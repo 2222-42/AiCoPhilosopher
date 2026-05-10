@@ -55,9 +55,10 @@
   - MUST accept steering commands ("pause workstream X", "abandon hypothesis Y", "deepen analysis on Z").
 
 ### 4.2 Literature Search Agent
-- MUST query: PhilPapers API, Stanford Encyclopedia of Philosophy (via search/scrape if API unavailable), arXiv philosophy, Semantic Scholar.
+- MUST support querying: PhilPapers API, Stanford Encyclopedia of Philosophy (via search/scrape if API unavailable), arXiv philosophy, and Semantic Scholar, but only after the user has explicitly consented to the use of those external services for the current project or request.
+- When using external literature-search services, the system MUST transmit only the minimum necessary user-approved search data (e.g., query terms, author names, date ranges, and other bibliographic filters) and MUST NOT send project content, living-document text, notes, hypotheses, or uploaded files/PDF contents unless the user has explicitly approved sending that specific content to a named external service.
 - Output: Structured list of papers with title, authors, year, abstract snippet, relevance score, and BibTeX entry.
-- MUST support user-uploaded PDFs for RAG.
+- MUST support user-uploaded PDFs for RAG, with PDF ingestion and retrieval performed locally by default; uploaded PDFs MUST NOT be sent to external literature-search services unless the user explicitly consents to that transfer.
 
 ### 4.3 Concept Analysis Agent
 - MUST perform:
@@ -112,7 +113,7 @@
   - Web/Philosophical search
   - PDF text extraction and chunking
   - Code execution (for formal logic, probability, etc.)
-- LaTeX/PDF generation
+  - LaTeX/PDF generation
 
 All tool calls SHALL be logged in the project workspace.
 
