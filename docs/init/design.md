@@ -77,14 +77,14 @@ Uses Pydantic models for all outputs (guaranteed structure)
 
 ## 4. Agent Detailed Design
 
-| Agent                    | Role                              | Key Tools                              | Output Format                  |
-|--------------------------|-----------------------------------|----------------------------------------|--------------------------------|
-| Project Coordinator      | User dialogue, orchestration      | None (delegates)                       | ProgressSummary + NextAction   |
-| Literature Search        | Find & summarize sources          | PhilPapers, Semantic Scholar, PDF RAG | StructuredPaperList            |
-| Concept Analysis         | Clarify concepts, thought experiments | None (pure reasoning)                | ConceptMap + ThoughtExperiments|
-| Argumentation            | Build arguments                   | Logic checker tool                     | FormalArgumentList             |
-| Critical Review          | Critique & find weaknesses        | Fallacy detector                       | CritiqueReport                 |
-| Synthesis                | Merge into living document        | Document writer                        | UpdatedDocumentSection         |
+| Agent                  | Role                                      | Key Tools                              | Output Format                    |
+|------------------------|-------------------------------------------|----------------------------------------|----------------------------------|
+| Project Coordinator    | User dialogue & orchestration             | None (delegates)                       | ProgressSummary + NextAction     |
+| Literature Search      | Find & summarize sources                  | PhilPapers, Semantic Scholar, PDF RAG  | StructuredPaperList              |
+| Concept Analysis       | Clarify concepts, thought experiments     | Pure reasoning                         | ConceptMap + ThoughtExperiments  |
+| Argumentation          | Build arguments                           | Logic checker tool                     | FormalArgumentList               |
+| Critical Review        | Critique & find weaknesses                | Fallacy detector                       | CritiqueReport                   |
+| Synthesis              | Merge into living document                | Document writer                        | UpdatedDocumentSection           |
 
 ## 5. Prompt Engineering Strategy
 
