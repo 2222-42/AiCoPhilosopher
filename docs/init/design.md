@@ -1,4 +1,4 @@
-# AI Co-Philosopher - Design.md
+# AI Co-Philosopher - design.md
 
 ## 1. High-Level Architecture
 
