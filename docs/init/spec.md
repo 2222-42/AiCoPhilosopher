@@ -1,4 +1,4 @@
-# AI Co-Philosopher - Specification (Spec.md)
+# AI Co-Philosopher - Specification (spec.md)
 
 ## 1. Overview
 - This document specifies the detailed behavior, interfaces, data models, and functional flows of the AI Co-Philosopher system based on the requirements.
