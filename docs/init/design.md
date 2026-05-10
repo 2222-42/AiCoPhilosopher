@@ -121,7 +121,10 @@ Uses Pydantic models for all outputs (guaranteed structure)
   [Suggestions] → next actions
   ```
 - User can issue commands at any time:
-  - pause 3, deepen concept X, abandon hypothesis Y, export latex
+  - `pause 3`
+  - `deepen concept X`
+  - `abandon hypothesis Y`
+  - `export latex`
  
 ## 8. Extensibility Points
 
