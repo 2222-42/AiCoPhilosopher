@@ -3,13 +3,14 @@
 ## 1. Overview
 - This document specifies the detailed behavior, interfaces, data models, and functional flows of the AI Co-Philosopher system based on the requirements.
 - The system is a stateful, hierarchical multi-agent application designed for long-running philosophical research collaboration.
+- The architecture MUST support both **internal-only mode** (completely standalone) and **external-orchestration mode** (using Hermes Agent, OpenCode Go, etc.) via adapters.
 
 ## 2. System Architecture
 - The system SHALL consist of a central **Project Coordinator Agent** that acts as the sole user-facing interface.
 - The Project Coordinator SHALL delegate work to specialized **Workstream Coordinators** and **Specialized Sub-Agents**.
-- All agents SHALL communicate via a standardized message protocol (Pydantic models or equivalent structured schema).
-- The system SHALL maintain a single **Shared Workspace** per research project, implemented as a persistent directory + database.
-- State persistence SHALL support saving/loading entire projects so sessions can be paused and resumed.
+- All agents SHALL communicate via a standardized message protocol.
+- The system MUST maintain a single **Shared Workspace** per research project.
+- The architecture MUST clearly separate core logic from external layer integration through an **Adapter Pattern**.
 
 ## 3. Core Data Models
 
@@ -24,6 +25,7 @@
   - `hypothesis_history`: List of Hypothesis records (including failed/abandoned)
   - `artifacts`: List of files (PDFs, notes, generated LaTeX)
   - `metadata`: timestamps, last_updated, owner
+  - `external_layer_config` (optional) to store runtime configuration for Hermes Agent / OpenCode Go.
 
 ### 3.2 Workstream
 - Each workstream SHALL have:
@@ -81,6 +83,11 @@
 - MUST merge outputs from multiple workstreams into coherent sections of the living document.
 - MUST maintain consistent philosophical voice and citation style.
 
+### 4.7 External Agent Bridge
+- The system SHALL provide an `ExternalAgentBridge` that translates internal Workstream requests into calls to Hermes Agent or OpenCode Go.
+- The Bridge MUST support seamless fallback to internal LangGraph execution if the external layer is unavailable or returns an error.
+- Communication SHALL use a standardized JSON protocol when interacting with external layers.
+
 ## 5. User Interaction Specification
 - Primary interface: Chat-based (terminal, Gradio, or Streamlit).
 - Supported commands:
@@ -118,16 +125,14 @@
 All tool calls SHALL be logged in the project workspace.
 
 ## 8. Non-Functional Specifications
-
-- Response latency for Coordinator interactions SHOULD be under 8 seconds for simple replies.
-- Heavy agent tasks MAY run asynchronously with progress callbacks.
-- All LLM calls MUST include system prompts that emphasize philosophical rigor, charity of interpretation, and avoidance of overconfidence.
-- Privacy: No project data SHALL be sent to external services without explicit user consent (local models preferred when possible).
+- Core independence: The entire system MUST be able to run completely without Hermes Agent or OpenCode Go.
+- External layer integration is strictly optional and MUST NOT break core functionality.
+- When external layers are enabled, the system SHOULD leverage their advanced capabilities (persistent memory, self-improvement, low-cost execution) while maintaining full transparency and user control.
 
 ## 9. MVP Scope (First Iteration)
-
 - Project Coordinator + Literature Search Agent + Synthesis Agent
 - Persistent Markdown living document
 - Basic workstream management
 - Local file-based workspace
+- Full operation without any external layers
 - Support for Claude / Gemini / Ollama backends
