@@ -2,20 +2,21 @@
 
 ## 1. High-Level Architecture
 
-The system follows a **hierarchical multi-agent architecture** based on LangGraph (or equivalent stateful orchestration framework).
+The system is built with **core independence** as the highest priority, while providing clean, optional integration with external agent orchestration layers (Hermes Agent, OpenCode Go, etc.) through an Adapter Pattern.
 
 ```
 User
 ↓ (Chat Interface)
-Project Coordinator Agent (Supervisor)
+Project Coordinator Agent (Core)
 ↓
-Workstream Orchestrator
+Internal Orchestrator (LangGraph - Default)
 ├── Literature Search Workstream
 ├── Concept Analysis Workstream
 ├── Argumentation Workstream
 ├── Critical Review Workstream
 └── Synthesis Workstream
-Shared Persistent Workspace (File System + Vector DB + SQLite)
+
+Shared Persistent Workspace (Local File System + Vector DB + SQLite)
 ```
 
 - **Project Coordinator** acts as the brain and user proxy.
@@ -74,17 +75,24 @@ Each agent follows the ReAct + Structured Output pattern:
 Planner → Tool Use → Reflection → Output
 Uses Pydantic models for all outputs (guaranteed structure)
 
+### 3.4 External Agent Bridge (Key New Component)
+
+- Translates internal workstream requests into calls to Hermes Agent, OpenCode Go, or other external layers.
+- Implements **automatic fallback**: if the external layer is unavailable, the task is seamlessly re-routed to internal LangGraph execution.
+- All interactions are logged for auditability.
+
 
 ## 4. Agent Detailed Design
 
-| Agent                  | Role                                      | Key Tools                              | Output Format                    |
-|------------------------|-------------------------------------------|----------------------------------------|----------------------------------|
-| Project Coordinator    | User dialogue & orchestration             | None (delegates)                       | ProgressSummary + NextAction     |
-| Literature Search      | Find & summarize sources                  | PhilPapers, Semantic Scholar, PDF RAG  | StructuredPaperList              |
-| Concept Analysis       | Clarify concepts, thought experiments     | Pure reasoning                         | ConceptMap + ThoughtExperiments  |
-| Argumentation          | Build arguments                           | Logic checker tool                     | FormalArgumentList               |
-| Critical Review        | Critique & find weaknesses                | Fallacy detector                       | CritiqueReport                   |
-| Synthesis              | Merge into living document                | Document writer                        | UpdatedDocumentSection           |
+| Agent                  | Role                                                 | Key Tools                              | Output Format                    |
+|------------------------|------------------------------------------------------|----------------------------------------|----------------------------------|
+| Project Coordinator    | Core execution layer; user dialogue & orchestration  | None (delegates)                       | ProgressSummary + NextAction     |
+| Literature Search      | Core; find & summarize sources                       | PhilPapers, Semantic Scholar, PDF RAG  | StructuredPaperList              |
+| Concept Analysis       | Core; clarify concepts, thought experiments          | Pure reasoning                         | ConceptMap + ThoughtExperiments  |
+| Argumentation          | Core; build arguments                                | Logic checker tool                     | FormalArgumentList               |
+| Critical Review        | Core; critique & find weaknesses                     | Fallacy detector                       | CritiqueReport                   |
+| Synthesis              | Core; merge into living document                     | Document writer                        | UpdatedDocumentSection           |
+| External Agent Bridge  | External adapter/fallback; delegate to external layers | Hermes / OpenCode Go APIs            | —                                |
 
 ## 5. Prompt Engineering Strategy
 
@@ -142,6 +150,8 @@ Uses Pydantic models for all outputs (guaranteed structure)
 - The user SHALL always have final approval on any content that is permanently added to the living document.
 - Sensitive user data and entire research projects MUST remain locally stored by default with no automatic external transmission.
 - The system SHOULD log all agent decisions and tool uses for auditability and debugging.
+- External layer failures are caught by the External Agent Bridge and automatically fall back to internal execution.
+- The core system **MUST never depend** on external layers for basic operation.
 
 ## 10. MVP Implementation Plan (Phase 1)
 
@@ -153,12 +163,14 @@ Uses Pydantic models for all outputs (guaranteed structure)
 - Project creation, save, and load functionality
 - Progressive disclosure in Coordinator responses
 - Basic workstream management (create, pause, resume, view status)
+- Project Coordinator + Literature Search + Synthesis Agent (fully functional in core mode)
+- External Agent Bridge skeleton (always falls back to internal)
+- **The entire MVP MUST run completely without any external layers**
 
 ## 11. Future Phases (Post-MVP)
 
-- Phase 2: Add Concept Analysis, Argumentation, and Critical Review Agents
-- Phase 3: Full asynchronous workstream execution + web UI (Gradio/Streamlit)
-- Phase 4: Advanced RAG over personal philosophy library + LaTeX export
-- Phase 5: Multi-project management and cross-project knowledge sharing
-
----
+- Phase 2: Full Hermes Agent and OpenCode Go adapters
+- Phase 3: Add Concept Analysis, Argumentation, and Critical Review Agents
+- Phase 4: Full asynchronous workstream execution + web UI (Gradio/Streamlit)
+- Phase 5: Advanced RAG over personal philosophy library + LaTeX export
+- Phase 6: Multi-project management and cross-project knowledge sharing
