@@ -9,7 +9,7 @@
 - The system SHALL consist of a central **Project Coordinator Agent** that acts as the sole user-facing interface.
 - The Project Coordinator SHALL delegate work to specialized **Workstream Coordinators** and **Specialized Sub-Agents**.
 - All agents SHALL communicate via a standardized message protocol.
-- The system MUST maintain a single **Shared Workspace** per research project.
+- The system MUST maintain a single persistent **Shared Workspace** per research project, and the architecture MUST support saving and loading project state so long-running projects can be resumed across sessions.
 - The architecture MUST clearly separate core logic from external layer integration through an **Adapter Pattern**.
 
 ## 3. Core Data Models

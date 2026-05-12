@@ -84,19 +84,15 @@ Uses Pydantic models for all outputs (guaranteed structure)
 
 ## 4. Agent Detailed Design
 
-| Agent                  | Role                                      | Key Tools                              | Output Format                    |
-|------------------------|-------------------------------------------|----------------------------------------|----------------------------------|
-| **Execution Layer**      | **Fallback**                      |                                        |                                |
-| Project Coordinator    | User dialogue & orchestration             | None (delegates)                       | ProgressSummary + NextAction     |
-| Core                     | —                                 |                                        |
-| Literature Search      | Find & summarize sources                  | PhilPapers, Semantic Scholar, PDF RAG  | StructuredPaperList              |
-| Core / External          | Internal                           |                                        |                                |
-| Concept Analysis       | Clarify concepts, thought experiments     | Pure reasoning                         | ConceptMap + ThoughtExperiments  |
-| Argumentation          | Build arguments                           | Logic checker tool                     | FormalArgumentList               |
-| Critical Review        | Critique & find weaknesses                | Fallacy detector                       | CritiqueReport                   |
-| Synthesis              | Merge into living document                | Document writer                        | UpdatedDocumentSection           |
-| External Agent Bridge    | Delegate to external layers       | Hermes / OpenCode Go APIs              | —                              |
-| Adapter                  | Internal                           |                                        |                                |
+| Agent                  | Role                                                 | Key Tools                              | Output Format                    |
+|------------------------|------------------------------------------------------|----------------------------------------|----------------------------------|
+| Project Coordinator    | Core execution layer; user dialogue & orchestration  | None (delegates)                       | ProgressSummary + NextAction     |
+| Literature Search      | Core; find & summarize sources                       | PhilPapers, Semantic Scholar, PDF RAG  | StructuredPaperList              |
+| Concept Analysis       | Core; clarify concepts, thought experiments          | Pure reasoning                         | ConceptMap + ThoughtExperiments  |
+| Argumentation          | Core; build arguments                                | Logic checker tool                     | FormalArgumentList               |
+| Critical Review        | Core; critique & find weaknesses                     | Fallacy detector                       | CritiqueReport                   |
+| Synthesis              | Core; merge into living document                     | Document writer                        | UpdatedDocumentSection           |
+| External Agent Bridge  | External adapter/fallback; delegate to external layers | Hermes / OpenCode Go APIs            | —                                |
 
 ## 5. Prompt Engineering Strategy
 
@@ -154,7 +150,7 @@ Uses Pydantic models for all outputs (guaranteed structure)
 - The user SHALL always have final approval on any content that is permanently added to the living document.
 - Sensitive user data and entire research projects MUST remain locally stored by default with no automatic external transmission.
 - The system SHOULD log all agent decisions and tool uses for auditability and debugging.
-- External layer failures are caught by the External Agent Bridge and automatically fallback to internal execution.
+- External layer failures are caught by the External Agent Bridge and automatically fall back to internal execution.
 - The core system **MUST never depend** on external layers for basic operation.
 
 ## 10. MVP Implementation Plan (Phase 1)
