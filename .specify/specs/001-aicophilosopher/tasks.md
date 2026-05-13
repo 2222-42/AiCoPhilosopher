@@ -37,6 +37,30 @@
 
 ---
 
+## Phase 1.5: Architecture Skeleton (Clean Architecture / Ports & Adapters)
+
+**Purpose**: Establish the layered directory structure and dependency-injection wiring before any domain logic is written. Enforces the "inward-only" dependency rule from day one.
+
+**⚠️ CRITICAL**: No domain logic or adapter implementation can begin until this skeleton passes lint and type checks.
+
+- [ ] T-006 [P] [Setup] Create Clean Architecture directory skeleton at `src/aicophilosopher/`: `domain/` (entities/, value_objects/, services/), `application/` (orchestration/, use_cases/), `ports/` (llm_port.py, storage_port.py, reviewer_port.py, dialectical_history_port.py, search_port.py), `infrastructure/adapters/` (gemini_adapter.py, claude_adapter.py, ollama_adapter.py, sqlite_adapter.py, chroma_adapter.py, filesystem_adapter.py), `presentation/` (cli.py, commands.py)
+  - **AC**: `tree src/aicophilosopher/` shows all 5 layers; every package has `__init__.py`; no Python files contain implementation code yet (only docstrings / pass / `raise NotImplementedError`)
+  - **Depends on**: T-001, T-002
+
+- [ ] T-007 [P] [Setup] Define all Port interfaces in `src/aicophilosopher/ports/` using `typing.Protocol` with full type annotations and docstrings: `LLMPort` (generate, embed), `StoragePort` (save_project, load_project, query_uncertainty), `ReviewerPort` (request_review, submit_verdict), `DialecticalHistoryPort` (append_move, query_history), `SearchPort` (query_philpapers, query_sep)
+  - **AC**: Each protocol can be imported without errors; `mypy --strict src/aicophilosopher/ports/` passes; a mock implementation satisfies the protocol (verified by `mypy`)
+  - **Depends on**: T-006
+
+- [ ] T-008 [Setup] Implement DI container skeleton in `src/aicophilosopher/container.py`: lightweight `Container` class that reads backend config from `core/config.py`, instantiates the correct Adapter for each Port, and allows one-line adapter swap for testing (e.g., `container.register(StoragePort, FakeStorageAdapter)`)
+  - **AC**: `python -c "from aicophilosopher.container import Container; c = Container(); c.resolve('LLMPort')"` raises `NotImplementedError` (no adapter bound yet); `c.register(LLMPort, FakeLLMAdapter); c.resolve(LLMPort)` returns `FakeLLMAdapter` instance; no circular imports
+  - **Depends on**: T-007, T-012
+
+- [ ] T-009 [P] [Setup] Configure `ruff` circular-import detection and add `scripts/check_domain_purity.py` that verifies every `.py` file under `domain/` imports only stdlib + `pydantic` (no LangGraph, no ChromaDB, no SDKs)
+  - **AC**: `ruff check src/aicophilosopher` passes on the skeleton; `python scripts/check_domain_purity.py` passes; `mypy --strict src/aicophilosopher` passes; `pyright src/aicophilosopher` passes (if pyright is configured)
+  - **Depends on**: T-003, T-006
+
+---
+
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
