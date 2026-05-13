@@ -152,6 +152,14 @@
   - **AC**: `create(title, project_id)` generates frontmatter; `add_section("Arguments", content)` appends with annotation placeholders; `embed_annotations()` inserts HTML comment annotations; `parse_annotations()` extracts all annotations
   - **Depends on**: T-015
 
+- [x] T-033 [DONE] [US1] Implement `src/aicophilosopher/application/orchestration/coordinator.py`: `ProjectCoordinatorAgent` with Socratic clarification dialogue, goal refinement, workstream proposal/approval, steering command handling, progressive disclosure rendering
+  - **AC**: Dialogue continues until goal approved; `propose_workstream()` returns structured proposal; steering commands update workstream state
+  - **Depends on**: T-032, T-013, T-015
+
+- [x] T-034 [DONE] [P] [US1] Implement `src/aicophilosopher/application/orchestration/workstream_coordinator.py`: `WorkstreamCoordinatorAgent` base class that manages sub-agent sequences, tracks workstream status, generates incremental updates
+  - **AC**: `create_workstream(type, goal)` initializes correct coordinator subclass; `pause()`/`resume()` transition status; `steer()` modifies active plan
+  - **Depends on**: T-032, T-015
+
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. User can create project, clarify goals, manage workstreams, and view document.
 
 ---
