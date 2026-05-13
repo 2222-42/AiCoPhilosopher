@@ -164,7 +164,10 @@ def config(key: str | None = None, value: str | None = None) -> None:
         click.echo("  llm.backend: ollama")
         click.echo("  privacy.allow_external_search: false")
     else:
-        click.echo(f"Config '{key}' set to: {value}")
+        if value is None:
+            click.echo(f"Error: 'config {key}' requires a value. Usage: config <key> <value>")
+        else:
+            click.echo(f"Config '{key}' set to: {value}")
 
 
 @cli.command()
