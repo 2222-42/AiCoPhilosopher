@@ -20,19 +20,19 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T-001 [P] [Setup] Create project directory structure per plan.md at `src/aicophilosopher/` with Clean Architecture layers (`domain/`, `application/`, `ports/`, `infrastructure/adapters/`, `presentation/`)
+- [x] T-001 [DONE] [P] [Setup] Create project directory structure per plan.md at `src/aicophilosopher/` with Clean Architecture layers (`domain/`, `application/`, `ports/`, `infrastructure/adapters/`, `presentation/`)
   - **AC**: `tree src/aicophilosopher/` shows all 5 layers; `__init__.py` files present in each; `scripts/check_domain_purity.py` passes
 
-- [ ] T-002 [P] [Setup] Initialize `pyproject.toml` with Python 3.11+ requirement, core dependencies (langgraph>=0.2.0, pydantic>=2.7, chromadb>=0.5.0, rich>=13.0, click>=8.0, PyMuPDF>=1.24, z3-solver>=4.13, anthropic, google-generativeai, ollama, aiosqlite>=0.20), and dev dependencies (pytest, pytest-asyncio, pytest-mock, hypothesis, coverage, ruff, mypy)
+- [x] T-002 [DONE] [P] [Setup] Initialize `pyproject.toml` with Python 3.11+ requirement, core dependencies (langgraph>=0.2.0, pydantic>=2.7, chromadb>=0.5.0, rich>=13.0, click>=8.0, PyMuPDF>=1.24, z3-solver>=4.13, anthropic, google-generativeai, ollama, aiosqlite>=0.20), and dev dependencies (pytest, pytest-asyncio, pytest-mock, hypothesis, coverage, ruff, mypy)
   - **AC**: `pip install -e ".[dev]"` succeeds in clean venv; `python -c "import aicophilosopher"` works
 
-- [ ] T-003 [P] [Setup] Configure linting/formatting/type checking: `ruff` for lint+format, `mypy` for type checking, `pytest` with asyncio plugin in `pyproject.toml` tool sections
+- [x] T-003 [DONE] [P] [Setup] Configure linting/formatting/type checking: `ruff` for lint+format, `mypy` for type checking, `pytest` with asyncio plugin in `pyproject.toml` tool sections
   - **AC**: `ruff check src/` passes on empty structure; `mypy src/aicophilosopher` passes; `pytest --collect-only` works
 
-- [ ] T-004 [Setup] Create `Makefile` with targets: `test`, `test-cov`, `lint`, `format`, `typecheck`, `check` (runs all)
+- [x] T-004 [DONE] [Setup] Create `Makefile` with targets: `test`, `test-cov`, `lint`, `format`, `typecheck`, `check` (runs all)
   - **AC**: `make check` runs without error on empty project
 
-- [ ] T-005 [P] [Setup] Create `.gitignore` for Python project (venv, `__pycache__`, `.env`, `*.egg-info`, `.coverage`, ChromaDB data dirs, workspace dirs)
+- [x] T-005 [DONE] [P] [Setup] Update `.gitignore` for Python project (venv, `__pycache__`, `.env`, `*.egg-info`, `.coverage`, ChromaDB data dirs, workspace dirs)
   - **AC**: `git status` shows no untracked build artifacts after `pip install -e ".[dev]"`
 
 ---
@@ -43,19 +43,19 @@
 
 **⚠️ CRITICAL**: No domain logic or adapter implementation can begin until this skeleton passes lint and type checks.
 
-- [ ] T-006 [P] [Setup] Create Clean Architecture directory skeleton at `src/aicophilosopher/`: `domain/` (entities/, value_objects/, services/), `application/` (orchestration/, use_cases/), `ports/` (llm_port.py, storage_port.py, reviewer_port.py, dialectical_history_port.py, search_port.py), `infrastructure/adapters/` (gemini_adapter.py, claude_adapter.py, ollama_adapter.py, sqlite_adapter.py, chroma_adapter.py, filesystem_adapter.py), `presentation/` (cli.py, commands.py)
+- [x] T-006 [DONE] [P] [Setup] Create Clean Architecture directory skeleton at `src/aicophilosopher/`: `domain/` (entities/, value_objects/, services/), `application/` (orchestration/, use_cases/), `ports/` (llm_port.py, storage_port.py, reviewer_port.py, dialectical_history_port.py, search_port.py), `infrastructure/adapters/` (gemini_adapter.py, claude_adapter.py, ollama_adapter.py, sqlite_adapter.py, chroma_adapter.py, filesystem_adapter.py), `presentation/` (cli.py, commands.py)
   - **AC**: `tree src/aicophilosopher/` shows all 5 layers; every package has `__init__.py`; no Python files contain implementation code yet (only docstrings / pass / `raise NotImplementedError`)
   - **Depends on**: T-001, T-002
 
-- [ ] T-007 [P] [Setup] Define all Port interfaces in `src/aicophilosopher/ports/` using `typing.Protocol` with full type annotations and docstrings: `LLMPort` (generate, embed), `StoragePort` (save_project, load_project, query_uncertainty), `ReviewerPort` (request_review, submit_verdict), `DialecticalHistoryPort` (append_move, query_history), `SearchPort` (query_philpapers, query_sep)
+- [x] T-007 [DONE] [P] [Setup] Define all Port interfaces in `src/aicophilosopher/ports/` using `typing.Protocol` with full type annotations and docstrings: `LLMPort` (generate, embed), `StoragePort` (save_project, load_project, query_uncertainty), `ReviewerPort` (request_review, submit_verdict), `DialecticalHistoryPort` (append_move, query_history), `SearchPort` (query_philpapers, query_sep)
   - **AC**: Each protocol can be imported without errors; `mypy --strict src/aicophilosopher/ports/` passes; a mock implementation satisfies the protocol (verified by `mypy`)
   - **Depends on**: T-006
 
-- [ ] T-008 [Setup] Implement DI container skeleton in `src/aicophilosopher/container.py`: lightweight `Container` class that reads backend config from `core/config.py`, instantiates the correct Adapter for each Port, and allows one-line adapter swap for testing (e.g., `container.register(StoragePort, FakeStorageAdapter)`)
+- [x] T-008 [DONE] [Setup] Implement DI container skeleton in `src/aicophilosopher/container.py`: lightweight `Container` class that reads backend config from `core/config.py`, instantiates the correct Adapter for each Port, and allows one-line adapter swap for testing (e.g., `container.register(StoragePort, FakeStorageAdapter)`)
   - **AC**: `python -c "from aicophilosopher.container import Container; c = Container(); c.resolve('LLMPort')"` raises `NotImplementedError` (no adapter bound yet); `c.register(LLMPort, FakeLLMAdapter); c.resolve(LLMPort)` returns `FakeLLMAdapter` instance; no circular imports
   - **Depends on**: T-007, T-012
 
-- [ ] T-009 [P] [Setup] Configure `ruff` circular-import detection and add `scripts/check_domain_purity.py` that verifies every `.py` file under `domain/` imports only stdlib + `pydantic` (no LangGraph, no ChromaDB, no SDKs)
+- [x] T-009 [DONE] [P] [Setup] Configure `ruff` circular-import detection and add `scripts/check_domain_purity.py` that verifies every `.py` file under `domain/` imports only stdlib + `pydantic` (no LangGraph, no ChromaDB, no SDKs)
   - **AC**: `ruff check src/aicophilosopher` passes on the skeleton; `python scripts/check_domain_purity.py` passes; `mypy --strict src/aicophilosopher` passes; `pyright src/aicophilosopher` passes (if pyright is configured)
   - **Depends on**: T-003, T-006
 
@@ -69,14 +69,14 @@
 
 ### 2.1 Core Models & Schemas
 
-- [ ] T-010 [P] [Foundation] Implement Pydantic v2 domain entities in `src/aicophilosopher/domain/entities/`: `ProjectState`, `WorkstreamState`, `HypothesisRecord`, `UncertaintyRecord`, `DialecticalMove`, `ConceptNode`, `ReviewRound`, `Message`, `GoalStatement`, `Artifact`, `ProgressUpdate`, `FailedExploration`, `Note` with all enums (`WorkstreamType`, `WorkstreamStatus`, `HypothesisStrength`, `Origin`, `HypothesisStatus`, `ReviewStatus`, `DialecticalMoveType`, `MessageType`, `ArtifactType`, `ReviewerVerdictStatus`, `ReviewRoundStatus`, `ProjectStatus`)
-  - **AC**: All entities validate correctly with sample data; enums restrict values; `confidence_score` bounds (0.0–1.0) enforced; `living_document` YAML frontmatter validator works; `ProjectState` includes `status: ProjectStatus` field; `Note` entity supports `--attach-to` option from CLI contract
+- [x] T-010 [DONE] [P] [Foundation] Implement Pydantic v2 domain entities in `src/aicophilosopher/domain/entities/`: `ProjectState`, `WorkstreamState`, `HypothesisRecord`, `UncertaintyRecord`, `DialecticalMove`, `ConceptNode`, `ReviewRound`, `Message`, `GoalStatement`, `Artifact`, `ProgressUpdate`, `FailedExploration`, `Note` with all enums (`WorkstreamType`, `WorkstreamStatus`, `HypothesisStrength`, `Origin`, `HypothesisStatus`, `ReviewStatus`, `DialecticalMoveType`, `MessageType`, `ArtifactType`, `ReviewerVerdictStatus`, `ReviewRoundStatus`, `ProjectStatus`)
+  - **AC**: All entities validate correctly with sample data; enums restrict values; `confidence_score` bounds (0.0–1.0) enforced; `ProjectState` includes `status: ProjectStatus` field; `Note` entity supports `--attach-to` option from CLI contract
   - **Depends on**: T-002
 
-- [ ] T-011 [Foundation] Implement `src/aicophilosopher/domain/exceptions.py` with domain-specific exceptions: `AICoPhilosopherError`, `WorkstreamError`, `ReviewDeadlockError`, `IncommensurabilityError`, `ExternalLayerError`, `ValidationError`, `ConfigurationError`
+- [x] T-011 [DONE] [Foundation] Implement `src/aicophilosopher/domain/exceptions.py` with domain-specific exceptions: `AICoPhilosopherError`, `WorkstreamError`, `ReviewDeadlockError`, `IncommensurabilityError`, `ExternalLayerError`, `ValidationError`, `ConfigurationError`
   - **AC**: Each exception can be raised/caught; `ReviewDeadlockError` carries `workstream_id` and `round_number`
 
-- [ ] T-012 [Foundation] Implement `src/aicophilosopher/domain/services/config.py` using `pydantic-settings` for environment-based configuration: LLM backends, privacy settings, external layer toggles, workspace directory, log level
+- [x] T-012 [DONE] [Foundation] Implement `src/aicophilosopher/domain/services/config.py` using `pydantic-settings` for environment-based configuration: LLM backends, privacy settings, external layer toggles, workspace directory, log level
   - **AC**: `Config()` loads from `.env`; `Config(llm_backend="ollama")` overrides; validation rejects unknown backends
   - **Depends on**: T-010
 
@@ -98,7 +98,7 @@
 
 ### 2.4 Messaging Protocol
 
-- [ ] T-016 [Foundation] Implement `src/aicophilosopher/domain/entities/message.py`: Pydantic models for all 12 message types (`status_update`, `delegation_request`, `delegation_response`, `steering_command`, `steering_ack`, `help_request`, `help_response`, `review_request`, `review_response`, `result_delivery`, `error_notification`, `user_notification`) with payload schemas per `contracts/message-protocol.md`
+- [x] T-016 [DONE] [Foundation] Implement `src/aicophilosopher/domain/entities/message.py`: Pydantic models for all 12 message types (`status_update`, `delegation_request`, `delegation_response`, `steering_command`, `steering_ack`, `help_request`, `help_response`, `review_request`, `review_response`, `result_delivery`, `error_notification`, `user_notification`) with payload schemas per `contracts/message-protocol.md`
   - **AC**: All message types validate with sample payloads; `MessageType` enum restricts values; `correlation_id` linking works
   - **Depends on**: T-010
 
@@ -112,20 +112,20 @@
   - **AC**: Each backend implements `LLMPort` Protocol and returns `GenerationResult` with text + usage; `OllamaBackend` works offline; switching backends via config works; all backends mocked in tests; DI container resolves `LLMPort` correctly
   - **Depends on**: T-012
 
-- [ ] T-019 [P] [Foundation] Implement `src/aicophilosopher/application/services/tool_registry.py`: `ToolRegistry` with plugin-style registration (`register_tool`, `get_tool`, `list_tools`); `BaseTool` ABC with `name`, `description`, `execute()`
+- [x] T-019 [DONE] [P] [Foundation] Implement `src/aicophilosopher/application/services/tool_registry.py`: `ToolRegistry` with plugin-style registration (`register_tool`, `get_tool`, `list_tools`); `BaseTool` ABC with `name`, `description`, `execute()`
   - **AC**: Tools register/unregister dynamically; `ToolRegistry.get_tool("search")` returns correct instance; duplicate registration raises `ValidationError`
 
 ### 2.6 Reasoning Engine Skeleton
 
-- [ ] T-020 [P] [Foundation] Implement `src/aicophilosopher/domain/services/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, buddhist, confucian, daoist); validates arguments against tradition norms; detects incommensurability
+- [x] T-020 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, buddhist, confucian, daoist); validates arguments against tradition norms; detects incommensurability
   - **AC**: `load_traditions()` discovers all JSON files; `validate_argument(arg, "buddhist_philosophy")` returns norm violations; `check_incommensurability("anatta", "cartesian_ego")` returns True with explanation
   - **Depends on**: T-019
 
-- [ ] T-021 [P] [Foundation] Implement `src/aicophilosopher/domain/services/uncertainty.py`: `UncertaintyLifecycle` class with `track()`, `manage()`, `communicate()` methods; state machine for `ReviewStatus` transitions; uncertainty registry sync with inline Markdown annotations
+- [x] T-021 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/uncertainty.py`: `UncertaintyLifecycle` class with `track()`, `manage()`, `communicate()` methods; state machine for `ReviewStatus` transitions; uncertainty registry sync with inline Markdown annotations
   - **AC**: `track(claim)` creates `UncertaintyRecord`; `manage()` updates confidence; `communicate()` generates margin annotation string; rejected claims trigger document section removal + appendix append
   - **Depends on**: T-010
 
-- [ ] T-022 [P] [Foundation] Implement `src/aicophilosopher/domain/services/logic_engine.py`: `LogicEngine` with Z3 integration for propositional/predicate validity checking; `check_validity(premises, conclusion)`; `detect_contradiction(formulas)`; returns `ValidityResult` with `is_valid`, `counter_model` (if invalid), `confidence`
+- [x] T-022 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/logic_engine.py`: `LogicEngine` with Z3 integration for propositional/predicate validity checking; `check_validity(premises, conclusion)`; `detect_contradiction(formulas)`; returns `ValidityResult` with `is_valid`, `counter_model` (if invalid), `confidence`
   - **AC**: Syllogism "All M are P; All S are M; Therefore All S are P" returns valid; inconsistent premises return contradiction detected; invalid argument returns counter-model explanation
   - **Depends on**: T-002
 
@@ -452,4 +452,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: Ready for implementation
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 1 (Setup), Phase 1.5 (Skeleton), and Phase 2 Core (T-010–T-012, T-016, T-019–T-022) COMPLETE** — Proceeding to Phase 2 remaining adapters (T-013–T-015, T-017–T-018) and User Stories.
