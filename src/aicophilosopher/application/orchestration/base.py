@@ -10,6 +10,7 @@ class BaseAgent:
     def __init__(
         self,
         agent_id: str,
+        project_id: str = "",
         llm_backend: LLMPort | None = None,
         message_queue: MessageQueueAdapter | None = None,
         tool_registry: ToolRegistry | None = None,
@@ -17,23 +18,22 @@ class BaseAgent:
         **kwargs: object,
     ) -> None:
         self.agent_id = agent_id
+        self.project_id = project_id
         self.llm = llm_backend
         self.message_queue = message_queue
-        self.tools: dict[str, BaseTool] = {}
+        self.tool_registry = tool_registry
         self.config = config or {}
         self.logger = logging.getLogger(f"aicophilosopher.agent.{agent_id}")
         if tool_registry is not None:
             self.set_tool_registry(tool_registry)
 
     def set_tool_registry(self, registry: ToolRegistry) -> None:
-        self.tools = {}
-        for tool_name in registry.list_tools():
-            tool = registry.get_tool(tool_name)
-            if tool:
-                self.tools[tool.name] = tool
+        self.tool_registry = registry
 
     def get_tool(self, name: str) -> BaseTool | None:
-        return self.tools.get(name)
+        if self.tool_registry is None:
+            return None
+        return self.tool_registry.get_tool(name)
 
     async def run(self, **kwargs: object) -> Any:
         raise NotImplementedError
@@ -43,6 +43,7 @@ class BaseAgent:
             raise RuntimeError("MessageQueue not configured")
         return await self.message_queue.send({
             "sender_id": self.agent_id,
+            "project_id": self.project_id,
             "recipient_id": recipient_id,
             "message_type": message_type,
             "payload": payload,

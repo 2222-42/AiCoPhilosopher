@@ -1,7 +1,17 @@
 import re
 from typing import Any
 
-ANNOTATION_PATTERN = re.compile(r"<!--\s*Source:\s*(.*?)\s*\|\s*Confidence:\s*(.*?)\s*\|\s*Origin:\s*(.*?)\s*\|\s*Counter-argument strength:\s*(.*?)\s*\|\s*Tradition:\s*(.*?)\s*\|\s*Review status:\s*(.*?)\s*(?:\|\s*Phenomenological grounding:\s*(.*?))?\s*-->")
+ANNOTATION_PATTERN = re.compile(r"""
+    <!--\s*
+    Source:\s*(.*?)\s*\|\s*
+    Confidence:\s*(.*?)\s*\|\s*
+    Origin:\s*(.*?)\s*\|\s*
+    Counter-argument\ strength:\s*(.*?)\s*\|\s*
+    Tradition:\s*(.*?)\s*\|\s*
+    Review\ status:\s*(.*?)
+    (?:\|\s*Phenomenological\ grounding:\s*(.*?))?
+    \s*-->
+""", re.VERBOSE)
 
 
 def _yaml_safe(value: Any) -> str:
@@ -31,13 +41,13 @@ def _format_annotation(source: str, confidence: float, origin: str,
 
 
 class LivingDocument:
-    def __init__(self, project_id: str, title: str = "") -> None:
-        self.project_id = project_id
-        self.title = title
+    def __init__(self) -> None:
+        self.project_id = ""
+        self.title = ""
         self.content: str = ""
         self.frontmatter: dict[str, Any] = {}
 
-    async def create(self, title: str, project_id: str) -> str:
+    async def create(self, title: str, project_id: str, **kwargs: object) -> str:
         self.title = title
         self.project_id = project_id
         self.frontmatter = {
@@ -70,7 +80,7 @@ class LivingDocument:
         next_heading = re.search(r"^##\s", rest, re.MULTILINE)
         if next_heading:
             return start + next_heading.start()
-        return None
+        return len(self.content)
 
     async def embed_annotations(self, annotations: list[dict[str, Any]] | None = None) -> str:
         if not annotations:
@@ -95,17 +105,27 @@ class LivingDocument:
     async def parse_annotations(self) -> list[dict[str, Any]]:
         annotations: list[dict[str, Any]] = []
         for match in ANNOTATION_PATTERN.finditer(self.content):
-            annotation = {
+            ann: dict[str, Any] = {
                 "source": match.group(1).strip(),
-                "confidence": float(match.group(2).strip()) if match.group(2) else None,
                 "origin": match.group(3).strip(),
-                "counter_argument_strength": float(match.group(4).strip()) if match.group(4) else None,
                 "tradition": match.group(5).strip(),
                 "review_status": match.group(6).strip(),
             }
+            raw_conf = match.group(2).strip() if match.group(2) else None
+            try:
+                ann["confidence"] = float(raw_conf) if raw_conf else None
+            except (ValueError, TypeError):
+                ann["confidence"] = None
+
+            raw_cas = match.group(4).strip() if match.group(4) else None
+            try:
+                ann["counter_argument_strength"] = float(raw_cas) if raw_cas else None
+            except (ValueError, TypeError):
+                ann["counter_argument_strength"] = None
+
             if match.group(7):
-                annotation["phenomenological_grounding"] = match.group(7).strip()
-            annotations.append(annotation)
+                ann["phenomenological_grounding"] = match.group(7).strip()
+            annotations.append(ann)
         return annotations
 
     def get_section(self, name: str) -> str | None:
