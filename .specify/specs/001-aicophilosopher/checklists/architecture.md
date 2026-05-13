@@ -27,6 +27,5 @@ This checklist **must** be used during implementation and PR review.
 - [ ] Project Coordinator and Workstream Coordinators are implemented as LangGraph subgraphs
 - [ ] All inter-agent communication flows through Ports
 - [ ] No Agent or Coordinator manipulates the filesystem or database directly (all persistence goes through `StoragePort`)
-- [ ] **This checklist itself**: All items in `checklists/architecture.md` are satisfied
 
 **If a violation is found**: PR merge is immediately blocked. Fix is mandatory.
