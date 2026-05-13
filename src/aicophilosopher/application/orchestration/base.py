@@ -22,6 +22,8 @@ class BaseAgent:
         self.tools: dict[str, BaseTool] = {}
         self.config = config or {}
         self.logger = logging.getLogger(f"aicophilosopher.agent.{agent_id}")
+        if tool_registry is not None:
+            self.set_tool_registry(tool_registry)
 
     def set_tool_registry(self, registry: ToolRegistry) -> None:
         self.tools = {}
