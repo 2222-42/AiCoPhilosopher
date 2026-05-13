@@ -12,6 +12,15 @@ class MessageQueueAdapter:
             "status_update": 30,
             "user_notification": 30,
             "error_notification": 90,
+            "delegation_request": 365,
+            "delegation_response": 365,
+            "steering_command": 365,
+            "steering_ack": 365,
+            "help_request": 365,
+            "help_response": 365,
+            "review_request": 365,
+            "review_response": 365,
+            "result_delivery": 365,
         }
 
     async def _connect(self) -> aiosqlite.Connection:

@@ -48,5 +48,7 @@ class Container:
             return ClaudeBackend(api_key=cfg.llm_api_key or None, model=cfg.llm_model or "claude-3-5-sonnet-20241022")
         elif backend == "gemini":
             return GeminiBackend(api_key=cfg.llm_api_key or None, model=cfg.llm_model or "gemini-1.5-pro")
-        else:
+        elif backend == "ollama":
             return OllamaBackend(model=cfg.llm_model or "llama3")
+        else:
+            raise ValueError(f"Unknown LLM backend: {backend}")

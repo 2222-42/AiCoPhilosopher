@@ -1,8 +1,8 @@
 
-from aicophilosopher.ports.llm_port import GenerationResult
+from aicophilosopher.ports.llm_port import GenerationResult, LLMPort
 
 
-class GeminiBackend:
+class GeminiBackend(LLMPort):
     def __init__(self, api_key: str | None = None, model: str = "gemini-1.5-pro") -> None:
         self.api_key = api_key
         self.model = model

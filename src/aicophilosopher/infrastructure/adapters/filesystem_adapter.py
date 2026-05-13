@@ -49,7 +49,7 @@ class FileSystemAdapter:
     async def append_jsonl(self, project_id: str, filename: str, records: list[dict[str, Any]]) -> None:
         base = self._ensure_project_dirs(project_id)
         filepath = base / filename
-        with open(filepath, "a") as f:
+        with open(filepath, "a", encoding="utf-8") as f:
             for record in records:
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
