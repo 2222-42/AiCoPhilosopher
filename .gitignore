@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Speckit feature pointer (pins downstream commands to a single feature; per-developer)
+.specify/feature.json

@@ -100,8 +100,8 @@ Each project has a persistent workspace:
 projects/<project_id>/
 ├── metadata.json                 # Project state, goals, configuration
 ├── living_document.md            # Working paper with YAML frontmatter
-├── dialectical_history.jsonl     # Complete record of arguments, refutations, revisions
-├── hypotheses.jsonl              # All hypotheses including abandoned/refuted
+├── dialectical_history.jsonl     # Derived export: complete argument/refutation history (SQLite is authoritative)
+├── hypotheses.jsonl              # Derived export: all hypotheses (SQLite is authoritative)
 ├── conceptual_genealogy/         # Concept maps, distinction matrices, tradition trees
 ├── artifacts/                    # Uploaded PDFs, generated LaTeX, code, simulations
 ├── vector_db/                    # Chroma/LanceDB collection for RAG
@@ -110,17 +110,18 @@ projects/<project_id>/
 │   ├── <ws_id>_incremental.log
 │   └── <ws_id>_review_rounds.json
 ├── margin_notes/                 # Standalone margin annotations linked to living_document
-├── uncertainty_registry.json     # Tracking of confidence scores, contested claims, review status
+├── uncertainty_registry.json     # Derived export: confidence scores and review status (SQLite is authoritative)
 └── logs/                         # Agent decision logs, tool call logs
 ```
 
 ### 3.3 State Schema (Pydantic)
 
 ```python
-class ProjectState(TypedDict):
+class ProjectState(BaseModel):
     project_id: str                          # UUID
     title: str
     original_question: str
+    status: ProjectStatus                    # Project lifecycle state
     refined_goals: list[GoalStatement]
     workstreams: dict[str, WorkstreamState]
     living_document: str                     # Markdown with embedded annotations
@@ -132,7 +133,7 @@ class ProjectState(TypedDict):
     metadata: ProjectMetadata
     external_layer_config: Optional[ExternalConfig]
 
-class WorkstreamState(TypedDict):
+class WorkstreamState(BaseModel):
     workstream_id: str
     type: WorkstreamType                     # Enum: see Section 5
     status: WorkstreamStatus                 # Enum: pending, running, paused, completed, failed, stalled
@@ -145,7 +146,7 @@ class WorkstreamState(TypedDict):
     uncertainty_flags: list[UncertaintyFlag]
     failed_explorations: list[FailedExploration]
 
-class HypothesisRecord(TypedDict):
+class HypothesisRecord(BaseModel):
     statement: str
     strength: HypothesisStrength             # strong, moderate, weak, refuted, underdetermined
     origin: Origin                           # user, ai, joint, cross_tradition_synthesis
@@ -155,7 +156,7 @@ class HypothesisRecord(TypedDict):
     status: HypothesisStatus                 # active, abandoned, refined, refuted
     epistemic_tradition: Optional[str]       # e.g., "analytic", "phenomenological", "confucian"
 
-class UncertaintyRecord(TypedDict):
+class UncertaintyRecord(BaseModel):
     claim_id: str
     claim_text: str
     confidence_score: float                  # 0.0–1.0
@@ -165,6 +166,34 @@ class UncertaintyRecord(TypedDict):
     stalled_sections: list[str]              # Links to document sections where review deadlocked
     last_updated: str                        # ISO timestamp
 ```
+
+### 3.4 Implementation Architecture Principles (Mandatory)
+
+The AI Co-Philosopher **must** be implemented following **Pragmatic Clean Architecture** (Ports & Adapters / Hexagonal Architecture) with strong emphasis on type safety and maintainability.
+
+#### Core Rules
+
+- **Language**: Python 3.11+ (targeting 3.12+ in future)
+- **Architecture Style**: Ports & Adapters (Clean Architecture)
+  - `domain/`: Pure business logic—Entities, Value Objects, and domain services. Must have zero external dependencies.
+  - `application/`: Orchestration and use cases—LangGraph state graphs, Project Coordinator, Workstream Coordinators, and Synthesis workflows. Depends only on `domain/` and `ports/`.
+  - `ports/`: Abstract interfaces—`LLMPort`, `StoragePort`, `ReviewerPort`, `DialecticalHistoryPort`, etc. Must import no third-party libraries.
+  - `infrastructure/adapters/`: Concrete implementations—`GeminiAdapter`, `FileSystemAdapter`, `ChromaAdapter`, `SqliteAdapter`, etc. Implement the interfaces declared in `ports/`.
+  - `presentation/`: CLI / Chat interface—Rich-based terminal UI, command parsing, and human-in-the-loop breakpoints. Depends only on `application/` and `ports/`.
+- **Type Safety**:
+  - All public APIs, ports, and data classes **must** be strictly defined with **Pydantic v2** (see §3.3 and `data-model.md`).
+  - Static type checking enforced via `typing.Protocol` + `mypy --strict`.
+  - Runtime validation via Pydantic `model_validate` / `TypeAdapter` on every external input and deserialization boundary.
+- **Dependency Direction**:
+  - `infrastructure/adapters` → `ports` → `application` → `domain` (dependencies point inward only; outer layers depend on inner layers, never the reverse).
+  - All external libraries and I/O concerns (LLM SDKs, vector databases, filesystem, search APIs) **must** be wrapped by adapters behind the interfaces declared in `ports/`.
+  - The orchestration framework (LangGraph) may be used directly in the `application/` layer as it realises the orchestration use-case itself; it does not require an adapter, but all state schemas it manipulates must be Pydantic models defined in `domain/`.
+- **Additional Mandates**:
+  - No circular imports (enforced by `ruff` + `pyright`).
+  - All state changes **must** be immutable or follow an explicit command pattern; in-place mutation of domain objects is prohibited.
+  - Uncertainty Registry, Dialectical History, and Living Document **must** be treated as first-class domain entities. Agents and coordinators are forbidden from direct filesystem or database manipulation; all persistence flows through the `StoragePort`.
+
+These principles are mandatory to faithfully realise the **stateful / uncertainty-aware / auditable workspace** demanded by the AI Co-Mathematician paper, adapted for philosophical research.
 
 ## 4. Agent Specifications
 
@@ -478,7 +507,7 @@ The system treats uncertainty as a core variable to be orchestrated, not an erro
 
 When a workstream concludes in failure (refuted hypothesis, unsolvable contradiction, non-terminating review), the system MUST:
 - Preserve the full workstream report with failure reason
-- Log the failed exploration in `hypotheses.jsonl` with status `refuted` or `abandoned`
+- Log the failed exploration in SQLite `hypotheses` table (and export to `hypotheses.jsonl`) with status `refuted` or `abandoned`
 - Generate a "lessons learned" summary accessible to future workstreams
 - Surface the failure to the user via the Project Coordinator with context on why the failure is informative
 
