@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 from typing import Any
@@ -12,59 +13,73 @@ class FileSystemAdapter:
 
     def _ensure_project_dirs(self, project_id: str) -> Path:
         p = self._project_path(project_id)
-        (p / "workstreams").mkdir(parents=True, exist_ok=True)
-        (p / "margin_notes").mkdir(parents=True, exist_ok=True)
-        (p / "artifacts").mkdir(parents=True, exist_ok=True)
-        (p / "logs").mkdir(parents=True, exist_ok=True)
-        (p / "vector_db").mkdir(parents=True, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True)
+        (p / "workstreams").mkdir(exist_ok=True)
+        (p / "margin_notes").mkdir(exist_ok=True)
+        (p / "artifacts").mkdir(exist_ok=True)
+        (p / "logs").mkdir(exist_ok=True)
+        (p / "vector_db").mkdir(exist_ok=True)
         return p
 
     async def create_project(self, title: str) -> str:
         import uuid
         project_id = f"proj-{uuid.uuid4().hex[:8]}"
-        base = self._ensure_project_dirs(project_id)
+        base = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         living_doc = base / "living_document.md"
         if not living_doc.exists():
-            living_doc.write_text(
+            content = (
                 f"---\ntitle: {title}\nproject_id: {project_id}\nversion: 1\n"
                 f"epistemic_status: Draft\ntraditions_referenced: []\n---\n\n"
                 f"# {title}\n\n"
             )
+            await asyncio.to_thread(living_doc.write_text, content, encoding="utf-8")
         return project_id
 
     async def write_document(self, project_id: str, filename: str, content: str) -> str:
-        base = self._ensure_project_dirs(project_id)
+        base = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         filepath = base / filename
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        filepath.write_text(content, encoding="utf-8")
+        await asyncio.to_thread(filepath.parent.mkdir, parents=True, exist_ok=True)
+        await asyncio.to_thread(filepath.write_text, content, encoding="utf-8")
         return str(filepath)
 
     async def read_document(self, project_id: str, filename: str) -> str | None:
-        base = self._ensure_project_dirs(project_id)
-        filepath = base / filename
+        filepath = self._project_path(project_id) / filename
         if not filepath.exists():
             return None
-        return filepath.read_text(encoding="utf-8")
+
+        def _read() -> str | None:
+            return filepath.read_text(encoding="utf-8")
+
+        return await asyncio.to_thread(_read)
 
     async def append_jsonl(self, project_id: str, filename: str, records: list[dict[str, Any]]) -> None:
-        base = self._ensure_project_dirs(project_id)
+        base = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         filepath = base / filename
-        with open(filepath, "a", encoding="utf-8") as f:
-            for record in records:
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        lines = [json.dumps(r, ensure_ascii=False) + "\n" for r in records]
+
+        def _write() -> None:
+            with open(filepath, "a", encoding="utf-8") as f:
+                f.writelines(lines)
+
+        await asyncio.to_thread(_write)
 
     async def write_json(self, project_id: str, filename: str, data: Any) -> str:
-        base = self._ensure_project_dirs(project_id)
+        base = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         filepath = base / filename
-        filepath.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        await asyncio.to_thread(
+            filepath.write_text, json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         return str(filepath)
 
     async def read_json(self, project_id: str, filename: str) -> Any:
-        base = self._ensure_project_dirs(project_id)
-        filepath = base / filename
+        filepath = self._project_path(project_id) / filename
         if not filepath.exists():
             return None
-        return json.loads(filepath.read_text(encoding="utf-8"))
+
+        def _read() -> Any:
+            return json.loads(filepath.read_text(encoding="utf-8"))
+
+        return await asyncio.to_thread(_read)
 
     async def write_workstream_report(self, project_id: str, workstream_id: str, report: str) -> str:
         return await self.write_document(project_id, f"workstreams/{workstream_id}_report.md", report)
@@ -88,18 +103,21 @@ class FileSystemAdapter:
         return await self.write_json(project_id, f"margin_notes/{note['note_id']}.json", note)
 
     async def list_workstreams(self, project_id: str) -> list[str]:
-        base = self._ensure_project_dirs(project_id)
-        ws_dir = base / "workstreams"
+        ws_dir = self._project_path(project_id) / "workstreams"
         if not ws_dir.exists():
             return []
-        return sorted(
-            f.stem.replace("_report", "")
-            for f in ws_dir.glob("*_report.md")
-        )
+
+        def _list() -> list[str]:
+            return sorted(
+                f.stem.replace("_report", "")
+                for f in ws_dir.glob("*_report.md")
+            )
+
+        return await asyncio.to_thread(_list)
 
     async def create_directory(self, path: str) -> None:
-        Path(path).mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(Path(path).mkdir, parents=True, exist_ok=True)
 
     async def ensure_project_dirs(self, project_id: str) -> str:
-        p = self._ensure_project_dirs(project_id)
+        p = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         return str(p)

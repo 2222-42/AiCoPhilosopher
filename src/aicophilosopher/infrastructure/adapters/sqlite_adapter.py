@@ -73,7 +73,8 @@ CREATE TABLE IF NOT EXISTS messages (
     epistemic_status_json TEXT DEFAULT '{}',
     correlation_id TEXT,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    delivered INTEGER DEFAULT 0
+    delivered INTEGER DEFAULT 0,
+    archived INTEGER DEFAULT 0
 )"""
 
 CREATE_REVIEW_ROUNDS = """
@@ -154,9 +155,15 @@ class SQLiteAdapter:
         conn = await self._connect()
         try:
             await conn.execute(
-                """INSERT OR REPLACE INTO projects
+                """INSERT INTO projects
                    (project_id, title, original_question, status, living_document, metadata_json, external_layer_config_json, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(project_id) DO UPDATE SET
+                       title=excluded.title, original_question=excluded.original_question,
+                       status=excluded.status, living_document=excluded.living_document,
+                       metadata_json=excluded.metadata_json,
+                       external_layer_config_json=excluded.external_layer_config_json,
+                       updated_at=CURRENT_TIMESTAMP""",
                 (project["project_id"], project.get("title", ""),
                  project.get("original_question", ""), project.get("status", "created"),
                  project.get("living_document", ""),
@@ -175,7 +182,13 @@ class SQLiteAdapter:
             row = await cursor.fetchone()
             if row is None:
                 return None
-            return dict(row)
+            d = dict(row)
+            d["metadata"] = json.loads(d.pop("metadata_json", "{}"))
+            raw = d.pop("external_layer_config_json", None)
+            d["external_layer_config"] = json.loads(raw) if raw else None
+            d.pop("created_at", None)
+            d.pop("updated_at", None)
+            return d
         finally:
             await conn.close()
 
@@ -183,10 +196,16 @@ class SQLiteAdapter:
         conn = await self._connect()
         try:
             await conn.execute(
-                """INSERT OR REPLACE INTO workstreams
+                """INSERT INTO workstreams
                    (workstream_id, project_id, type, status, goal_statement_json, assigned_coordinator,
                     assigned_sub_agents_json, results, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                   ON CONFLICT(workstream_id) DO UPDATE SET
+                       project_id=excluded.project_id, type=excluded.type, status=excluded.status,
+                       goal_statement_json=excluded.goal_statement_json,
+                       assigned_coordinator=excluded.assigned_coordinator,
+                       assigned_sub_agents_json=excluded.assigned_sub_agents_json,
+                       results=excluded.results, updated_at=CURRENT_TIMESTAMP""",
                 (workstream["workstream_id"], project_id,
                  workstream.get("type", ""), workstream.get("status", "pending"),
                  json.dumps(workstream.get("goal_statement", {})),
@@ -207,7 +226,14 @@ class SQLiteAdapter:
                 (workstream_id, project_id),
             )
             row = await cursor.fetchone()
-            return dict(row) if row else None
+            if row is None:
+                return None
+            d = dict(row)
+            d["goal_statement"] = json.loads(d.pop("goal_statement_json", "{}"))
+            d["assigned_sub_agents"] = json.loads(d.pop("assigned_sub_agents_json", "[]"))
+            d.pop("created_at", None)
+            d.pop("updated_at", None)
+            return d
         finally:
             await conn.close()
 

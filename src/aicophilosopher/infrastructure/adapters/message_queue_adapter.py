@@ -1,6 +1,4 @@
 import json
-import uuid
-from datetime import datetime, timedelta
 
 import aiosqlite
 
@@ -30,29 +28,20 @@ class MessageQueueAdapter:
         return conn
 
     async def initialize(self) -> None:
+        """Ensure the messages table has required columns (schema owned by SQLiteAdapter)."""
         conn = await self._connect()
         try:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    message_id TEXT PRIMARY KEY,
-                    project_id TEXT NOT NULL,
-                    sender_id TEXT NOT NULL,
-                    recipient_id TEXT NOT NULL,
-                    message_type TEXT NOT NULL,
-                    payload_json TEXT DEFAULT '{}',
-                    epistemic_status_json TEXT DEFAULT '{}',
-                    correlation_id TEXT,
-                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    delivered INTEGER DEFAULT 0,
-                    archived INTEGER DEFAULT 0
-                )""")
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_recipient ON messages(recipient_id, delivered, archived)")
-            await conn.execute("CREATE INDEX IF NOT EXISTS idx_mq_project ON messages(project_id)")
+            for col in ("delivered", "archived"):
+                try:
+                    await conn.execute(f"ALTER TABLE messages ADD COLUMN {col} INTEGER DEFAULT 0")
+                except aiosqlite.OperationalError:
+                    pass
             await conn.commit()
         finally:
             await conn.close()
 
     async def send(self, message: dict[str, object]) -> str:
+        import uuid
         mid = str(message.get("message_id", uuid.uuid4().hex))
         conn = await self._connect()
         try:
@@ -99,6 +88,7 @@ class MessageQueueAdapter:
             await conn.close()
 
     async def broadcast(self, message: dict[str, object], agent_ids: list[str]) -> list[str]:
+        import uuid
         ids = []
         for agent_id in agent_ids:
             msg = dict(message)
@@ -124,6 +114,7 @@ class MessageQueueAdapter:
             await conn.close()
 
     async def archive_old_messages(self) -> int:
+        from datetime import datetime, timedelta
         conn = await self._connect()
         try:
             total = 0
