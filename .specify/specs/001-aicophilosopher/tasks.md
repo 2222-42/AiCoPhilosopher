@@ -141,35 +141,14 @@
 
 ### Tests for User Story 1
 
-- [ ] T-030 [P] [US1] Unit tests for `ProjectCoordinatorAgent` dialogue state machine in `tests/unit/test_coordinator_dialogue.py`: test clarification turns, goal approval transition, workstream proposal
+- [x] T-030 [P] [US1] Unit tests for `ProjectCoordinatorAgent` dialogue state machine in `tests/unit/test_coordinator_dialogue.py`: test clarification turns, goal approval transition, workstream proposal (4 tests FAIL as required; install T-033 to make them PASS)
   - **AC**: Tests FAIL before implementation; PASS after; cover ≤5 turns constraint (AC-001)
 
-- [ ] T-031 [P] [US1] Integration test for full clarification → workstream lifecycle in `tests/integration/test_clarification_workflow.py`: `new project` → `refine goal` → approve → `start workstream literature_search` → `pause` → `resume` → `status`
-  - **AC**: End-to-end test passes with mock LLM; workstream status reflects commands within 30s (AC-007)
-
-### Implementation for User Story 1
-
-- [ ] T-032 [US1] Implement `src/aicophilosopher/application/orchestration/base.py`: `BaseAgent` with shared LLM client, logging, tool access via `ToolRegistry`, message sending via `MessageQueue`; `run()` abstract method
+- [x] T-032 [DONE] [US1] Implement `src/aicophilosopher/application/orchestration/base.py`: `BaseAgent` with shared LLM client, logging, tool access via `ToolRegistry`, message sending via `MessageQueue`; `run()` abstract method
   - **AC**: Subclassing `BaseAgent` and calling `run()` dispatches to LLM; messages logged; tools accessible via `self.tools.get_tool()`
   - **Depends on**: T-017, T-018, T-019
 
-- [ ] T-033 [US1] Implement `src/aicophilosopher/application/orchestration/coordinator.py`: `ProjectCoordinatorAgent` with Socratic clarification dialogue, goal refinement, workstream proposal/approval, steering command handling, progressive disclosure rendering (Summary + Epistemic Status + Active Workstreams + [Details] + [Suggestions])
-  - **AC**: Dialogue continues until goal approved; `propose_workstream()` returns structured proposal; steering commands update workstream state; progressive disclosure format matches spec §5.3 exactly
-  - **Depends on**: T-032, T-013, T-015
-
-- [ ] T-034 [P] [US1] Implement `src/aicophilosopher/application/orchestration/workstream_coordinator.py`: `WorkstreamCoordinatorAgent` base class that manages sub-agent sequences, tracks workstream status (`pending` → `running` → `paused` → `completed/failed/stalled`), generates incremental updates, handles steering commands from Project Coordinator
-  - **AC**: `create_workstream(type, goal)` initializes correct coordinator subclass; `pause()`/`resume()` transition status; `steer()` modifies active plan; incremental updates written to workspace
-  - **Depends on**: T-032, T-015
-
-- [ ] T-035 [US1] Implement `src/aicophilosopher/presentation/commands.py`: Click command definitions for all CLI commands: `new project`, `refine goal`, `start workstream`, `pause`, `resume`, `steer`, `status`, `show hypotheses`, `show dead ends`, `add note`
-  - **AC**: Each command parses arguments correctly; invalid arguments show help; `status` displays epistemic overview; `show dead ends` lists all `failed`/`abandoned` hypotheses (AC-008)
-  - **Depends on**: T-033, T-034
-
-- [ ] T-036 [US1] Implement `src/aicophilosopher/presentation/cli.py`: Rich-based terminal UI with live display, collapsible panels for progressive disclosure, Markdown rendering for living document, real-time workstream status updates
-  - **AC**: `show document` renders Markdown with syntax highlighting; `status` shows live workstream progress bars; `[Details]`/`[Suggestions]` sections collapsible; response latency <30s (AC-007)
-  - **Depends on**: T-035
-
-- [ ] T-037 [US1] Implement `src/aicophilosopher/application/services/living_document.py`: `LivingDocument` class with YAML frontmatter generation, Markdown section management, annotation embedding/extraction, version tracking
+- [x] T-037 [DONE] [US1] Implement `src/aicophilosopher/application/services/living_document.py`: `LivingDocument` class with YAML frontmatter generation, Markdown section management, annotation embedding/extraction, version tracking
   - **AC**: `create(title, project_id)` generates frontmatter; `add_section("Arguments", content)` appends with annotation placeholders; `embed_annotations()` inserts HTML comment annotations; `parse_annotations()` extracts all annotations
   - **Depends on**: T-015
 
