@@ -1,4 +1,5 @@
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from aicophilosopher.application.orchestration.base import BaseAgent
@@ -21,7 +22,9 @@ class WorkstreamCoordinatorAgent(BaseAgent):
         filesystem: Any = None,
         **kwargs: object,
     ) -> None:
-        super().__init__(agent_id=workstream_id, llm_backend=llm_backend, message_queue=message_queue, config=kwargs.get("config"), tool_registry=kwargs.get("tool_registry"))  # type: ignore[arg-type]
+        project_id = str(kwargs.get("project_id", ""))
+        super().__init__(agent_id=workstream_id, project_id=project_id, llm_backend=llm_backend, message_queue=message_queue, config=kwargs.get("config"), tool_registry=kwargs.get("tool_registry"))  # type: ignore[arg-type]
+        self.project_id = project_id
         self.workstream_id = workstream_id
         self.workstream_type = workstream_type
         self.goal_statement = goal_statement
@@ -48,6 +51,8 @@ class WorkstreamCoordinatorAgent(BaseAgent):
         await self._log_update({"action": "resume", "message": f"Workstream '{self.workstream_id}' resumed"})
 
     async def steer(self, instruction: str) -> None:
+        if self.status not in ("running", "paused"):
+            raise RuntimeError(f"Cannot steer workstream in state: {self.status}")
         await self._log_update({"action": "steer", "instruction": instruction})
 
     def fail(self, reason: str) -> None:
@@ -76,15 +81,15 @@ class WorkstreamCoordinatorAgent(BaseAgent):
 
     async def _log_update(self, update: dict[str, Any]) -> None:
         entry = {
+            **update,
             "update_id": f"upd-{uuid.uuid4().hex[:8]}",
             "workstream_id": self.workstream_id,
-            "timestamp": update.get("timestamp", ""),
-            **update,
+            "timestamp": update.get("timestamp") or datetime.now(UTC).isoformat(),
         }
         self._incremental_updates.append(entry)
-        if self.filesystem:
+        if self.filesystem and self.project_id:
             await self.filesystem.write_json(
-                self.workstream_id,
+                self.project_id,
                 f"workstreams/{self.workstream_id}_incremental.log",
                 self._incremental_updates,
             )
@@ -92,8 +97,6 @@ class WorkstreamCoordinatorAgent(BaseAgent):
     @staticmethod
     def create_workstream(ws_type: str, goal: dict[str, Any], **kwargs: Any) -> "WorkstreamCoordinatorAgent":
         coord_cls = WORKSTREAM_TYPE_MAP.get(ws_type, WorkstreamCoordinatorAgent)
-        if coord_cls is None:
-            coord_cls = WorkstreamCoordinatorAgent
         ws_id = f"ws-{uuid.uuid4().hex[:8]}"
         return coord_cls(  # type: ignore[no-any-return]
             workstream_id=ws_id,
