@@ -1,4 +1,6 @@
 
+import uuid
+
 import click
 
 
@@ -74,10 +76,10 @@ def steer(ctx: click.Context, workstream_id: str, instruction: str) -> None:
 
 
 @cli.command()
-@click.option("--status", "hyp_status", help="Filter by status: active, abandoned, refined, refuted")
+@click.option("--filter-status", type=click.Choice(["active", "abandoned", "refined", "refuted"]), default=None, help="Filter by hypothesis status")
 @click.option("--tradition", help="Filter by epistemic tradition")
 @click.pass_context
-def show_hypotheses(ctx: click.Context, hyp_status: str | None = None, tradition: str | None = None) -> None:
+def show_hypotheses(ctx: click.Context, filter_status: str | None = None, tradition: str | None = None) -> None:
     """Display hypothesis history with epistemic status."""
     click.echo("Hypothesis History:")
     click.echo("  No hypotheses yet. Start a workstream to generate hypotheses.")
@@ -97,7 +99,7 @@ def show_dead_ends(ctx: click.Context) -> None:
 @click.pass_context
 def add_note(ctx: click.Context, text: str, attach_to: str | None = None) -> None:
     """Add user note to workspace."""
-    note_id = f"note-{hash(text) % 10000:04x}"
+    note_id = f"note-{uuid.uuid4().hex[:4]}"
     click.echo(f"Note added: {note_id}")
     if attach_to:
         click.echo(f"Attached to: {attach_to}")
@@ -130,5 +132,4 @@ def show_document(ctx: click.Context, section: str | None = None, annotations: b
     click.echo("No document content yet. Start a workstream to generate content.")
 
 
-if __name__ == "__main__":
-    cli()
+
