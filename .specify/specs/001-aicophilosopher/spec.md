@@ -166,6 +166,34 @@ class UncertaintyRecord(TypedDict):
     last_updated: str                        # ISO timestamp
 ```
 
+### 3.4 Implementation Architecture Principles (Mandatory)
+
+The AI Co-Philosopher **must** be implemented following **Pragmatic Clean Architecture** (Ports & Adapters / Hexagonal Architecture) with strong emphasis on type safety and maintainability.
+
+#### Core Rules
+
+- **Language**: Python 3.11+ (targeting 3.12+ in future)
+- **Architecture Style**: Ports & Adapters (Clean Architecture)
+  - `domain/`: Pure business logic—Entities, Value Objects, and domain services. Must have zero external dependencies.
+  - `application/`: Orchestration and use cases—LangGraph state graphs, Project Coordinator, Workstream Coordinators, and Synthesis workflows. Depends only on `domain/` and `ports/`.
+  - `ports/`: Abstract interfaces—`LLMPort`, `StoragePort`, `ReviewerPort`, `DialecticalHistoryPort`, etc. Must import no third-party libraries.
+  - `infrastructure/adapters/`: Concrete implementations—`GeminiAdapter`, `FileSystemAdapter`, `ChromaAdapter`, `SqliteAdapter`, etc. Implement the interfaces declared in `ports/`.
+  - `presentation/`: CLI / Chat interface—Rich-based terminal UI, command parsing, and human-in-the-loop breakpoints. Depends only on `application/` and `ports/`.
+- **Type Safety**:
+  - All public APIs, ports, and data classes **must** be strictly defined with **Pydantic v2** (see §3.3 and `data-model.md`).
+  - Static type checking enforced via `typing.Protocol` + `mypy --strict`.
+  - Runtime validation via Pydantic `model_validate` / `TypeAdapter` on every external input and deserialization boundary.
+- **Dependency Direction**:
+  - `domain` → `application` → `ports` → `infrastructure/adapters` (dependencies point inward only).
+  - All external libraries and I/O concerns (LLM SDKs, vector databases, filesystem, search APIs) **must** be wrapped by adapters behind the interfaces declared in `ports/`.
+  - The orchestration framework (LangGraph) may be used directly in the `application/` layer as it realises the orchestration use-case itself; it does not require an adapter, but all state schemas it manipulates must be Pydantic models defined in `domain/`.
+- **Additional Mandates**:
+  - No circular imports (enforced by `ruff` + `pyright`).
+  - All state changes **must** be immutable or follow an explicit command pattern; in-place mutation of domain objects is prohibited.
+  - Uncertainty Registry, Dialectical History, and Working Paper **must** be treated as first-class domain entities. Agents and coordinators are forbidden from direct filesystem or database manipulation; all persistence flows through the `StoragePort`.
+
+These principles are mandatory to faithfully realise the **stateful / uncertainty-aware / auditable workspace** demanded by the AI Co-Mathematician paper, adapted for philosophical research.
+
 ## 4. Agent Specifications
 
 ### 4.1 Project Coordinator Agent
