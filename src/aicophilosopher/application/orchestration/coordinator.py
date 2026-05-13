@@ -21,7 +21,7 @@ class ProjectCoordinatorAgent(BaseAgent):
         filesystem: Any = None,
         **kwargs: object,
     ) -> None:
-        super().__init__(agent_id="project_coordinator", llm_backend=llm_backend, message_queue=message_queue, config=kwargs.get("config"), tool_registry=kwargs.get("tool_registry"))  # type: ignore[arg-type]
+        super().__init__(agent_id="project_coordinator", project_id=project_id, llm_backend=llm_backend, message_queue=message_queue, config=kwargs.get("config"), tool_registry=kwargs.get("tool_registry"))  # type: ignore[arg-type]
         self.project_id = project_id
         self.storage = storage
         self.filesystem = filesystem
@@ -50,17 +50,17 @@ class ProjectCoordinatorAgent(BaseAgent):
         return self._start_dialogue(user_input)
 
     def _start_dialogue(self, user_input: str | None) -> dict[str, Any]:
-        self._turn_count += 1
         if not user_input:
             return {
                 "message": "Welcome to the AI Co-Philosopher. What philosophical question would you like to explore?",
                 "dialogue_state": "awaiting_question",
-                "turn": self._turn_count,
+                "turn": 0,
             }
 
+        self._turn_count += 1
         self.dialogue_history.append({"role": "user", "content": user_input})
 
-        if self._turn_count >= len(CLARIFICATION_QUESTIONS):
+        if self._turn_count > len(CLARIFICATION_QUESTIONS):
             goal = self._synthesize_goal()
             self._goal_proposed = goal
             return {
@@ -101,13 +101,13 @@ class ProjectCoordinatorAgent(BaseAgent):
 
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
-            return {"error": "Cannot start workstream: no approved goals. Use `refine goal` first."}
+            return {"error": "Cannot start workstream: no approved goals. Use `refine_goal` first."}
         return {
             "message": f"Workstream of type '{workstream_type}' proposed for goal: **{self._goal_proposed}**\n\nDo you want to proceed with this workstream?",
             "workstream_type": workstream_type,
             "proposal": {
                 "type": workstream_type,
-                "goal": self._goal_proposed,
+                "goal": {"description": self._goal_proposed, "approved": True},
                 "assigned_coordinator": f"{workstream_type}_coordinator",
             },
         }
@@ -134,6 +134,7 @@ class ProjectCoordinatorAgent(BaseAgent):
         }
 
     def _synthesize_goal(self) -> str:
+        # TODO: incorporate dialogue_history to generate a meaningful goal
         return "To investigate the philosophical question through conceptual analysis and cross-traditional comparison, producing a structured living document with annotated arguments and a dialectical history appendix."
 
     def get_dialogue_state(self) -> str:
@@ -141,4 +142,6 @@ class ProjectCoordinatorAgent(BaseAgent):
             return "goals_approved"
         elif self._goal_proposed:
             return "goal_proposed"
+        elif self._turn_count == 0:
+            return "awaiting_question"
         return "clarifying"
