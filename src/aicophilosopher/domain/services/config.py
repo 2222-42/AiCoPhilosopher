@@ -1,11 +1,15 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings
+
+LLMBackend = Literal["ollama", "claude", "gemini"]
 
 
 class Config(BaseSettings):
     model_config = {"env_prefix": "AICOPH_", "env_file": ".env", "extra": "ignore"}
 
-    llm_backend: str = Field(default="ollama", description="LLM backend: claude, gemini, ollama")
+    llm_backend: LLMBackend = Field(default="ollama", description="LLM backend: ollama, claude, gemini")
     llm_model: str = Field(default="", description="LLM model name")
     llm_api_key: str = Field(default="", description="LLM API key")
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)

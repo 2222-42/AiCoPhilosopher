@@ -37,7 +37,7 @@ class UncertaintyLifecycle:
             try:
                 record.review_status = ReviewStatus(new_status)
             except ValueError:
-                pass
+                raise ValidationError(f"Invalid review status: {new_status}") from None
         if "last_updated" in updates:
             record.last_updated = str(updates["last_updated"])
         return record.model_dump()

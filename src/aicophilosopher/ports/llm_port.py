@@ -1,9 +1,11 @@
+from dataclasses import dataclass, field
 from typing import Protocol
 
 
+@dataclass
 class GenerationResult:
     text: str = ""
-    usage: dict[str, int] = {}
+    usage: dict[str, int] = field(default_factory=dict)
     model: str = ""
     finish_reason: str | None = None
 

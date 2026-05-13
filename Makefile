@@ -1,6 +1,6 @@
 .PHONY: test test-cov lint format typecheck check clean
 
-PYTHON := /home/daioh/.pyenv/versions/3.12.12/bin/python3
+PYTHON ?= python3
 PROJECT := aicophilosopher
 SRC := src/$(PROJECT)
 TEST := tests

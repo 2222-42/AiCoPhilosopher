@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify domain/ imports only stdlib + pydantic."""
+"""Verify domain/ imports only stdlib + pydantic + intra-domain modules."""
 
 import ast
 import sys
@@ -37,6 +37,27 @@ ALLOWED_TOP_LEVELS = {imp.split(".")[0] for imp in ALLOWED_IMPORTS}
 ROOT = Path(__file__).resolve().parent.parent
 DOMAIN_DIR = ROOT / "src" / "aicophilosopher" / "domain"
 
+# aicophilosopher subpackages that domain/ may import from
+ALLOWED_AICOPH_IMPORTS = {
+    "aicophilosopher.domain",
+    "aicophilosopher.domain.entities",
+    "aicophilosopher.domain.entities.uncertainty",
+    "aicophilosopher.domain.entities.dialectical",
+    "aicophilosopher.domain.entities.project",
+    "aicophilosopher.domain.entities.workstream",
+    "aicophilosopher.domain.entities.hypothesis",
+    "aicophilosopher.domain.entities.concept",
+    "aicophilosopher.domain.entities.review",
+    "aicophilosopher.domain.entities.message",
+    "aicophilosopher.domain.entities.artifact",
+    "aicophilosopher.domain.value_objects",
+    "aicophilosopher.domain.value_objects.enums",
+    "aicophilosopher.domain.services",
+    "aicophilosopher.domain.services.config",
+    "aicophilosopher.domain.exceptions",
+    "aicophilosopher.domain.note",
+}
+
 
 def check_file(filepath: Path) -> list[str]:
     errors = []
@@ -54,9 +75,14 @@ def check_file(filepath: Path) -> list[str]:
                 if full_import not in ALLOWED_IMPORTS and top_level not in ALLOWED_TOP_LEVELS:
                     errors.append(f"  {filepath.relative_to(ROOT)}: import '{alias.name}' not allowed")
         elif isinstance(node, ast.ImportFrom):
-            if node.module and node.module.split(".")[0] not in ALLOWED_TOP_LEVELS:
-                if node.module not in ALLOWED_IMPORTS:
-                    errors.append(f"  {filepath.relative_to(ROOT)}: import from '{node.module}' not allowed")
+            if node.module is None:
+                continue
+            top_level = node.module.split(".")[0]
+            # if top_level is aicophilosopher, enforce that only domain subpackages are imported
+            if top_level == "aicophilosopher" and node.module not in ALLOWED_AICOPH_IMPORTS:
+                errors.append(f"  {filepath.relative_to(ROOT)}: import from '{node.module}' not allowed (only aicophilosopher.domain.* allowed in domain layer)")
+            elif top_level not in ALLOWED_TOP_LEVELS:
+                errors.append(f"  {filepath.relative_to(ROOT)}: import from '{node.module}' not allowed")
 
     return errors
 
