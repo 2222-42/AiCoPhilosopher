@@ -2,7 +2,7 @@
 
 This checklist **must** be used during implementation and PR review.
 
-**Last Review**: 2026-05-13 | **Commit**: 92d00e2 | **Status**: 11/16 PASS, 5 DEFERRED (Phase 3+)
+**Last Review**: 2026-05-13 | **Commit**: 92d00e2 | **Status**: 11/21 PASS, 10 DEFERRED (Phase 3+)
 
 ## Acceptance Criteria (All must be satisfied)
 
@@ -29,5 +29,14 @@ This checklist **must** be used during implementation and PR review.
 - [ ] Project Coordinator and Workstream Coordinators are implemented as LangGraph subgraphs — *DEFERRED: Orchestration stubs exist but LangGraph integration not yet implemented (Phase 3)*
 - [ ] All inter-agent communication flows through Ports — *DEFERRED: `MessagePort` protocol defined; `MessageQueueAdapter` stub exists but not implemented*
 - [x] No Agent or Coordinator manipulates the filesystem or database directly (all persistence goes through `StoragePort`) — *Verified: domain purity enforced; no I/O in domain/ layer*
+
+### 5. Cost-Aware LLM Routing & Tiered Execution
+
+- [ ] `ports/llm_port.py` に `LLMProfile` enum（`CHEAP`, `MEDIUM`, `EXPENSIVE`）と `LLMRoutingConfig` が定義されている
+- [ ] `infrastructure/adapters/llm_router_adapter.py` でルーティング・コスト見積もりが実装されている
+- [ ] Literature Review Workstream（および類似の探索系Agent）は **staged pipeline**（Stage 1 Cheap → Stage 2 Expensive）で実装されている
+- [ ] Cheapモデルで十分な探索・収集を行い、Kimi K2.6は**深層分析・レビュー時のみ**呼び出される
+- [ ] 各LLM呼び出し時にコスト見積もり・ログが出力され、Uncertainty Registryに記録される
+- [ ] 高コスト呼び出し前にWorkstream Coordinatorがユーザー確認を求める仕組みがある（または予算閾値設定可能）
 
 **If a violation is found**: PR merge is immediately blocked. Fix is mandatory.

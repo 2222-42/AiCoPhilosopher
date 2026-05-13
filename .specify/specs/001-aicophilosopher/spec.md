@@ -195,6 +195,26 @@ The AI Co-Philosopher **must** be implemented following **Pragmatic Clean Archit
 
 These principles are mandatory to faithfully realise the **stateful / uncertainty-aware / auditable workspace** demanded by the AI Co-Mathematician paper, adapted for philosophical research.
 
+### 3.5 Cost-Aware LLM Routing & Tiered Execution (Mandatory)
+
+For literature-search and exploration workstreams, **cost-optimised multi-stage execution is mandatory**.
+
+#### 3.5.1 Design Principles
+- **Exploration / Collection tasks** (paper search, abstract retrieval, citation graph construction, initial relevance filtering) **must** run on **low-cost models** (e.g., Gemini 2.5 Flash, DeepSeek R1, Moonshot cheap tier).
+- **Analysis / Synthesis tasks** (deep critical review, conceptual genealogy analysis, Cross-Traditional Comparison, Uncertainty evaluation, integration into the Working Paper) **must** use the **high-quality model (Kimi K2.6)** exclusively.
+- Each task is automatically routed by an **LLM Router** that selects the appropriate model for the task tier.
+- When cumulative cost exceeds a configurable threshold, the Workstream Coordinator **must** surface a confirmation request to the user via progressive disclosure.
+
+#### 3.5.2 Implementation Requirements (Ports & Adapters)
+- Add `LLMProfile` enum (`CHEAP`, `MEDIUM`, `EXPENSIVE`) and `LLMRoutingConfig` to `ports/llm_port.py`.
+- Implement actual routing and cost estimation logic in `infrastructure/adapters/llm_router_adapter.py`.
+- The Literature Review Sub-Agent (and related Phenomenological / Cross-Traditional Agents) **must** operate as a **staged pipeline**:
+  1. **Stage 1 (CHEAP)**: Search, Abstract retrieval, Citation collection.
+  2. **Stage 2 (EXPENSIVE)**: Deep review and synthesis via Kimi K2.6 (only when needed).
+- Cost logs are recorded alongside the `uncertainty_registry` (enabling future budget-cap configuration).
+
+This mechanism ensures the **AI Co-Philosopher dramatically reduces routine exploration costs** while reserving Kimi K2.6's philosophical depth for the core analytical work that demands it.
+
 ## 4. Agent Specifications
 
 ### 4.1 Project Coordinator Agent
