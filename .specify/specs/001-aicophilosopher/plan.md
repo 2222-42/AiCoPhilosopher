@@ -256,6 +256,67 @@ See `.specify/specs/001-aicophilosopher/quickstart.md` for development environme
 
 Updated `.github/copilot-instructions.md` between `<!-- SPECKIT START -->` and `<!-- SPECKIT END -->` markers to reference the implementation plan.
 
+### Phase 1.5: Architecture Skeleton
+
+**Prerequisites**: `data-model.md` and `/contracts/` complete
+
+**Output**: Empty directory tree + DI container skeleton + `pyproject.toml` tool config
+
+**Purpose**: Establish the Clean Architecture directory structure and dependency-injection wiring before any domain logic is written. This ensures the "inward-only" dependency rule is enforced from day one.
+
+**Skeleton structure**:
+```text
+src/aicophilosopher/
+├── domain/
+│   ├── __init__.py
+│   ├── entities/              # UncertaintyRegistry, DialecticalHistory, WorkingPaper
+│   ├── value_objects/         # ConfidenceScore, TraditionTag, ClaimId
+│   └── services/              # Pure domain services (no I/O)
+├── application/
+│   ├── __init__.py
+│   ├── orchestration/         # LangGraph state graphs
+│   ├── use_cases/             # StartProject, LaunchWorkstream, SynthesizeDocument
+│   └── ports/                 # Abstract interfaces (re-exported from ports/)
+├── ports/
+│   ├── __init__.py
+│   ├── llm_port.py            # generate(), embed()
+│   ├── storage_port.py        # save_project(), load_project(), query_uncertainty()
+│   ├── reviewer_port.py       # request_review(), submit_verdict()
+│   ├── dialectical_history_port.py  # append_move(), query_history()
+│   └── search_port.py         # query_philpapers(), query_sep()
+├── infrastructure/
+│   ├── __init__.py
+│   └── adapters/
+│       ├── __init__.py
+│       ├── gemini_adapter.py
+│       ├── claude_adapter.py
+│       ├── ollama_adapter.py
+│       ├── sqlite_adapter.py
+│       ├── chroma_adapter.py
+│       └── filesystem_adapter.py
+├── presentation/
+│   ├── __init__.py
+│   ├── cli.py                 # Rich-based terminal UI
+│   └── commands.py            # Click command definitions
+```
+
+**DI container**: A lightweight `Container` class (or `dependency-injector` library) in `src/aicophilosopher/container.py` that:
+- Reads backend config (LLM provider, vector DB, etc.) from `core/config.py`
+- Instantiates the correct Adapter for each Port
+- Injects Ports into Application-layer use cases
+- Allows one-line adapter swap for testing (e.g., `container.register(StoragePort, FakeStorageAdapter)`)
+
+**Tool config**:
+- `ruff` configured with `select = ["E", "F", "I", "C90"]` and circular-import detection enabled
+- `mypy` configured with `strict = true` and `warn_return_any = true`
+- `pyright` configured with `typeCheckingMode = "strict"` (optional, for dual enforcement)
+
+**Acceptance criteria**:
+- `ruff check src/aicophilosopher` passes on the empty skeleton (no import errors, no circular refs)
+- `mypy src/aicophilosopher` passes on the empty skeleton
+- `python -c "from aicophilosopher.container import Container; c = Container(); print(c.resolve('LLMPort'))"` raises a clean `NotImplementedError` (port has no adapter yet)
+- Every `.py` file in `domain/` contains only stdlib + `pydantic` imports (verified by a grep script in CI)
+
 ### Phase 2: Task Breakdown (Future `/speckit.tasks`)
 
 Not created by `/speckit.plan`. The plan ends here. The next step is `/speckit.tasks` to generate `tasks.md` with actionable implementation tasks organized by user story and dependency order.
