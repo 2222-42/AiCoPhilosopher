@@ -203,7 +203,7 @@ fi
 
 cd "$REPO_ROOT"
 
-SPECS_DIR="$REPO_ROOT/specs"
+SPECS_DIR="$REPO_ROOT/.specify/specs"
 if [ "$DRY_RUN" != true ]; then
     mkdir -p "$SPECS_DIR"
 fi
@@ -302,8 +302,10 @@ fi
 
 # GitHub enforces a 244-byte limit on branch names
 # Validate and truncate if necessary
+# Use LC_ALL=C to count bytes (not characters) for multi-byte UTF-8 correctness
 MAX_BRANCH_LENGTH=244
-if [ ${#BRANCH_NAME} -gt $MAX_BRANCH_LENGTH ]; then
+BRANCH_NAME_BYTES=$(LC_ALL=C printf '%s' "$BRANCH_NAME" | wc -c | tr -d ' ')
+if [ "$BRANCH_NAME_BYTES" -gt $MAX_BRANCH_LENGTH ]; then
     # Calculate how much we need to trim from suffix
     # Account for prefix length: timestamp (15) + hyphen (1) = 16, or sequential (3) + hyphen (1) = 4
     PREFIX_LENGTH=$(( ${#FEATURE_NUM} + 1 ))
@@ -317,9 +319,11 @@ if [ ${#BRANCH_NAME} -gt $MAX_BRANCH_LENGTH ]; then
     ORIGINAL_BRANCH_NAME="$BRANCH_NAME"
     BRANCH_NAME="${FEATURE_NUM}-${TRUNCATED_SUFFIX}"
     
+    ORIGINAL_BYTES=$(LC_ALL=C printf '%s' "$ORIGINAL_BRANCH_NAME" | wc -c | tr -d ' ')
+    TRUNCATED_BYTES=$(LC_ALL=C printf '%s' "$BRANCH_NAME" | wc -c | tr -d ' ')
     >&2 echo "[specify] Warning: Branch name exceeded GitHub's 244-byte limit"
-    >&2 echo "[specify] Original: $ORIGINAL_BRANCH_NAME (${#ORIGINAL_BRANCH_NAME} bytes)"
-    >&2 echo "[specify] Truncated to: $BRANCH_NAME (${#BRANCH_NAME} bytes)"
+    >&2 echo "[specify] Original: $ORIGINAL_BRANCH_NAME ($ORIGINAL_BYTES bytes)"
+    >&2 echo "[specify] Truncated to: $BRANCH_NAME ($TRUNCATED_BYTES bytes)"
 fi
 
 FEATURE_DIR="$SPECS_DIR/$BRANCH_NAME"
