@@ -34,8 +34,10 @@ class UncertaintyLifecycle:
             record.counter_argument_strength = float(updates["counter_argument_strength"])  # type: ignore[arg-type]
         if "review_status" in updates:
             new_status = str(updates["review_status"])
-            if new_status in ReviewStatus._value2member_map_:
+            try:
                 record.review_status = ReviewStatus(new_status)
+            except ValueError:
+                pass
         if "last_updated" in updates:
             record.last_updated = str(updates["last_updated"])
         return record.model_dump()
