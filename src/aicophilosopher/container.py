@@ -1,5 +1,10 @@
 from typing import Any, overload
 
+from aicophilosopher.domain.services.config import Config
+from aicophilosopher.infrastructure.adapters.claude_adapter import ClaudeBackend
+from aicophilosopher.infrastructure.adapters.gemini_adapter import GeminiBackend
+from aicophilosopher.infrastructure.adapters.ollama_adapter import OllamaBackend
+
 
 class Container:
     def __init__(self, config: dict[str, Any] | None = None) -> None:
@@ -8,11 +13,6 @@ class Container:
         self.config = config or {}
 
     def register(self, interface: type, implementation: type[Any]) -> None:
-        """Register an adapter class (not instance) for a given interface type.
-
-        `implementation` must be a class/callable that `resolve()` will instantiate
-        via `implementation()`. Use `register_instance()` for pre-built instances.
-        """
         self._registry[self._key(interface)] = implementation
 
     @overload
@@ -31,7 +31,6 @@ class Container:
         raise NotImplementedError(f"No adapter registered for {key}")
 
     def register_instance(self, interface: type | str, instance: Any) -> None:
-        """Register a pre-built instance for a given interface type or name."""
         key = interface if isinstance(interface, str) else self._key(interface)
         self._instances[key] = instance
 
@@ -40,3 +39,16 @@ class Container:
         mod = getattr(interface, "__module__", "")
         name = getattr(interface, "__name__", str(interface))
         return f"{mod}.{name}" if mod else name
+
+    @staticmethod
+    def create_llm_backend(config: Config | None = None) -> Any:
+        cfg = config or Config()
+        backend = cfg.llm_backend
+        if backend == "claude":
+            return ClaudeBackend(api_key=cfg.llm_api_key or None, model=cfg.llm_model or "claude-3-5-sonnet-20241022")
+        elif backend == "gemini":
+            return GeminiBackend(api_key=cfg.llm_api_key or None, model=cfg.llm_model or "gemini-1.5-pro")
+        elif backend == "ollama":
+            return OllamaBackend(model=cfg.llm_model or "llama3")
+        else:
+            raise ValueError(f"Unknown LLM backend: {backend}")

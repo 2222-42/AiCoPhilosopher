@@ -29,6 +29,7 @@
 - [x] Feature meets measurable outcomes defined in Success Criteria — *Baseline comparisons (30% faster), satisfaction thresholds (4/5), precision targets (70%+) defined*
 - [x] No implementation details leak into specification — *Technical schemas are in Architecture section; requirements are behavioral*
 - [x] Architecture Compliance Checklist (`checklists/architecture.md`) defines enforceable rules for Clean Architecture / Ports & Adapters, type safety, and domain-entity isolation — *All items must be satisfied at implementation and PR review time*
+- [ ] Cost-Aware LLM Routing（§3.5）が実装され、Literature Review Workstreamで実際に安価モデルとKimi K2.6が適切に使い分けられている
 
 ## Notes
 

@@ -82,17 +82,17 @@
 
 ### 2.2 Persistence Layer
 
-- [ ] T-013 [Foundation] Implement SQLite StoragePort adapter in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`: `SQLiteAdapter` class implementing `StoragePort` with methods for CRUD on projects, workstreams, hypotheses, uncertainty registry, messages, review rounds, artifacts, notes
+- [x] T-013 [DONE] [Foundation] Implement SQLite StoragePort adapter in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`: `SQLiteAdapter` class implementing `StoragePort` with methods for CRUD on projects, workstreams, hypotheses, uncertainty registry, messages, review rounds, artifacts, notes
   - **AC**: All tables from `data-model.md` §3.1 created; `notes` table added; foreign keys enforced; indexes functional; async `aiosqlite` operations work; `StoragePort` interface satisfied
   - **Depends on**: T-010, T-011
 
-- [ ] T-014 [P] [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/chroma_adapter.py`: `ChromaAdapter` implementing SearchPort's vector retrieval methods with `create_collection`, `add_documents`, `query` with tradition-aware `where` filtering, collection-per-project isolation
+- [x] T-014 [DONE] [P] [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/chroma_adapter.py`: `ChromaAdapter` implementing SearchPort's vector retrieval methods with `create_collection`, `add_documents`, `query` with tradition-aware `where` filtering, collection-per-project isolation
   - **AC**: `ChromaAdapter.query("free will", where={"tradition": "analytic_philosophy"})` returns filtered results; collections isolated by project ID; `SearchPort` interface satisfied
   - **Depends on**: T-002
 
 ### 2.3 Workspace & File System
 
-- [ ] T-015 [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/filesystem_adapter.py`: `FileSystemAdapter` implementing `StoragePort` with async-safe methods for creating project directories, reading/writing living documents, workstream reports, hypotheses JSONL (derived export), dialectical history JSONL (derived export), margin notes, uncertainty registry JSON, and notes
+- [x] T-015 [DONE] [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/filesystem_adapter.py`: `FileSystemAdapter` implementing `StoragePort` with async-safe methods for creating project directories, reading/writing living documents, workstream reports, hypotheses JSONL (derived export), dialectical history JSONL (derived export), margin notes, uncertainty registry JSON, and notes
   - **AC**: `FileSystemAdapter.create_project("Test")` creates full directory tree; concurrent writes to different project files do not corrupt; `living_document.md` round-trips with YAML frontmatter intact; `StoragePort` interface satisfied; SQLite is authoritative source; JSONL files are derived exports
   - **Depends on**: T-010, T-012
 
@@ -102,13 +102,13 @@
   - **AC**: All message types validate with sample payloads; `MessageType` enum restricts values; `correlation_id` linking works
   - **Depends on**: T-010
 
-- [ ] T-017 [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/message_queue_adapter.py`: `MessageQueueAdapter` implementing `MessagePort` backed by SQLite with `enqueue`, `dequeue`, `poll_inbox(agent_id)`, `broadcast`, and message retention policies
+- [x] T-017 [DONE] [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/message_queue_adapter.py`: `MessageQueueAdapter` implementing `MessagePort` backed by SQLite with `enqueue`, `dequeue`, `poll_inbox(agent_id)`, `broadcast`, and message retention policies
   - **AC**: Messages enqueue/dequeue correctly; `poll_inbox("project_coordinator")` returns only messages for that agent; broadcast creates copies for all active agents; retention policy archives old messages; `MessagePort` interface satisfied
   - **Depends on**: T-013, T-016
 
 ### 2.5 LLM Backend & Tool Registry
 
-- [ ] T-018 [Foundation] Define `LLMPort` in `src/aicophilosopher/ports/llm_port.py` (Protocol) and implement `ClaudeBackend`, `GeminiBackend`, `OllamaBackend` in `src/aicophilosopher/infrastructure/adapters/` (`claude_adapter.py`, `gemini_adapter.py`, `ollama_adapter.py`); factory function `create_backend(config)` in `domain/services/config.py`
+- [x] T-018 [DONE] [Foundation] Define `LLMPort` in `src/aicophilosopher/ports/llm_port.py` (Protocol) and implement `ClaudeBackend`, `GeminiBackend`, `OllamaBackend` in `src/aicophilosopher/infrastructure/adapters/` (`claude_adapter.py`, `gemini_adapter.py`, `ollama_adapter.py`); factory function `create_backend(config)` in `domain/services/config.py`
   - **AC**: Each backend implements `LLMPort` Protocol and returns `GenerationResult` with text + usage; `OllamaBackend` works offline; switching backends via config works; all backends mocked in tests; DI container resolves `LLMPort` correctly
   - **Depends on**: T-012
 
@@ -452,4 +452,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 1 (Setup), Phase 1.5 (Skeleton), and Phase 2 Core (T-010–T-012, T-016, T-019–T-022) COMPLETE** — Proceeding to Phase 2 remaining adapters (T-013–T-015, T-017–T-018) and User Stories.
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 2 COMPLETE** — All foundational tasks (T-010–T-022) done. Ready for Phase 3 (User Stories).
