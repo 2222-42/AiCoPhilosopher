@@ -1,2 +1,9 @@
+from aicophilosopher.presentation.commands import cli
+
+
 def main() -> None:
-    raise NotImplementedError
+    cli()
+
+
+if __name__ == "__main__":
+    main()
