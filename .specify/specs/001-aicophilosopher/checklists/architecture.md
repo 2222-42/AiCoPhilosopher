@@ -9,7 +9,7 @@ This checklist **must** be used during implementation and PR review.
 - [ ] All external dependencies (Gemini SDK, VectorDB, FileSystem, Search API, etc.) are accessed **only** through an Adapter
 - [ ] LangGraph is used directly in the `application/` layer as the orchestration backbone (no Adapter required)
 - [ ] The `domain/` layer has zero external dependencies (pure Python + Pydantic v2 only)
-- [ ] Dependencies point inward only (`domain` → `application` → `ports` → `infrastructure/adapters`) — Dependency Inversion Principle is observed
+- [ ] Dependencies point inward only (`infrastructure/adapters` → `ports` → `application` → `domain`) — Dependency Inversion Principle is observed
 
 ### 2. Type Safety
 - [ ] Every public class, function, and port is fully **type-annotated**
@@ -23,7 +23,7 @@ This checklist **must** be used during implementation and PR review.
 - [ ] No circular imports exist (verified by `ruff check` + `pyright`)
 
 ### 4. AI Co-Philosopher Specific Requirements
-- [ ] Uncertainty Registry, Dialectical History, and Working Paper are defined as **domain/entity** objects
+- [ ] Uncertainty Registry, Dialectical History, and Living Document are defined as **domain/entity** objects
 - [ ] Project Coordinator and Workstream Coordinators are implemented as LangGraph subgraphs
 - [ ] All inter-agent communication flows through Ports
 - [ ] No Agent or Coordinator manipulates the filesystem or database directly (all persistence goes through `StoragePort`)

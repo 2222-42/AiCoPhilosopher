@@ -37,7 +37,8 @@ Root aggregate. Represents a single philosophical research project.
 class ProjectState(BaseModel):
     project_id: UUID = Field(default_factory=uuid4)
     title: str = Field(..., min_length=1, max_length=500)
-    original_question: str = Field(..., min_length=10)
+    original_question: str = Field(..., min_length=1)
+    status: ProjectStatus = Field(default=ProjectStatus.created)
     refined_goals: list[GoalStatement] = Field(default_factory=list)
     workstreams: dict[str, WorkstreamState] = Field(default_factory=dict)
     living_document: str = Field(default="")
@@ -48,6 +49,7 @@ class ProjectState(BaseModel):
     artifacts: list[Artifact] = Field(default_factory=list)
     metadata: ProjectMetadata = Field(default_factory=ProjectMetadata)
     external_layer_config: ExternalConfig | None = Field(default=None)
+    notes: list[Note] = Field(default_factory=list)
 
     # Validation
     @field_validator("living_document")
@@ -58,15 +60,44 @@ class ProjectState(BaseModel):
         return v
 ```
 
+**ProjectStatus enum**:
+```python
+class ProjectStatus(str, Enum):
+    created = "created"
+    clarifying = "clarifying"
+    goals_approved = "goals_approved"
+    active = "active"
+    paused = "paused"
+    completed = "completed"
+    archived = "archived"
+```
+
 **Validation rules**:
 - `title`: 1-500 characters, non-empty
-- `original_question`: minimum 10 characters (prevents empty or trivial questions)
+- `original_question`: minimum 1 character (vague questions are expected; the clarification dialogue refines them)
+- `status`: MUST follow the lifecycle state transitions (see §4.1)
 - `living_document`: If non-empty, MUST start with YAML frontmatter (`---`)
 - `refined_goals`: Must have at least 1 goal before workstreams can be created
 
 **State transitions**:
 ```
 created → clarifying → goals_approved → active → paused → completed | archived
+```
+
+**Supporting types**:
+```python
+class ProjectMetadata(BaseModel):
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    version: int = Field(default=1, ge=1)
+    tags: list[str] = Field(default_factory=list)
+
+class ExternalConfig(BaseModel):
+    hermes_enabled: bool = Field(default=False)
+    hermes_endpoint: str | None = Field(default=None)
+    opencode_enabled: bool = Field(default=False)
+    opencode_endpoint: str | None = Field(default=None)
+    consent_given_at: datetime | None = Field(default=None)  # When user consented to external calls
 ```
 
 ### 2.2 WorkstreamState
@@ -390,7 +421,24 @@ class GoalStatement(BaseModel):
 - `description`: Minimum 20 characters (must be substantive enough to guide workstreams)
 - A workstream can only be created for a goal with `approved_by_user == True`
 
-### 2.10 Artifact
+### 2.10 Note
+
+Represents a user annotation attached to a project, a living document section, or a specific claim.
+
+```python
+class Note(BaseModel):
+    note_id: str = Field(default_factory=lambda: f"note-{uuid4().hex[:8]}")
+    project_id: str
+    content: str = Field(..., min_length=1)
+    attach_to: str | None = Field(default=None)  # Claim ID, section heading, or None for project-level
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+```
+
+**Validation rules**:
+- `content`: Minimum 1 character
+- `attach_to`: Optional reference to a claim ID, hypothesis ID, or living document section heading; if None, the note is project-level
+
+### 2.11 Artifact
 
 Represents a file produced or uploaded in the project.
 
@@ -415,7 +463,7 @@ class ArtifactType(str, Enum):
     simulation_result = "simulation_result"
 ```
 
-### 2.11 ProgressUpdate
+### 2.12 ProgressUpdate
 
 Incremental status report from a running workstream.
 
@@ -430,7 +478,7 @@ class ProgressUpdate(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 ```
 
-### 2.12 FailedExploration
+### 2.13 FailedExploration
 
 Records a workstream or sub-investigation that concluded in failure.
 
@@ -457,8 +505,8 @@ CREATE TABLE projects (
     project_id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     original_question TEXT NOT NULL,
-    living_document TEXT DEFAULT '',
     status TEXT DEFAULT 'created' CHECK (status IN ('created', 'clarifying', 'goals_approved', 'active', 'paused', 'completed', 'archived')),
+    living_document TEXT DEFAULT '',
     metadata_json TEXT DEFAULT '{}',
     external_layer_config_json TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -552,6 +600,15 @@ CREATE TABLE artifacts (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Notes
+CREATE TABLE notes (
+    note_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    attach_to TEXT,  -- Claim ID, hypothesis ID, or section heading; NULL for project-level
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
 CREATE INDEX idx_workstreams_project ON workstreams(project_id);
 CREATE INDEX idx_workstreams_status ON workstreams(status);
@@ -562,6 +619,8 @@ CREATE INDEX idx_uncertainty_review ON uncertainty_registry(review_status);
 CREATE INDEX idx_messages_project ON messages(project_id);
 CREATE INDEX idx_messages_recipient ON messages(recipient_id);
 CREATE INDEX idx_review_rounds_ws ON review_rounds(workstream_id);
+CREATE INDEX idx_notes_project ON notes(project_id);
+CREATE INDEX idx_notes_attach ON notes(attach_to);
 ```
 
 ---
@@ -631,6 +690,8 @@ unreviewed ──→ under_review ──→ contested ──→ accepted_with_re
 5. **Message ordering**: Messages within a project MUST be processable in `timestamp` order without loss of semantics.
 6. **Review round limit**: `ReviewRound.round_number` MUST NOT exceed 5 for any workstream.
 7. **Tradition validity**: All keys in `UncertaintyRecord.tradition_validity` MUST exist in the `TraditionRegistry` (loaded from `data/traditions/`).
+8. **Storage authority**: SQLite is the authoritative source for structured data (projects, workstreams, hypotheses, uncertainty, messages, notes). JSONL/JSON files in the workspace are derived exports for human convenience; they MUST NOT be used as primary sources.
+9. **Immutability**: Domain entities (`HypothesisRecord`, `DialecticalMove`, `Note`) follow a command-sourced mutation pattern — new state replaces old via explicit commands, not in-place mutation. Where full immutability is required, Pydantic models SHOULD use `model_config = ConfigDict(frozen=True)`.
 
 ---
 

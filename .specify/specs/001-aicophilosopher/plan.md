@@ -102,92 +102,133 @@ AiCoPhilosopher v2.0 is a stateful, hierarchical multi-agent workbench for philo
 
 ### Source Code (repository root)
 
-**Structure Decision**: Single project (Option 1) — CLI application with library core. The `aicophilosopher` package is designed to be importable for future web UI or programmatic usage.
+**Structure Decision**: Single project — CLI application with library core. The `aicophilosopher` package follows **Pragmatic Clean Architecture** (Ports & Adapters) per spec.md §3.4. Dependencies point inward: `domain` ← `application` ← `ports` ← `infrastructure/adapters`, with `presentation` depending on `application` and `ports` only.
 
 ```text
 src/
 ├── aicophilosopher/
 │   ├── __init__.py
-│   ├── __main__.py              # Entry point: python -m aicophilosopher
-│   ├── version.py               # Semantic versioning
-│   ├── core/
+│   ├── __main__.py                      # Entry point: python -m aicophilosopher
+│   ├── version.py                       # Semantic versioning
+│   ├── container.py                      # DI container: adapter registration, config-driven resolution
+│   ├── domain/
 │   │   ├── __init__.py
-│   │   ├── models.py            # Pydantic state schemas (ProjectState, WorkstreamState, etc.)
-│   │   ├── workspace.py         # WorkspaceManager: thread-safe/async-safe file/DB operations
-│   │   ├── config.py            # Pydantic-settings based configuration
-│   │   └── exceptions.py        # Domain-specific exceptions
-│   ├── agents/
+│   │   ├── entities/                    # Pydantic state schemas (BaseModel, frozen where appropriate)
+│   │   │   ├── __init__.py
+│   │   │   ├── project.py               # ProjectState, ProjectStatus, GoalStatement
+│   │   │   ├── workstream.py            # WorkstreamState, WorkstreamType, WorkstreamStatus
+│   │   │   ├── hypothesis.py            # HypothesisRecord, HypothesisStrength, HypothesisStatus
+│   │   │   ├── uncertainty.py           # UncertaintyRecord, ReviewStatus
+│   │   │   ├── dialectical.py           # DialecticalMove, DialecticalMoveType
+│   │   │   ├── concept.py              # ConceptNode, Distinction, ThoughtExperiment
+│   │   │   ├── review.py               # ReviewRound, ReviewerVerdict, ReviewRoundStatus
+│   │   │   ├── message.py              # Message, MessageType, EpistemicStatus
+│   │   │   └── artifact.py             # Artifact, ArtifactType
+│   │   ├── value_objects/               # Value objects and enums
+│   │   │   ├── __init__.py
+│   │   │   └── enums.py                 # All enums (Origin, etc.)
+│   │   ├── services/                    # Pure domain services (no I/O, no external deps)
+│   │   │   ├── __init__.py
+│   │   │   ├── logic_engine.py          # Formal validity, contradiction detection (Z3-free pure logic)
+│   │   │   ├── tradition_manager.py     # Tradition profiles, norm enforcement, incommensurability
+│   │   │   └── uncertainty.py           # Uncertainty lifecycle transitions, confidence scoring
+│   │   ├── exceptions.py               # Domain-specific exceptions
+│   │   └── note.py                      # Note entity (user annotations in workspace)
+│   ├── application/
 │   │   ├── __init__.py
-│   │   ├── base.py              # BaseAgent: shared LLM client, logging, tool access
-│   │   ├── coordinator.py       # ProjectCoordinatorAgent: user-facing, dialogue, steering
-│   │   ├── workstream_coordinator.py  # WorkstreamCoordinatorAgent: manages sub-agent sequences
-│   │   ├── literature_search.py # LiteratureSearchAgent: multi-database querying, tradition bridging
-│   │   ├── concept_analysis.py  # ConceptAnalysisAgent: distinction mapping, genealogy, thought experiments
-│   │   ├── cross_traditional.py # CrossTraditionalComparisonAgent: bridge concepts, incommensurability
-│   │   ├── argumentation.py     # ArgumentationAgent: standard form, competing positions, implicit premises
-│   │   ├── critical_review.py   # CriticalReviewAgent: fallacy detection, adversarial review
-│   │   ├── phenomenological.py  # PhenomenologicalDescriptionAgent: POST-MVP skeleton
-│   │   ├── ethical_analysis.py  # EthicalAnalysisAgent: POST-MVP skeleton
-│   │   └── synthesis.py         # SynthesisAgent: living document generation, margin annotations
-│   ├── reasoning/
+│   │   ├── orchestration/               # LangGraph state graphs
+│   │   │   ├── __init__.py
+│   │   │   ├── coordinator.py           # ProjectCoordinatorAgent: user-facing, dialogue, steering
+│   │   │   ├── workstream_coordinator.py # WorkstreamCoordinatorAgent: manages sub-agent sequences
+│   │   │   └── base.py                  # BaseAgent: shared LLM client (via LLMPort), logging, tool access
+│   │   ├── use_cases/                   # Application use cases (command pattern)
+│   │   │   ├── __init__.py
+│   │   │   ├── start_project.py
+│   │   │   ├── launch_workstream.py
+│   │   │   └── synthesize_document.py
+│   │   ├── services/                    # Application services (orchestration helpers)
+│   │   │   ├── __init__.py
+│   │   │   ├── review_process.py        # Multi-agent review orchestration, round management, escalation
+│   │   │   └── tool_registry.py          # ToolRegistry: plugin-style tool registration
+│   │   └── agents/                      # Agent implementations (use LangGraph via orchestration/)
+│   │       ├── __init__.py
+│   │       ├── literature_search.py
+│   │       ├── concept_analysis.py
+│   │       ├── cross_traditional.py
+│   │       ├── argumentation.py
+│   │       ├── critical_review.py
+│   │       ├── phenomenological.py       # POST-MVP skeleton
+│   │       ├── ethical_analysis.py        # POST-MVP skeleton
+│   │       └── synthesis.py
+│   ├── ports/                            # Abstract interfaces (typing.Protocol only, no external deps)
 │   │   ├── __init__.py
-│   │   ├── logic_engine.py      # Formal validity, contradiction detection, Z3 integration
-│   │   ├── tradition_manager.py # Tradition profiles, norm enforcement, incommensurability detection
-│   │   └── uncertainty.py       # Uncertainty lifecycle: track, manage, communicate
-│   ├── artifacts/
+│   │   ├── llm_port.py                  # generate(), embed()
+│   │   ├── storage_port.py              # save_project(), load_project(), query_uncertainty(), save_note()
+│   │   ├── reviewer_port.py             # request_review(), submit_verdict()
+│   │   ├── dialectical_history_port.py  # append_move(), query_history()
+│   │   ├── search_port.py               # query_philpapers(), query_sep(), query_arxiv()
+│   │   └── message_port.py              # send(), receive(), broadcast()
+│   ├── infrastructure/
 │   │   ├── __init__.py
-│   │   ├── living_document.py   # Markdown generation, YAML frontmatter, annotation embedding
-│   │   ├── review_process.py    # Multi-agent review orchestration, round management, escalation
-│   │   └── document_parser.py   # Markdown/YAML parsing, annotation extraction
-│   ├── tools/
+│   │   └── adapters/
+│   │       ├── __init__.py
+│   │       ├── gemini_adapter.py         # LLMPort implementation
+│   │       ├── claude_adapter.py         # LLMPort implementation
+│   │       ├── ollama_adapter.py         # LLMPort implementation
+│   │       ├── sqlite_adapter.py         # StoragePort implementation
+│   │       ├── chroma_adapter.py         # SearchPort / vector retrieval implementation
+│   │       ├── filesystem_adapter.py     # StoragePort implementation (workspace file I/O)
+│   │       ├── search_adapter.py         # SearchPort implementation (PhilPapers, SEP, etc.)
+│   │       ├── pdf_rag_adapter.py        # SearchPort extension (local PDF RAG via PyMuPDF)
+│   │       ├── code_execution_adapter.py # ToolRegistry integration (RestrictedPython, Prolog skeleton)
+│   │       ├── message_queue_adapter.py  # MessagePort implementation (SQLite-backed)
+│   │       └── external_bridge_adapter.py # ExternalAgentBridge: Hermes/OpenCode Go with fallback
+│   ├── presentation/
 │   │   ├── __init__.py
-│   │   ├── registry.py          # ToolRegistry: plugin-style tool registration
-│   │   ├── search.py            # PhilPapers, SEP, IEP, arXiv, Semantic Scholar adapters
-│   │   ├── pdf_rag.py           # PDF ingestion, chunking, ChromaDB indexing (local only)
-│   │   └── code_execution.py    # Python sandbox (RestrictedPython), Prolog skeleton
-│   ├── interfaces/
-│   │   ├── __init__.py
-│   │   ├── cli.py               # Rich-based terminal UI, progressive disclosure, command loop
-│   │   ├── commands.py          # Click command definitions for steering
-│   │   └── external_bridge.py   # ExternalAgentBridge: Hermes/OpenCode Go adapter with fallback
-│   ├── messaging/
-│   │   ├── __init__.py
-│   │   ├── protocol.py          # JSON message schema, validation, routing
-│   │   └── queue.py             # SQLite-backed message queue for async agent communication
-│   └── persistence/
-│       ├── __init__.py
-│       ├── sqlite_store.py      # SQLite operations: projects, workstreams, messages, uncertainty
-│       └── vector_store.py      # ChromaDB wrapper with tradition-aware metadata filtering
+│   │   ├── cli.py                        # Rich-based terminal UI, progressive disclosure
+│   │   └── commands.py                   # Click command definitions for steering
 ├── tests/
-│   ├── conftest.py              # Shared fixtures: mock LLM client, temp workspace, test project
+│   ├── conftest.py                      # Shared fixtures: mock adapters, temp workspace, test project
 │   ├── unit/
-│   │   ├── test_models.py       # State schema validation, serialization
-│   │   ├── test_workspace.py    # WorkspaceManager operations
-│   │   ├── test_logic_engine.py # Validity, contradiction detection
-│   │   ├── test_tradition_manager.py  # Tradition norm enforcement
-│   │   ├── test_uncertainty.py  # Uncertainty lifecycle transitions
-│   │   ├── test_living_document.py    # Markdown generation, annotation parsing
-│   │   ├── test_review_process.py     # Review round orchestration
-│   │   └── test_messaging.py    # Message protocol, queue operations
+│   │   ├── domain/
+│   │   │   ├── test_entities.py          # State schema validation, serialization
+│   │   │   ├── test_logic_engine.py      # Validity, contradiction detection
+│   │   │   ├── test_tradition_manager.py # Tradition norm enforcement
+│   │   │   └── test_uncertainty.py       # Uncertainty lifecycle transitions
+│   │   ├── application/
+│   │   │   ├── test_review_process.py   # Review round orchestration
+│   │   │   └── test_messaging.py        # Message protocol, queue via port mocks
+│   │   └── infrastructure/
+│   │       ├── test_sqlite_adapter.py   # SQLite CRUD operations
+│   │       └── test_filesystem_adapter.py  # Workspace file I/O
 │   ├── integration/
-│   │   ├── test_coordinator.py  # End-to-end clarification dialogue → workstream creation
-│   │   ├── test_literature_search.py  # Mocked search → structured bibliography
-│   │   ├── test_workstream_lifecycle.py  # Create → run → pause → resume → complete
-│   │   └── test_synthesis.py    # Multi-workstream → living document with annotations
+│   │   ├── test_coordinator.py          # End-to-end clarification dialogue → workstream creation
+│   │   ├── test_literature_search.py    # Mocked search → structured bibliography (via SearchPort)
+│   │   ├── test_workstream_lifecycle.py # Create → run → pause → resume → complete
+│   │   └── test_synthesis.py            # Multi-workstream → living document with annotations
 │   └── fixtures/
-│       ├── sample_papers/       # Mock PDFs for RAG testing
-│       ├── mock_llm_responses/  # Pre-recorded LLM outputs for deterministic tests
-│       └── test_projects/       # Pre-configured project states for integration tests
+│       ├── sample_papers/               # Mock PDFs for RAG testing
+│       ├── mock_llm_responses/          # Pre-recorded LLM outputs for deterministic tests
+│       └── test_projects/               # Pre-configured project states for integration tests
 ├── prompts/
-│   ├── coordinator/             # Project Coordinator system prompts
-│   ├── workstream/              # Workstream Coordinator prompts
-│   ├── agent/                   # Per-agent role prompts (literature, concept, argument, etc.)
-│   └── review/                  # Reviewer agent prompts with methodological frameworks
+│   ├── coordinator/                      # Project Coordinator system prompts
+│   ├── workstream/                       # Workstream Coordinator prompts
+│   ├── agent/                            # Per-agent role prompts (literature, concept, argument, etc.)
+│   └── review/                          # Reviewer agent prompts with methodological frameworks
+├── scripts/
+│   └── check_domain_purity.py           # CI script: verify domain/ imports only stdlib + pydantic
+├── data/
+│   └── traditions/                       # JSON tradition profile files
+│       ├── analytic_philosophy.json
+│       ├── continental_philosophy.json
+│       ├── buddhist_philosophy.json
+│       ├── confucian_ethics.json
+│       └── daoist_philosophy.json
 ├── docs/
-│   └── usage.md                 # User-facing documentation (post-MVP)
-├── pyproject.toml               # Modern Python packaging, dependencies, tool configs
+│   └── usage.md                         # User-facing documentation (post-MVP)
+├── pyproject.toml                        # Modern Python packaging, dependencies, tool configs
 ├── README.md
-└── Makefile                     # Common dev tasks: test, lint, format, typecheck
+└── Makefile                              # Common dev tasks: test, lint, format, typecheck, check
 ```
 
 ## Complexity Tracking

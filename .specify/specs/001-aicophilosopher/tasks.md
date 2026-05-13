@@ -20,8 +20,8 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T-001 [P] [Setup] Create project directory structure per plan.md at `src/aicophilosopher/` with all subpackages (`core/`, `agents/`, `reasoning/`, `artifacts/`, `tools/`, `interfaces/`, `messaging/`, `persistence/`)
-  - **AC**: `tree src/aicophilosopher/` shows all directories; `__init__.py` files present in each
+- [ ] T-001 [P] [Setup] Create project directory structure per plan.md at `src/aicophilosopher/` with Clean Architecture layers (`domain/`, `application/`, `ports/`, `infrastructure/adapters/`, `presentation/`)
+  - **AC**: `tree src/aicophilosopher/` shows all 5 layers; `__init__.py` files present in each; `scripts/check_domain_purity.py` passes
 
 - [ ] T-002 [P] [Setup] Initialize `pyproject.toml` with Python 3.11+ requirement, core dependencies (langgraph>=0.2.0, pydantic>=2.7, chromadb>=0.5.0, rich>=13.0, click>=8.0, PyMuPDF>=1.24, z3-solver>=4.13, anthropic, google-generativeai, ollama, aiosqlite>=0.20), and dev dependencies (pytest, pytest-asyncio, pytest-mock, hypothesis, coverage, ruff, mypy)
   - **AC**: `pip install -e ".[dev]"` succeeds in clean venv; `python -c "import aicophilosopher"` works
@@ -69,63 +69,63 @@
 
 ### 2.1 Core Models & Schemas
 
-- [ ] T-010 [P] [Foundation] Implement Pydantic v2 state schemas in `src/aicophilosopher/core/models.py`: `ProjectState`, `WorkstreamState`, `HypothesisRecord`, `UncertaintyRecord`, `DialecticalMove`, `ConceptNode`, `ReviewRound`, `Message`, `GoalStatement`, `Artifact`, `ProgressUpdate`, `FailedExploration` with all enums (`WorkstreamType`, `WorkstreamStatus`, `HypothesisStrength`, `Origin`, `HypothesisStatus`, `ReviewStatus`, `DialecticalMoveType`, `MessageType`, `ArtifactType`, `ReviewerVerdictStatus`, `ReviewRoundStatus`)
-  - **AC**: All models validate correctly with sample data; enums restrict values; `confidence_score` bounds (0.0–1.0) enforced; `living_document` YAML frontmatter validator works
+- [ ] T-010 [P] [Foundation] Implement Pydantic v2 domain entities in `src/aicophilosopher/domain/entities/`: `ProjectState`, `WorkstreamState`, `HypothesisRecord`, `UncertaintyRecord`, `DialecticalMove`, `ConceptNode`, `ReviewRound`, `Message`, `GoalStatement`, `Artifact`, `ProgressUpdate`, `FailedExploration`, `Note` with all enums (`WorkstreamType`, `WorkstreamStatus`, `HypothesisStrength`, `Origin`, `HypothesisStatus`, `ReviewStatus`, `DialecticalMoveType`, `MessageType`, `ArtifactType`, `ReviewerVerdictStatus`, `ReviewRoundStatus`, `ProjectStatus`)
+  - **AC**: All entities validate correctly with sample data; enums restrict values; `confidence_score` bounds (0.0–1.0) enforced; `living_document` YAML frontmatter validator works; `ProjectState` includes `status: ProjectStatus` field; `Note` entity supports `--attach-to` option from CLI contract
   - **Depends on**: T-002
 
-- [ ] T-011 [Foundation] Implement `src/aicophilosopher/core/exceptions.py` with domain-specific exceptions: `AICoPhilosopherError`, `WorkstreamError`, `ReviewDeadlockError`, `IncommensurabilityError`, `ExternalLayerError`, `ValidationError`, `ConfigurationError`
+- [ ] T-011 [Foundation] Implement `src/aicophilosopher/domain/exceptions.py` with domain-specific exceptions: `AICoPhilosopherError`, `WorkstreamError`, `ReviewDeadlockError`, `IncommensurabilityError`, `ExternalLayerError`, `ValidationError`, `ConfigurationError`
   - **AC**: Each exception can be raised/caught; `ReviewDeadlockError` carries `workstream_id` and `round_number`
 
-- [ ] T-012 [Foundation] Implement `src/aicophilosopher/core/config.py` using `pydantic-settings` for environment-based configuration: LLM backends, privacy settings, external layer toggles, workspace directory, log level
+- [ ] T-012 [Foundation] Implement `src/aicophilosopher/domain/services/config.py` using `pydantic-settings` for environment-based configuration: LLM backends, privacy settings, external layer toggles, workspace directory, log level
   - **AC**: `Config()` loads from `.env`; `Config(llm_backend="ollama")` overrides; validation rejects unknown backends
   - **Depends on**: T-010
 
 ### 2.2 Persistence Layer
 
-- [ ] T-013 [Foundation] Implement SQLite schema and async operations in `src/aicophilosopher/persistence/sqlite_store.py`: `SQLiteStore` class with methods for CRUD on projects, workstreams, hypotheses, uncertainty registry, messages, review rounds, artifacts
-  - **AC**: All tables from `data-model.md` §3.1 created; foreign keys enforced; indexes functional; async `aiosqlite` operations work
+- [ ] T-013 [Foundation] Implement SQLite StoragePort adapter in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`: `SQLiteAdapter` class implementing `StoragePort` with methods for CRUD on projects, workstreams, hypotheses, uncertainty registry, messages, review rounds, artifacts, notes
+  - **AC**: All tables from `data-model.md` §3.1 created; `notes` table added; foreign keys enforced; indexes functional; async `aiosqlite` operations work; `StoragePort` interface satisfied
   - **Depends on**: T-010, T-011
 
-- [ ] T-014 [P] [Foundation] Implement `src/aicophilosopher/persistence/vector_store.py`: `VectorStore` wrapper around ChromaDB with `create_collection`, `add_documents`, `query` with tradition-aware `where` filtering, collection-per-project isolation
-  - **AC**: `VectorStore.query("free will", where={"tradition": "analytic_philosophy"})` returns filtered results; collections isolated by project ID
+- [ ] T-014 [P] [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/chroma_adapter.py`: `ChromaAdapter` implementing SearchPort's vector retrieval methods with `create_collection`, `add_documents`, `query` with tradition-aware `where` filtering, collection-per-project isolation
+  - **AC**: `ChromaAdapter.query("free will", where={"tradition": "analytic_philosophy"})` returns filtered results; collections isolated by project ID; `SearchPort` interface satisfied
   - **Depends on**: T-002
 
 ### 2.3 Workspace & File System
 
-- [ ] T-015 [Foundation] Implement `src/aicophilosopher/core/workspace.py`: `WorkspaceManager` class with async-safe methods for creating project directories, reading/writing living documents, workstream reports, hypotheses JSONL, dialectical history JSONL, margin notes, uncertainty registry JSON
-  - **AC**: `WorkspaceManager.create_project("Test")` creates full directory tree; concurrent writes to different project files do not corrupt; `living_document.md` round-trips with YAML frontmatter intact
+- [ ] T-015 [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/filesystem_adapter.py`: `FileSystemAdapter` implementing `StoragePort` with async-safe methods for creating project directories, reading/writing living documents, workstream reports, hypotheses JSONL (derived export), dialectical history JSONL (derived export), margin notes, uncertainty registry JSON, and notes
+  - **AC**: `FileSystemAdapter.create_project("Test")` creates full directory tree; concurrent writes to different project files do not corrupt; `living_document.md` round-trips with YAML frontmatter intact; `StoragePort` interface satisfied; SQLite is authoritative source; JSONL files are derived exports
   - **Depends on**: T-010, T-012
 
 ### 2.4 Messaging Protocol
 
-- [ ] T-016 [Foundation] Implement `src/aicophilosopher/messaging/protocol.py`: Pydantic models for all 12 message types (`status_update`, `delegation_request`, `delegation_response`, `steering_command`, `steering_ack`, `help_request`, `help_response`, `review_request`, `review_response`, `result_delivery`, `error_notification`, `user_notification`) with payload schemas per `contracts/message-protocol.md`
+- [ ] T-016 [Foundation] Implement `src/aicophilosopher/domain/entities/message.py`: Pydantic models for all 12 message types (`status_update`, `delegation_request`, `delegation_response`, `steering_command`, `steering_ack`, `help_request`, `help_response`, `review_request`, `review_response`, `result_delivery`, `error_notification`, `user_notification`) with payload schemas per `contracts/message-protocol.md`
   - **AC**: All message types validate with sample payloads; `MessageType` enum restricts values; `correlation_id` linking works
   - **Depends on**: T-010
 
-- [ ] T-017 [Foundation] Implement `src/aicophilosopher/messaging/queue.py`: `MessageQueue` class backed by SQLite with `enqueue`, `dequeue`, `poll_inbox(agent_id)`, `broadcast`, and message retention policies
-  - **AC**: Messages enqueue/dequeue correctly; `poll_inbox("project_coordinator")` returns only messages for that agent; broadcast creates copies for all active agents; retention policy archives old messages
+- [ ] T-017 [Foundation] Implement `src/aicophilosopher/infrastructure/adapters/message_queue_adapter.py`: `MessageQueueAdapter` implementing `MessagePort` backed by SQLite with `enqueue`, `dequeue`, `poll_inbox(agent_id)`, `broadcast`, and message retention policies
+  - **AC**: Messages enqueue/dequeue correctly; `poll_inbox("project_coordinator")` returns only messages for that agent; broadcast creates copies for all active agents; retention policy archives old messages; `MessagePort` interface satisfied
   - **Depends on**: T-013, T-016
 
 ### 2.5 LLM Backend & Tool Registry
 
-- [ ] T-018 [Foundation] Implement `src/aicophilosopher/core/llm_adapter.py`: `LLMBackend` ABC with `ClaudeBackend`, `GeminiBackend`, `OllamaBackend` implementing `generate()` and `embed()`; factory function `create_backend(config)`
-  - **AC**: Each backend returns `GenerationResult` with text + usage; `OllamaBackend` works offline; switching backends via config works; all backends mocked in tests
+- [ ] T-018 [Foundation] Define `LLMPort` in `src/aicophilosopher/ports/llm_port.py` (Protocol) and implement `ClaudeBackend`, `GeminiBackend`, `OllamaBackend` in `src/aicophilosopher/infrastructure/adapters/` (`claude_adapter.py`, `gemini_adapter.py`, `ollama_adapter.py`); factory function `create_backend(config)` in `domain/services/config.py`
+  - **AC**: Each backend implements `LLMPort` Protocol and returns `GenerationResult` with text + usage; `OllamaBackend` works offline; switching backends via config works; all backends mocked in tests; DI container resolves `LLMPort` correctly
   - **Depends on**: T-012
 
-- [ ] T-019 [P] [Foundation] Implement `src/aicophilosopher/tools/registry.py`: `ToolRegistry` with plugin-style registration (`register_tool`, `get_tool`, `list_tools`); `BaseTool` ABC with `name`, `description`, `execute()`
+- [ ] T-019 [P] [Foundation] Implement `src/aicophilosopher/application/services/tool_registry.py`: `ToolRegistry` with plugin-style registration (`register_tool`, `get_tool`, `list_tools`); `BaseTool` ABC with `name`, `description`, `execute()`
   - **AC**: Tools register/unregister dynamically; `ToolRegistry.get_tool("search")` returns correct instance; duplicate registration raises `ValidationError`
 
 ### 2.6 Reasoning Engine Skeleton
 
-- [ ] T-020 [P] [Foundation] Implement `src/aicophilosopher/reasoning/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, buddhist, confucian, daoist); validates arguments against tradition norms; detects incommensurability
+- [ ] T-020 [P] [Foundation] Implement `src/aicophilosopher/domain/services/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, buddhist, confucian, daoist); validates arguments against tradition norms; detects incommensurability
   - **AC**: `load_traditions()` discovers all JSON files; `validate_argument(arg, "buddhist_philosophy")` returns norm violations; `check_incommensurability("anatta", "cartesian_ego")` returns True with explanation
   - **Depends on**: T-019
 
-- [ ] T-021 [P] [Foundation] Implement `src/aicophilosopher/reasoning/uncertainty.py`: `UncertaintyLifecycle` class with `track()`, `manage()`, `communicate()` methods; state machine for `ReviewStatus` transitions; uncertainty registry sync with inline Markdown annotations
+- [ ] T-021 [P] [Foundation] Implement `src/aicophilosopher/domain/services/uncertainty.py`: `UncertaintyLifecycle` class with `track()`, `manage()`, `communicate()` methods; state machine for `ReviewStatus` transitions; uncertainty registry sync with inline Markdown annotations
   - **AC**: `track(claim)` creates `UncertaintyRecord`; `manage()` updates confidence; `communicate()` generates margin annotation string; rejected claims trigger document section removal + appendix append
   - **Depends on**: T-010
 
-- [ ] T-022 [P] [Foundation] Implement `src/aicophilosopher/reasoning/logic_engine.py`: `LogicEngine` with Z3 integration for propositional/predicate validity checking; `check_validity(premises, conclusion)`; `detect_contradiction(formulas)`; returns `ValidityResult` with `is_valid`, `counter_model` (if invalid), `confidence`
+- [ ] T-022 [P] [Foundation] Implement `src/aicophilosopher/domain/services/logic_engine.py`: `LogicEngine` with Z3 integration for propositional/predicate validity checking; `check_validity(premises, conclusion)`; `detect_contradiction(formulas)`; returns `ValidityResult` with `is_valid`, `counter_model` (if invalid), `confidence`
   - **AC**: Syllogism "All M are P; All S are M; Therefore All S are P" returns valid; inconsistent premises return contradiction detected; invalid argument returns counter-model explanation
   - **Depends on**: T-002
 
@@ -149,27 +149,27 @@
 
 ### Implementation for User Story 1
 
-- [ ] T-032 [US1] Implement `src/aicophilosopher/agents/base.py`: `BaseAgent` with shared LLM client, logging, tool access via `ToolRegistry`, message sending via `MessageQueue`; `run()` abstract method
+- [ ] T-032 [US1] Implement `src/aicophilosopher/application/orchestration/base.py`: `BaseAgent` with shared LLM client, logging, tool access via `ToolRegistry`, message sending via `MessageQueue`; `run()` abstract method
   - **AC**: Subclassing `BaseAgent` and calling `run()` dispatches to LLM; messages logged; tools accessible via `self.tools.get_tool()`
   - **Depends on**: T-017, T-018, T-019
 
-- [ ] T-033 [US1] Implement `src/aicophilosopher/agents/coordinator.py`: `ProjectCoordinatorAgent` with Socratic clarification dialogue, goal refinement, workstream proposal/approval, steering command handling, progressive disclosure rendering (Summary + Epistemic Status + Active Workstreams + [Details] + [Suggestions])
+- [ ] T-033 [US1] Implement `src/aicophilosopher/application/orchestration/coordinator.py`: `ProjectCoordinatorAgent` with Socratic clarification dialogue, goal refinement, workstream proposal/approval, steering command handling, progressive disclosure rendering (Summary + Epistemic Status + Active Workstreams + [Details] + [Suggestions])
   - **AC**: Dialogue continues until goal approved; `propose_workstream()` returns structured proposal; steering commands update workstream state; progressive disclosure format matches spec §5.3 exactly
   - **Depends on**: T-032, T-013, T-015
 
-- [ ] T-034 [P] [US1] Implement `src/aicophilosopher/agents/workstream_coordinator.py`: `WorkstreamCoordinatorAgent` base class that manages sub-agent sequences, tracks workstream status (`pending` → `running` → `paused` → `completed/failed/stalled`), generates incremental updates, handles steering commands from Project Coordinator
+- [ ] T-034 [P] [US1] Implement `src/aicophilosopher/application/orchestration/workstream_coordinator.py`: `WorkstreamCoordinatorAgent` base class that manages sub-agent sequences, tracks workstream status (`pending` → `running` → `paused` → `completed/failed/stalled`), generates incremental updates, handles steering commands from Project Coordinator
   - **AC**: `create_workstream(type, goal)` initializes correct coordinator subclass; `pause()`/`resume()` transition status; `steer()` modifies active plan; incremental updates written to workspace
   - **Depends on**: T-032, T-015
 
-- [ ] T-035 [US1] Implement `src/aicophilosopher/interfaces/commands.py`: Click command definitions for all CLI commands: `new project`, `refine goal`, `start workstream`, `pause`, `resume`, `steer`, `status`, `show hypotheses`, `show dead ends`, `add note`
+- [ ] T-035 [US1] Implement `src/aicophilosopher/presentation/commands.py`: Click command definitions for all CLI commands: `new project`, `refine goal`, `start workstream`, `pause`, `resume`, `steer`, `status`, `show hypotheses`, `show dead ends`, `add note`
   - **AC**: Each command parses arguments correctly; invalid arguments show help; `status` displays epistemic overview; `show dead ends` lists all `failed`/`abandoned` hypotheses (AC-008)
   - **Depends on**: T-033, T-034
 
-- [ ] T-036 [US1] Implement `src/aicophilosopher/interfaces/cli.py`: Rich-based terminal UI with live display, collapsible panels for progressive disclosure, Markdown rendering for living document, real-time workstream status updates
+- [ ] T-036 [US1] Implement `src/aicophilosopher/presentation/cli.py`: Rich-based terminal UI with live display, collapsible panels for progressive disclosure, Markdown rendering for living document, real-time workstream status updates
   - **AC**: `show document` renders Markdown with syntax highlighting; `status` shows live workstream progress bars; `[Details]`/`[Suggestions]` sections collapsible; response latency <30s (AC-007)
   - **Depends on**: T-035
 
-- [ ] T-037 [US1] Implement `src/aicophilosopher/artifacts/living_document.py`: `LivingDocument` class with YAML frontmatter generation, Markdown section management, annotation embedding/extraction, version tracking
+- [ ] T-037 [US1] Implement `src/aicophilosopher/application/services/living_document.py`: `LivingDocument` class with YAML frontmatter generation, Markdown section management, annotation embedding/extraction, version tracking
   - **AC**: `create(title, project_id)` generates frontmatter; `add_section("Arguments", content)` appends with annotation placeholders; `embed_annotations()` inserts HTML comment annotations; `parse_annotations()` extracts all annotations
   - **Depends on**: T-015
 
@@ -196,23 +196,23 @@
 
 ### Implementation for User Story 2
 
-- [ ] T-043 [US2] Implement `src/aicophilosopher/tools/search.py`: `SearchTool` with adapters for PhilPapers API, SEP (scrape if no API), IEP, arXiv (cs.AI + humanities), Semantic Scholar; cross-traditional query expansion; tradition tag assignment; consent gate before external API calls
+- [ ] T-043 [US2] Implement `src/aicophilosopher/infrastructure/adapters/search_adapter.py`: `SearchTool` with adapters for PhilPapers API, SEP (scrape if no API), IEP, arXiv (cs.AI + humanities), Semantic Scholar; cross-traditional query expansion; tradition tag assignment; consent gate before external API calls
   - **AC**: `search("free will", traditions=["analytic", "buddhist"])` returns results with tradition tags; consent dialog shown if `privacy.allow_external_search` unset; no project content transmitted (Constitution Principle I)
   - **Depends on**: T-019, T-012
 
-- [ ] T-044 [US2] Implement `src/aicophilosopher/agents/literature_search.py`: `LiteratureSearchAgent` that uses `SearchTool`, performs cross-traditional literature bridging (e.g., "mind" → 心 xīn, citta, nous), generates structured bibliography with confidence scores and bridge notes
+- [ ] T-044 [US2] Implement `src/aicophilosopher/application/agents/literature_search.py`: `LiteratureSearchAgent` that uses `SearchTool`, performs cross-traditional literature bridging (e.g., "mind" → 心 xīn, citta, nous), generates structured bibliography with confidence scores and bridge notes
   - **AC**: Bibliography contains ≥1 bridge note per cross-traditional query; relevance score 0.0–1.0 for each paper; BibTeX entries valid; precision ≥70% on known queries (AC-002)
   - **Depends on**: T-043, T-032
 
-- [ ] T-045 [P] [US2] Implement `src/aicophilosopher/tools/pdf_rag.py`: `PDFRAGTool` with PyMuPDF extraction, text chunking, ChromaDB indexing, local retrieval only; metadata extraction (title, author, abstract)
+- [ ] T-045 [P] [US2] Implement `src/aicophilosopher/infrastructure/adapters/pdf_rag_adapter.py`: `PDFRAGTool` with PyMuPDF extraction, text chunking, ChromaDB indexing, local retrieval only; metadata extraction (title, author, abstract)
   - **AC**: `ingest_pdf(path)` extracts text in <2s per 50 pages; `query("qualia")` returns relevant chunks; metadata accessible; no external transmission
   - **Depends on**: T-014, T-019
 
-- [ ] T-046 [US2] Implement `src/aicophilosopher/agents/concept_analysis.py`: `ConceptAnalysisAgent` that performs necessary/sufficient condition analysis, distinction mapping (de re vs de dicto, 理 li vs 氣 qi), thought experiment generation (trolley, brain-in-a-vat, Zhuangzi's butterfly), conceptual genealogy, cross-traditional concept bridging with incommensurability flagging
+- [ ] T-046 [US2] Implement `src/aicophilosopher/application/agents/concept_analysis.py`: `ConceptAnalysisAgent` that performs necessary/sufficient condition analysis, distinction mapping (de re vs de dicto, 理 li vs 氣 qi), thought experiment generation (trolley, brain-in-a-vat, Zhuangzi's butterfly), conceptual genealogy, cross-traditional concept bridging with incommensurability flagging
   - **AC**: Concept map has ≥3 nodes with relationships; distinction matrix compares ≥2 traditions; thought experiments include epistemic status; confidence scores on all analyses; accuracy ≥80% on analytic concepts (AC-003)
   - **Depends on**: T-032, T-020, T-021
 
-- [ ] T-047 [US2] Implement `src/aicophilosopher/artifacts/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding)
+- [ ] T-047 [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding)
   - **AC**: `parse("living_document.md")` returns frontmatter dict + list of annotations; invalid annotations raise `ValidationError`; annotation round-trip preserves all fields
   - **Depends on**: T-037
 
@@ -239,19 +239,19 @@
 
 ### Implementation for User Story 3
 
-- [ ] T-053 [US3] Implement `src/aicophilosopher/agents/argumentation.py`: `ArgumentationAgent` that reconstructs arguments in standard form (premises + conclusion + inference rule), generates multiple competing positions (compatibilist vs incompatibilist, consequentialist vs deontological), identifies implicit assumptions and suppressed premises, supports formal (syllogistic, propositional, predicate) and informal (analogical, abductive, phenomenological) schemes, evaluates within tradition norms
+- [ ] T-053 [US3] Implement `src/aicophilosopher/application/agents/argumentation.py`: `ArgumentationAgent` that reconstructs arguments in standard form (premises + conclusion + inference rule), generates multiple competing positions (compatibilist vs incompatibilist, consequentialist vs deontological), identifies implicit assumptions and suppressed premises, supports formal (syllogistic, propositional, predicate) and informal (analogical, abductive, phenomenological) schemes, evaluates within tradition norms
   - **AC**: Each argument has explicit premises/conclusion/inference rule; ≥2 distinct traditions represented per question; implicit assumptions listed; tradition-specific validity assessment included (AC-004)
   - **Depends on**: T-032, T-022, T-020
 
-- [ ] T-054 [US3] Implement `src/aicophilosopher/agents/critical_review.py`: `CriticalReviewAgent` that detects logical fallacies (formal + informal) with severity ratings, evaluates validity/soundness/plausibility separately, generates counter-arguments from multiple traditions, performs adversarial review (active refutation attempts), flags reviewer-pleasing bias risk
+- [ ] T-054 [US3] Implement `src/aicophilosopher/application/agents/critical_review.py`: `CriticalReviewAgent` that detects logical fallacies (formal + informal) with severity ratings, evaluates validity/soundness/plausibility separately, generates counter-arguments from multiple traditions, performs adversarial review (active refutation attempts), flags reviewer-pleasing bias risk
   - **AC**: Fallacy inventory includes severity + correction suggestion; counter-argument tree has ≥1 node per argument; adversarial stress-test results included; review confidence score present (AC-005)
   - **Depends on**: T-032, T-022, T-020
 
-- [ ] T-055 [US3] Implement `src/aicophilosopher/artifacts/review_process.py`: `ReviewProcess` class that orchestrates iterative multi-reviewer rounds (min 2 reviewers, max 5 rounds), manages reviewer persistence across rounds, handles escalation to Project Coordinator on non-termination, tracks verdicts and revision requests
+- [ ] T-055 [US3] Implement `src/aicophilosopher/application/services/review_process.py`: `ReviewProcess` class that orchestrates iterative multi-reviewer rounds (min 2 reviewers, max 5 rounds), manages reviewer persistence across rounds, handles escalation to Project Coordinator on non-termination, tracks verdicts and revision requests
   - **AC**: Review round completes when all reviewers approve; escalation triggered at round 5; reviewer agents initialized with different methodological lenses; `stalled` status set on escalation
   - **Depends on**: T-034, T-021
 
-- [ ] T-056 [US3] Implement `src/aicophilosopher/agents/synthesis.py`: `SynthesisAgent` that merges workstream outputs into coherent living document sections, maintains consistent philosophical voice and citation style, preserves all margin annotation fields (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding), generates conflict flags between disagreeing workstreams, supports Markdown output
+- [ ] T-056 [US3] Implement `src/aicophilosopher/application/agents/synthesis.py`: `SynthesisAgent` that merges workstream outputs into coherent living document sections, maintains consistent philosophical voice and citation style, preserves all margin annotation fields (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding), generates conflict flags between disagreeing workstreams, supports Markdown output
   - **AC**: Synthesized document has consistent voice; 100% of non-trivial claims annotated with all required fields (AC-006); conflicts flagged for human resolution; synthesis confidence score included
   - **Depends on**: T-037, T-047, T-055, T-021
 
@@ -275,7 +275,7 @@
 
 ### Implementation for User Story 4
 
-- [ ] T-062 [US4] Implement `src/aicophilosopher/agents/cross_traditional.py`: `CrossTraditionalComparisonAgent` that identifies functional analogues across traditions (eudaimonia → junzi → bodhisattva), flags incommensurabilities, evaluates arguments within native frameworks before comparison, avoids category colonization
+- [ ] T-062 [US4] Implement `src/aicophilosopher/application/agents/cross_traditional.py`: `CrossTraditionalComparisonAgent` that identifies functional analogues across traditions (eudaimonia → junzi → bodhisattva), flags incommensurabilities, evaluates arguments within native frameworks before comparison, avoids category colonization
   - **AC**: Comparison report contains tradition profiles, bridge concept map, incommensurability register, synthesis proposals with explicit methodology; no tradition forced into another's categories
   - **Depends on**: T-032, T-020, T-021
 
@@ -293,7 +293,7 @@
 
 ### 7.1 Testing & Quality
 
-- [ ] T-070 [P] [Polish] Achieve ≥80% test coverage for core logic (`src/aicophilosopher/core/`, `src/aicophilosopher/reasoning/`, `src/aicophilosopher/agents/`, `src/aicophilosopher/artifacts/`)
+- [ ] T-070 [P] [Polish] Achieve ≥80% test coverage for core logic (`src/aicophilosopher/domain/`, `src/aicophilosopher/application/`, `src/aicophilosopher/infrastructure/adapters/``)
   - **AC**: `pytest --cov` report shows ≥80% for all listed packages; `make test-cov` passes
 
 - [ ] T-071 [P] [Polish] Add property-based tests for state transition invariants using `hypothesis`: project lifecycle, workstream status machine, uncertainty review status machine
@@ -337,7 +337,7 @@
 
 ### 7.5 External Bridge Skeleton (Optional for MVP)
 
-- [ ] T-082 [P] [Polish] Implement `src/aicophilosopher/interfaces/external_bridge.py`: `ExternalAgentBridge` ABC with `HermesAdapter` and `OpenCodeGoAdapter` skeletons; seamless fallback to internal LangGraph; consent flow; audit logging
+- [ ] T-082 [P] [Polish] Implement `src/aicophilosopher/infrastructure/adapters/external_bridge_adapter.py`: `ExternalAgentBridge` ABC with `HermesAdapter` and `OpenCodeGoAdapter` skeletons; seamless fallback to internal LangGraph; consent flow; audit logging
   - **AC**: Bridge interface compiles; fallback triggers when external layer unavailable; consent dialog shown before data sharing; logs written to `external_bridge.jsonl`
   - **Note**: Full functionality deferred to Phase 6 (post-MVP) per spec §11
 
