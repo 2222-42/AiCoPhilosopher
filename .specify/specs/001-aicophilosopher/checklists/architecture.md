@@ -2,7 +2,7 @@
 
 This checklist **must** be used during implementation and PR review.
 
-**Last Review**: 2026-05-13 | **Commit**: 5458a33 | **Status**: 8/13 PASS, 5 DEFERRED (stubs)
+**Last Review**: 2026-05-13 | **Commit**: 92d00e2 | **Status**: 11/16 PASS, 5 DEFERRED (Phase 3+)
 
 ## Acceptance Criteria (All must be satisfied)
 
@@ -16,8 +16,8 @@ This checklist **must** be used during implementation and PR review.
 ### 2. Type Safety
 - [x] Every public class, function, and port is fully **type-annotated** — *Verified: all 70 source files pass `mypy --strict` with zero errors*
 - [x] Pydantic v2 (`BaseModel`, `TypeAdapter`) and `typing.Protocol` are used appropriately — *Verified: all entities use `BaseModel` with `ConfigDict`; all ports use `Protocol`*
-- [x] `mypy --strict` or `pyright --strict` reports **zero errors** — *Verified: `Success: no issues found in 70 source files`*
-- [ ] Runtime validation is performed via `model_validate` / `TypeAdapter` at every external input and deserialization boundary — *DEFERRED: Stub adapters need real implementations with input validation*
+- [x] `mypy --strict` or `pyright --strict` reports **zero errors** — *Verified: `Success: no issues found in 70 source files` (commit 92d00e2)*
+- [ ] Runtime validation is performed via `model_validate` / `TypeAdapter` at every external input and deserialization boundary — *DEFERRED: Adapter stubs need real implementations. Message.validate_payload() uses model_validate for payload schemas.*
 
 ### 3. Maintainability & Testability
 - [ ] Every Port has corresponding unit tests (or is structured so that tests can be written) — *DEFERRED: Test directories exist but no tests written yet (next phase)*
