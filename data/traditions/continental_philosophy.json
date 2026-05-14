@@ -23,7 +23,7 @@
     "Derrida, Of Grammatology"
   ],
   "bridge_warnings": [
-    {"concepts": ["Dasein"], "incompatible_with": ["Cartesian subject"], "explanation": "Heideggerian Dasein is being-in-the-world, not a Cartesian subject. The phenomenology of embodiment cannot be reduced to mental representation."},
-    {"concepts": ["difference"], "incompatible_with": ["metaphysics of presence"], "explanation": "Derridean différance challenges the metaphysics of presence assumed in much analytic philosophy. Direct comparison requires acknowledging this methodological divide."}
+    {"concepts": ["technological enframing", "Dasein"], "incompatible_with": ["computational cognition"], "explanation": "Heideggerian Dasein is being-in-the-world through equipmental totality; computational models of cognition reduce this to information processing. Treating technological mediation as mere tool-use ignores the ontological stakes."},
+    {"concepts": ["critique", "architectural design"], "incompatible_with": ["neutral engineering"], "explanation": "Continental critique (Foucault, Feenberg) shows that technological design embeds power relations. Treating software architecture as value-neutral engineering ignores the political philosophy of technology."}
   ]
 }

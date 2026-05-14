@@ -2,6 +2,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+DEFAULT_DOMAINS = [
+    "analytic", "continental",
+    "philosophy_of_technology", "philosophy_of_science",
+    "philosophy_of_mathematics", "software_architecture", "model_theory",
+]
+
 
 class TraditionManager:
     def __init__(self, traditions_dir: str | Path | None = None) -> None:

@@ -1,0 +1,29 @@
+{
+  "name": "model_theory",
+  "display_name": "Model Theory",
+  "assumptions": [
+    "A model is an interpretation that satisfies a given set of sentences in a formal language",
+    "The relationship between syntax (formal theories) and semantics (models) is fundamental to understanding representation",
+    "Model-theoretic techniques apply beyond mathematics: to databases, software specification, knowledge representation, and natural language semantics",
+    "Different logics (first-order, second-order, modal, intuitionistic) give rise to different model-theoretic frameworks"
+  ],
+  "norms": [
+    {"keyword": "satisfaction", "message": "Should specify the satisfaction relation between sentences and models"},
+    {"keyword": "completeness", "message": "Should distinguish between semantic consequence and syntactic provability"},
+    {"keyword": "categoricity", "message": "Should consider whether theories uniquely determine their models"},
+    {"keyword": "expressive power", "message": "Should analyse what can and cannot be expressed in a given logical language"}
+  ],
+  "criteria": ["formal precision", "metalogical awareness", "expressiveness analysis", "bridging syntax and semantics"],
+  "key_figures": ["Tarski", "Gödel", "Robinson", "Henkin", "Morley", "Shelah", "Väänänen", "Hodges", "Marker"],
+  "classic_texts": [
+    "Tarski, 'The Concept of Truth in Formalized Languages'",
+    "Gödel, 'The Completeness of the Axioms of the Functional Calculus of Logic'",
+    "Chang & Keisler, 'Model Theory'",
+    "Hodges, 'A Shorter Model Theory'",
+    "Väänänen, 'Models and Games'"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["model-theoretic semantics", "database model"], "incompatible_with": ["cognitive model"], "explanation": "Model-theoretic semantics maps syntax to mathematical structures via truth conditions; database models represent data schemas; cognitive models represent mental processes. These are distinct senses of 'model' with different success criteria."},
+    {"concepts": ["logical consequence", "program execution"], "incompatible_with": ["operational equivalence"], "explanation": "Tarskian logical consequence is a semantic relation; program execution is an operational process. Curry-Howard provides a bridge but the normative standards differ: truth-preservation vs termination/correctness."}
+  ]
+}

@@ -23,7 +23,7 @@
     "Kripke, Naming and Necessity"
   ],
   "bridge_warnings": [
-    {"concepts": ["anatta"], "incompatible_with": ["Cartesian ego"], "explanation": "Buddhist no-self (anatta) is incommensurable with the Cartesian ego. The former denies any permanent self, while the latter posits a thinking substance."},
-    {"concepts": ["li", "natural law"], "incompatible_with": ["divine command theory"], "explanation": "Confucian li (ritual propriety) is grounded in social harmony and cosmic order, not divine command. Direct comparison with natural law theory requires careful qualification."}
+    {"concepts": ["software abstraction", "mathematical abstraction"], "incompatible_with": ["logical analysis"], "explanation": "Software abstraction wraps behaviour behind interfaces; mathematical abstraction strips properties to expose formal structure. Analytic logical analysis may assume these are equivalent when they serve different epistemic purposes."},
+    {"concepts": ["formal specification", "implementation"], "incompatible_with": ["conceptual analysis"], "explanation": "Formal specification defines what a system should do; implementation defines how. Analytic conceptual analysis of 'correctness' must distinguish specification-level from implementation-level claims."}
   ]
 }
