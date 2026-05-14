@@ -1,0 +1,30 @@
+{
+  "name": "daoist_philosophy",
+  "display_name": "Daoist Philosophy",
+  "assumptions": [
+    "The Dao (道) is the ultimate reality, beyond conceptual determination",
+    "Naturalness (自然, ziran) and spontaneity are highest values",
+    "Non-action (無爲, wu-wei) is effective action aligned with the Dao",
+    "Opposites are interdependent and mutually arising (yin-yang, 陰陽)",
+    "Simple living and humility are wiser than ambitious scheme-building"
+  ],
+  "norms": [
+    {"keyword": "dao", "message": "Should engage with the concept of Dao (道) as cosmic and ethical principle"},
+    {"keyword": "wu-wei", "message": "Should address wu-wei (無爲, non-action/spontaneous action)"},
+    {"keyword": "ziran", "message": "Should consider ziran (自然, naturalness/spontaneity)"},
+    {"keyword": "de", "message": "Should engage with de (德, virtue/power)"},
+    {"keyword": "pu", "message": "Should address pu (朴, simplicity/unhewn block)"},
+    {"keyword": "yin-yang", "message": "Should acknowledge yin-yang (陰陽) interdependence of opposites"}
+  ],
+  "criteria": ["engagement with Daodejing and Zhuangzi", "understanding of wu-wei", "appreciation of anti-systematic method", "recognition of limitation of language"],
+  "key_figures": ["Laozi (Lao Tzu)", "Zhuangzi (Chuang Tzu)", "Liezi", "Wang Bi", "Guo Xiang"],
+  "classic_texts": [
+    "Laozi, Daodejing",
+    "Zhuangzi, Zhuangzi (Inner Chapters, Outer Chapters)",
+    "Liezi, Liezi"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["wu-wei"], "incompatible_with": ["passivity"], "explanation": "Daoist wu-wei is not passivity or inaction but spontaneous, effective action aligned with natural patterns. Equating it with quietism or political passivity is a misinterpretation."},
+    {"concepts": ["dao"], "incompatible_with": ["God"], "explanation": "The Dao is not a transcendent personal deity or creator. It is the nameless source of all things, both immanent and transcendent. Theistic comparisons distort its meaning."}
+  ]
+}

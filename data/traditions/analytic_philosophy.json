@@ -1,0 +1,29 @@
+{
+  "name": "analytic_philosophy",
+  "display_name": "Analytic Philosophy",
+  "assumptions": [
+    "Clarity and precision of language are essential for philosophical progress",
+    "Logical analysis is a primary tool for addressing philosophical problems",
+    "Philosophical problems can often be dissolved or clarified through analysis of language",
+    "Arguments should be explicit, with premises and conclusion stated in standard form"
+  ],
+  "norms": [
+    {"keyword": "argument", "message": "Should present arguments in standard form with explicit premises"},
+    {"keyword": "premise", "message": "Should identify premises explicitly"},
+    {"keyword": "conclusion", "message": "Should state the conclusion explicitly"},
+    {"keyword": "validity", "message": "Should evaluate validity and soundness of arguments"}
+  ],
+  "criteria": ["logical rigor", "conceptual clarity", "argumentative precision", "engagement with contemporary literature"],
+  "key_figures": ["Frege", "Russell", "Wittgenstein (early)", "Quine", "Kripke", "Lewis", "Putnam", "Davidson", "Dummett"],
+  "classic_texts": [
+    "Frege, 'On Sense and Reference'",
+    "Russell, 'On Denoting'",
+    "Wittgenstein, Tractatus Logico-Philosophicus",
+    "Quine, 'Two Dogmas of Empiricism'",
+    "Kripke, Naming and Necessity"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["anatta"], "incompatible_with": ["Cartesian ego"], "explanation": "Buddhist no-self (anatta) is incommensurable with the Cartesian ego. The former denies any permanent self, while the latter posits a thinking substance."},
+    {"concepts": ["li", "natural law"], "incompatible_with": ["divine command theory"], "explanation": "Confucian li (ritual propriety) is grounded in social harmony and cosmic order, not divine command. Direct comparison with natural law theory requires careful qualification."}
+  ]
+}

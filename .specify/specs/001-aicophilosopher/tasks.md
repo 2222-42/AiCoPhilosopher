@@ -208,7 +208,7 @@
   - **AC**: Concept map has ≥3 nodes with relationships; distinction matrix compares ≥2 traditions; thought experiments include epistemic status; confidence scores on all analyses; accuracy ≥80% on analytic concepts (AC-003)
   - **Depends on**: T-032, T-020, T-021
 
-- [ ] T-063 [US4] Add 5 default tradition JSON profiles in `data/traditions/`: `analytic_philosophy.json`, `continental_philosophy.json`, `buddhist_philosophy.json`, `confucian_ethics.json`, `daoist_philosophy.json`
+- [x] T-063 [DONE] [US4] Add 5 default tradition JSON profiles in `data/traditions/`: `analytic_philosophy.json`, `continental_philosophy.json`, `buddhist_philosophy.json`, `confucian_ethics.json`, `daoist_philosophy.json`
   - **AC**: Each profile has assumptions, norms, criteria, key figures, bridge warnings; `TraditionManager` loads all on startup
   - **Depends on**: T-020
 
@@ -381,4 +381,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-3 COMPLETE, Phase 4 (User Story 2) COMPLETE** — Ready for Phase 5 (User Story 3).
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-3 COMPLETE, Phase 4 (User Story 2) COMPLETE, T-063 DONE** — Ready for Phase 5 (User Story 3).
