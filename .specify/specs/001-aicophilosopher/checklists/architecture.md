@@ -39,13 +39,13 @@ This checklist **must** be used during implementation and PR review.
 - [ ] 各LLM呼び出し時にコスト見積もり・ログが出力され、Uncertainty Registryに記録される
 - [ ] 高コスト呼び出し前にWorkstream Coordinatorがユーザー確認を求める仕組みがある（または予算閾値設定可能）
 
-### 6. Domain-Aware Query Strategy
+### 6. Domain-Aware Query Strategy (tasks: T-048, T-049)
 
 - [ ] Domain-Aware Query Strategy (§3.6) is implemented and Core Philosophical Domains (Philosophy of Mathematics, Logic, Pragmatism, etc.) are handled appropriately
-- [ ] `ports/query_port.py` defines `PhilosophicalQueryStrategy` with semantic expansion
-- [ ] `infrastructure/adapters/search_adapter.py` conforms to the strategy (naive keyword dict replaced)
-- [ ] Stage 1 (CHEAP) query generation uses LLM-based semantic expansion, not keyword matching
-- [ ] Stage 2 (EXPENSIVE) deep review is triggered only for Core Domain–relevant papers
-- [ ] Core Domains are defined in `domain/core_domains.py` and shared across all Agents
+- [ ] T-048: `ports/query_port.py` defines `PhilosophicalQueryStrategy` with semantic expansion
+- [ ] T-048: `infrastructure/adapters/search_adapter.py` conforms to the strategy (naive keyword dict replaced)
+- [ ] T-048: Stage 1 (CHEAP) query generation uses LLM-based semantic expansion, not keyword matching
+- [ ] T-048: Stage 2 (EXPENSIVE) deep review is triggered only for Core Domain–relevant papers
+- [ ] T-049: Core Domains are defined in `domain/services/core_domains.py` and shared across all Agents
 
 **If a violation is found**: PR merge is immediately blocked. Fix is mandatory.

@@ -202,17 +202,23 @@
   - **AC**: Bibliography contains ≥1 bridge note per cross-traditional query; relevance score 0.0–1.0 for each paper; BibTeX entries valid; precision ≥70% on known queries (AC-002)
   - **Depends on**: T-043, T-032
 
-- [ ] T-045 [P] [US2] Implement `src/aicophilosopher/infrastructure/adapters/pdf_rag_adapter.py`: `PDFRAGTool` with PyMuPDF extraction, text chunking, ChromaDB indexing, local retrieval only; metadata extraction (title, author, abstract)
+- [x] T-045 [DONE] [P] [US2] Implement `src/aicophilosopher/infrastructure/adapters/pdf_rag_adapter.py`: `PDFRAGTool` with PyMuPDF extraction, text chunking, ChromaDB indexing, local retrieval only; metadata extraction (title, author, abstract)
   - **AC**: `ingest_pdf(path)` extracts text in <2s per 50 pages; `query("qualia")` returns relevant chunks; metadata accessible; no external transmission
   - **Depends on**: T-014, T-019
 
-- [ ] T-046 [US2] Implement `src/aicophilosopher/application/agents/concept_analysis.py`: `ConceptAnalysisAgent` that performs necessary/sufficient condition analysis, distinction mapping (de re vs de dicto, 理 li vs 氣 qi), thought experiment generation (trolley, brain-in-a-vat, Zhuangzi's butterfly), conceptual genealogy, cross-traditional concept bridging with incommensurability flagging
-  - **AC**: Concept map has ≥3 nodes with relationships; distinction matrix compares ≥2 traditions; thought experiments include epistemic status; confidence scores on all analyses; accuracy ≥80% on analytic concepts (AC-003)
-  - **Depends on**: T-032, T-020, T-021
-
-- [ ] T-047 [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding)
+- [x] T-047 [DONE] [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding)
   - **AC**: `parse("living_document.md")` returns frontmatter dict + list of annotations; invalid annotations raise `ValidationError`; annotation round-trip preserves all fields
   - **Depends on**: T-037
+
+### 2.7 Domain-Aware Query Strategy (spec §3.6)
+
+- [ ] T-048 [US2] Implement `src/aicophilosopher/ports/query_port.py`: `PhilosophicalQueryStrategy` with semantic expansion, Core Domain detection, staged pipeline integration (Cheap→Expensive), and tradition-aware query generation
+  - **AC**: `PhilosophicalQueryStrategy.expand("moving sofa problem")` returns philosophically scoped queries including "philosophy of mathematics"; LLM-based expansion (not keyword matching); Core Domains automatically detected
+  - **Depends on**: T-012 (reads LLM config for cheap-model access)
+
+- [ ] T-049 [P] [US2] Implement `src/aicophilosopher/domain/services/core_domains.py`: Core Philosophical Domains registry (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory) with weighted priority, sub-traditions, and subtopic metadata; shared across all Agents
+  - **AC**: `CoreDomains.get("philosophy_of_mathematics")` returns domain profile with sub_traditions and expansion_terms; `CoreDomains.detect("moving sofa problem")` returns matching domain priorities; all 6 domains registered
+  - **Depends on**: T-020 (follows same domain/ pattern)
 
 **Checkpoint**: User Stories 1 AND 2 should both work independently. User can search literature, analyze concepts, and see results in the living document.
 
