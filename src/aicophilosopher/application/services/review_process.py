@@ -28,6 +28,11 @@ class ReviewProcess:
         self.current_round = 1
         self._status = "in_progress"
         self._reviewer_lenses = lenses or METHODOLOGICAL_LENSES[:self.min_reviewers]
+        if len(self._reviewer_lenses) < self.min_reviewers:
+            raise ValueError(
+                f"Not enough lenses ({len(self._reviewer_lenses)}) "
+                f"to satisfy min_reviewers ({self.min_reviewers})"
+            )
         round_id = f"rev-{uuid.uuid4().hex[:8]}"
         self._rounds[self.current_round] = {
             "round_id": round_id,
@@ -44,14 +49,27 @@ class ReviewProcess:
         verdict_status = str(verdict.get("status", ""))
         if verdict_status not in ("approved", "approved_with_reservations", "rejected"):
             return False
+        reviewer_id = str(verdict.get("reviewer_id", ""))
+        if not reviewer_id:
+            return False
+        lens = str(verdict.get("lens", ""))
+        if lens not in self._reviewer_lenses:
+            return False
+        try:
+            confidence = float(str(verdict.get("confidence", 0.5)))
+        except (ValueError, TypeError):
+            confidence = 0.5
         if round_number not in self._verdicts:
             self._verdicts[round_number] = []
+        existing_ids = {v["reviewer_id"] for v in self._verdicts[round_number]}
+        if reviewer_id in existing_ids:
+            return False
         self._verdicts[round_number].append({
-            "reviewer_id": str(verdict.get("reviewer_id", "")),
-            "lens": str(verdict.get("lens", "")),
+            "reviewer_id": reviewer_id,
+            "lens": lens,
             "status": verdict_status,
             "comments": str(verdict.get("comments", "")),
-            "confidence": float(str(verdict.get("confidence", 0.5))),
+            "confidence": confidence,
             "submitted_at": datetime.now(UTC).isoformat(),
         })
         return True
@@ -61,7 +79,7 @@ class ReviewProcess:
         if not rd:
             return {"status": "not_started", "workstream_id": self.workstream_id}
         if self.current_round > self.max_rounds:
-            rd["status"] = "escalated"
+            rd["status"] = "stalled"
             raise ReviewDeadlockError(
                 workstream_id=self.workstream_id,
                 round_number=self.current_round,
@@ -89,7 +107,7 @@ class ReviewProcess:
                 "workstream_id": self.workstream_id,
             }
         if self.current_round >= self.max_rounds:
-            rd["status"] = "escalated"
+            rd["status"] = "stalled"
             raise ReviewDeadlockError(
                 workstream_id=self.workstream_id,
                 round_number=self.current_round,
@@ -114,9 +132,9 @@ class ReviewProcess:
 
     async def escalate(self, reason: str) -> dict[str, Any]:
         if self._rounds:
-            self._rounds[self.current_round]["status"] = "escalated"
+            self._rounds[self.current_round]["status"] = "stalled"
         return {
-            "status": "escalated",
+            "status": "stalled",
             "workstream_id": self.workstream_id,
             "total_rounds": self.current_round,
             "reason": reason,
