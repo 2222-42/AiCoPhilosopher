@@ -1,33 +1,39 @@
 from typing import Any
 
+from aicophilosopher.domain.services.tradition_manager import DEFAULT_DOMAINS
 from aicophilosopher.infrastructure.adapters.search_adapter import SearchTool
 
 BRIDGE_NOTES: dict[str, dict[str, str]] = {
-    "mind": {
-        "analytic→buddhist": "The concept of 'mind' in analytic philosophy (consciousness/qualia) parallels Buddhist vinnana (consciousness) and citta (mind), but Buddhist analysis denies a substantial self (anatta) that much Western philosophy of mind presupposes.",
-        "analytic→confucian": "Analytic philosophy of mind focuses on mental representation; Confucian xin (心, heart-mind) integrates cognition and emotion as a unified moral-psychological faculty.",
-        "analytic→daoist": "Analytic mental representation contrasts with Daoist xin (心) as spontaneous responsiveness (wúwéi), rejecting inner-outer dualism.",
-        "buddhist→continental": "Buddhist citta (mind) and no-self doctrine intersect with continental critiques of the Cartesian cogito (Sartre, Derrida).",
+    "abstraction": {
+        "analytic→philosophy_of_technology": "Analytic philosophy analyses abstraction as a formal operation; philosophy of technology examines how abstraction layers in software mediate human activity and embed normative commitments.",
+        "analytic→philosophy_of_mathematics": "Analytic philosophy treats mathematical abstraction as removing properties to expose structure; software architecture treats abstraction as hiding implementation behind interfaces. These serve different epistemic purposes.",
+        "philosophy_of_mathematics→software_architecture": "Mathematical abstraction discovers formal structure; software abstraction designs interfaces. Conflating the two risks treating design choices as mathematical necessities.",
+        "philosophy_of_technology→software_architecture": "Technological mediation theory (Ihde, Verbeek) reveals how software abstraction is not neutral: each layer reshapes what users can perceive and do.",
     },
-    "self": {
-        "analytic→buddhist": "Analytic personal identity theories (Parfit, Locke) challenge the unity of self; Buddhist anatta (no-self) radically extends this by denying any permanent substratum.",
-        "analytic→confucian": "Analytic self is individual and autonomous; Confucian self is relational, constituted through roles (五伦, five relationships).",
-        "analytic→daoist": "Analytic self-ownership models contrast with Daoist self-abandonment (wúwǒ, 无我) as spontaneous attunement to Dào.",
+    "model": {
+        "analytic→model_theory": "Analytic philosophy of science treats models as representations of target systems; model theory treats models as interpretations of formal languages. Both senses converge in scientific modelling but with different validity criteria.",
+        "philosophy_of_science→software_architecture": "Scientific models aim at isomorphism with reality; software models aim at executable specification. The normative standards differ: empirical adequacy vs behavioural correctness.",
+        "model_theory→software_architecture": "Model-theoretic semantics (Tarski) provides a formal framework applicable to software specification languages (algebraic specification, abstract state machines), but the engineering constraints add pragmatic criteria beyond formal satisfiability.",
     },
-    "free will": {
-        "analytic→buddhist": "Analytic compatibilism vs libertarianism debates parallel Buddhist karma-and-free-will discourses. Buddhists reject fixed determinism while affirming moral responsibility through pratityasamutpada (dependent origination).",
-        "analytic→confucian": "Confucian ming (命, fate) and tian (天, heaven) offer a non-Western compatibilism: moral agency within cosmic order.",
+    "computation": {
+        "analytic→philosophy_of_mathematics": "Turing's analysis of computation bridges analytic philosophy of mind (functionalism) and philosophy of mathematics (computability theory). The Church-Turing thesis has implications for both domains.",
+        "philosophy_of_technology→software_architecture": "Computational thinking transforms how we understand cognition, social organisation, and agency. Software architecture embodies assumptions about what computation is and what it can formalise.",
     },
-    "ethics": {
-        "analytic→confucian": "Western duty-based ethics vs Confucian role-based ethics (ren, 仁). Both are universalist but the Confucian self is irreducibly social.",
-        "analytic→buddhist": "Consequentialist welfare calculations parallel Buddhist karuna (compassion) ethics, but Buddhist ethics is grounded in phenomenological insight (prajna) rather than utility maximization.",
+    "proof": {
+        "analytic→philosophy_of_mathematics": "Mathematical proof is a social-epistemic practice involving understanding; formal proof is a syntactic derivation. Both are relevant to philosophical argumentation with different epistemic standards.",
+        "philosophy_of_mathematics→software_architecture": "Formal verification in software (model checking, theorem proving) draws on proof theory but applies it to systems with state, time, and concurrency—extending classical proof concepts.",
     },
-    "knowledge": {
-        "analytic→buddhist": "Analytic JTB epistemology vs Buddhist pramana theory. Buddhists accept perception and inference as valid instruments but reject testimony-independent justification.",
+    "correctness": {
+        "analytic→software_architecture": "Analytic philosophy distinguishes necessary and sufficient conditions; software correctness requires formal specification of both. The gap between specification and implementation mirrors the gap between concept and object in analytic epistemology.",
+        "philosophy_of_science→software_architecture": "Scientific falsification (Popper) and software testing (falsifying hypotheses about program behaviour) share structural parallels, but the normative aims differ: scientific truth vs operational reliability.",
     },
     "truth": {
-        "analytic→buddhist": "Correspondence truth vs Buddhist two-truths doctrine (conventional + ultimate). Nagarjuna's emptiness undermines correspondence while preserving conventional truth.",
-        "continental→daoist": "Heideggerian aletheia (unconcealment) resonates with Daoist unnamed dao beyond discursive truth.",
+        "analytic→model_theory": "Tarski's semantic conception of truth (truth in a model) provides a formal framework for understanding correspondence and its limits. Model-theoretic truth is relative to interpretation—a lesson relevant to philosophical pluralism.",
+        "continental→philosophy_of_technology": "Heideggerian aletheia (unconcealment) and technological enframing (Gestell) offer a non-correspondence account of truth-as-disclosure relevant to understanding how software systems shape what is intelligible.",
+    },
+    "design": {
+        "analytic→philosophy_of_technology": "Analytic aesthetics and philosophy of technology converge on the concept of design: both treat artefacts as embodying intentions and values that merit philosophical analysis.",
+        "philosophy_of_technology→software_architecture": "Software design embeds ontological assumptions (what entities exist in the system, how they relate) and normative commitments (what counts as good structure). These deserve philosophical scrutiny.",
     },
 }
 
@@ -44,14 +50,13 @@ class LiteratureSearchAgent:
 
         for concept, trad_notes in BRIDGE_NOTES.items():
             if concept in lower_q or lower_q in concept:
-                matched = False
                 for cross_key, note_text in trad_notes.items():
-                    if any(t in cross_key for t in traditions):
+                    parts = cross_key.split("→")
+                    if len(parts) == 2 and parts[0] in traditions and parts[1] in traditions:
                         matched = True
-                        src, dst = cross_key.split("→")
                         notes.append({
-                            "from_tradition": src,
-                            "to_tradition": dst,
+                            "from_tradition": parts[0],
+                            "to_tradition": parts[1],
                             "note": note_text,
                             "confidence_score": 0.7,
                         })
@@ -68,7 +73,7 @@ class LiteratureSearchAgent:
 
     async def run(self, query: str, **kwargs: object) -> dict[str, Any]:
         raw_traditions = kwargs.get("traditions")
-        trad_list: list[str] = list(raw_traditions) if isinstance(raw_traditions, (list, tuple)) else ["analytic"]
+        trad_list: list[str] = list(raw_traditions) if isinstance(raw_traditions, (list, tuple)) else DEFAULT_DOMAINS
 
         results = await self.search_tool.search(query, traditions=trad_list)
 

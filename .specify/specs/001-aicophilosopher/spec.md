@@ -25,7 +25,7 @@ While mathematics pursues necessary truths through formal proof, philosophy enga
 ### 1.2 Scope & Boundaries
 
 **In Scope**:
-- Philosophical research assistance across analytic, continental, pragmatic, Eastern (Buddhist, Confucian, Daoist), and indigenous philosophical traditions
+- Philosophical research assistance across analytic, continental, pragmatic, philosophy of technology, philosophy of science, philosophy of mathematics, software architecture, and model theory
 - Conceptual analysis, argument reconstruction, counter-argument generation, phenomenological description, ethical dilemma analysis, metaphysical inquiry
 - Living document generation with margin annotations and dialectical history
 - Local-first, privacy-preserving operation with optional external layer integration
@@ -52,7 +52,7 @@ While mathematics pursues necessary truths through formal proof, philosophy enga
 
 The AI Co-Philosopher is the first agentic AI system designed specifically for the **full messy reality of philosophical research**, not merely question-answering or argument mapping. Key differentiators:
 
-1. **Cross-Traditional Competence**: Unlike systems rooted in analytic philosophy alone, the Co-Philosopher MUST support dialogue across Western (analytic, continental, pragmatic), Eastern (Buddhist, Confucian, Daoist), and indigenous traditions, recognizing incommensurability where it exists and seeking bridge concepts where possible.
+1. **Cross-Traditional Competence**: Unlike systems rooted in analytic philosophy alone, the Co-Philosopher MUST support dialogue across analytic, continental, pragmatic, philosophy of technology, philosophy of science, philosophy of mathematics, software architecture, and model theory, recognizing incommensurability where it exists and seeking bridge concepts where possible.
 
 2. **Dialectical History as First-Class Artifact**: The system treats the process of philosophical inquiry—failed arguments, abandoned hypotheses, conceptual revisions—as equally important to final conclusions, mirroring Lakatos's *Proofs and Refutations* but for philosophical methodology.
 
@@ -154,7 +154,7 @@ class HypothesisRecord(BaseModel):
     counter_arguments: list[CounterArgument]
     dialectical_children: list[str]          # Hypotheses that refined/replaced this one
     status: HypothesisStatus                 # active, abandoned, refined, refuted
-    epistemic_tradition: Optional[str]       # e.g., "analytic", "phenomenological", "confucian"
+    epistemic_tradition: Optional[str]       # e.g., "analytic", "phenomenological", "philosophy_of_technology"
 
 class UncertaintyRecord(BaseModel):
     claim_id: str
@@ -215,6 +215,45 @@ For literature-search and exploration workstreams, **cost-optimised multi-stage 
 
 This mechanism ensures the **AI Co-Philosopher dramatically reduces routine exploration costs** while reserving Kimi K2.6's philosophical depth for the core analytical work that demands it.
 
+### 3.6 Domain-Aware Query Strategy (Mandatory)
+
+Literature Review Workstream and Cross-Traditional Comparison Agent **must** use a philosophically sophisticated query strategy, avoiding naive keyword matching.
+
+#### 3.6.1 Core Philosophical Domains (First-Class Treatment)
+
+The following domains are **Core Domains** with explicit priority and expansion:
+
+- **Philosophy of Mathematics** (foundations, structuralism, formalism, intuitionism, mathematical realism/anti-realism)
+- **Logic** (model theory, proof theory, non-classical logics, categorial logic, modal logic)
+- **Pragmatism** (Peirce, James, Dewey, Rorty, neopragmatism, pragmatic naturalism)
+- **Philosophy of Science** (scientific realism/anti-realism, epistemology of science, underdetermination, theory change, STS)
+- **Philosophy of Technology** (post-phenomenology, technological mediation, STS, critical theory of technology, AI ethics)
+- **Model Theory** (applications to philosophy, philosophical logic, structuralism, category-theoretic foundations, model-theoretic semantics)
+
+These domains receive **weighted priority during Query Expansion**, automatically including relevant subtopics (e.g., structuralism, formalism, causal inference, computational philosophy, technological mediation).
+
+#### 3.6.2 Query Strategy Requirements
+
+1. **Semantic Query Expansion**
+   - Naive keyword matching is **prohibited**; LLM-based (Cheap-tier permitted) **semantic expansion** is mandatory.
+   - Automatically detect Core Domains from user queries and generate philosophically optimised expanded queries.
+   - Example: "moving sofa problem" → `philosophy of mathematics + computational geometry + intuitionism + continuous mathematics`
+
+2. **Tradition-Aware Query**
+    - Recognise sub-traditions within Core Domains (Logicism, Intuitionism, Formalism, Structuralism, Category-theoretic foundations) alongside broad traditions (Analytic, Continental, Pragmatist, Philosophy of Technology, Philosophy of Science, Philosophy of Mathematics, Software Architecture, Model Theory).
+
+3. **Staged Query Pipeline** (tied to Cost-Aware §3.5)
+   - **Stage 1 (CHEAP)**: Broad exploration query generation + Abstract retrieval.
+   - **Stage 2 (EXPENSIVE: Kimi K2.6)**: Deep critical review and concept mapping **only** for papers highly relevant to Core Domains.
+
+#### 3.6.3 Implementation Requirements (Ports & Adapters)
+
+- Define `PhilosophicalQueryStrategy` in `ports/query_port.py`.
+- `infrastructure/adapters/search_adapter.py` **must** fully conform to this strategy (the naive keyword dict from PR #11 is to be replaced incrementally).
+- Core Domains are defined in `domain/core_domains.py` (or constitution) and shared across all Agents.
+
+This mechanism ensures the **AI Co-Philosopher accurately understands the user's specialist philosophical interests, producing high-quality philosophical literature discovery without relying on naive search heuristics**.
+
 ## 4. Agent Specifications
 
 ### 4.1 Project Coordinator Agent
@@ -223,7 +262,7 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 
 **Behavior**:
 - MUST engage in Socratic clarification dialogue before launching workstreams. The dialogue continues until:
-  - The user's philosophical question is disambiguated (analytic vs continental vs Eastern framing identified or explicitly left open)
+  - The user's philosophical question is disambiguated (analytic vs continental vs philosophy of technology / science / mathematics framing identified or explicitly left open)
   - Key concepts are preliminary scoped
   - The user's methodological preferences (if any) are understood
   - At least one concrete, achievable research goal is formulated
@@ -248,16 +287,16 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 **Role**: Discovers, retrieves, and synthesizes philosophical literature across traditions and languages.
 
 **Capabilities**:
-- MUST query: PhilPapers API, Stanford Encyclopedia of Philosophy (SEP), Internet Encyclopedia of Philosophy (IEP), arXiv philosophy (cs.AI, humanities), Semantic Scholar, and tradition-specific databases (e.g., Daoist texts corpus, Buddhist Digital Resource Center if available).
-- MUST support cross-traditional literature bridging: when the user inquires about a concept (e.g., "mind"), the agent MUST search for analogues across traditions (e.g., 心 xīn, citta, nous, Geist) and explicitly note where direct translation is contested.
+- MUST query: PhilPapers API, Stanford Encyclopedia of Philosophy (SEP), Internet Encyclopedia of Philosophy (IEP), arXiv philosophy (cs.AI, humanities), Semantic Scholar, and domain-specific databases (e.g., ACM Digital Library, IEEE Xplore for philosophy of technology / software architecture, MathSciNet for philosophy of mathematics).
+- MUST support cross-domain literature bridging: when the user inquires about a concept (e.g., "abstraction"), the agent MUST search for analogues across domains (e.g., software abstraction layers, mathematical abstraction, scientific model abstraction) and explicitly note where direct translation is contested.
 - MUST obtain explicit user consent before using external search services per project/request.
 - MUST transmit only minimum necessary search data to external services; MUST NOT transmit project content, living-document text, or uploaded PDF contents without explicit consent.
 - MUST support user-uploaded PDFs for local RAG; PDF ingestion and retrieval MUST be performed locally by default.
 
 **Output**: Structured bibliography with:
 - Title, authors, year, abstract snippet, relevance score, BibTeX entry
-- Tradition tag (e.g., `analytic_philosophy`, `phenomenology`, `buddhist_philosophy`, `confucian_ethics`)
-- Conceptual bridge notes (e.g., "Discusses 'qualia'—compare with Buddhist vinnana (consciousness) concepts")
+- Tradition tag (e.g., `analytic_philosophy`, `phenomenology`, `philosophy_of_technology`, `philosophy_of_science`, `philosophy_of_mathematics`, `software_architecture`, `model_theory`)
+- Conceptual bridge notes (e.g., "Discusses 'abstraction'—compare with software architecture layered abstraction vs mathematical abstraction vs scientific model abstraction")
 - Confidence score for relevance and for cross-traditional analogy validity
 
 ### 4.3 Concept Analysis Agent
@@ -267,8 +306,8 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 **Capabilities**:
 - MUST perform:
   - Necessary vs sufficient condition analysis
-  - Distinction mapping (e.g., de re vs de dicto, a priori vs a posteriori, 理 li vs 氣 qi)
-  - Thought experiment generation and evaluation (e.g., trolley problems, brain-in-a-vat, Zhuangzi's butterfly dream)
+  - Distinction mapping (e.g., de re vs de dicto, a priori vs a posteriori, formal specification vs implementation)
+  - Thought experiment generation and evaluation (e.g., trolley problems, brain-in-a-vat, Chinese room argument)
   - Conceptual genealogy (historical development of a concept across texts and traditions)
   - Cross-traditional concept bridging (identifying functional analogues and incommensurabilities)
 - MUST flag when concepts are fundamentally contested or incommensurable across traditions.
@@ -285,10 +324,10 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 **Role**: NEW specialized agent for the Co-Philosopher. Compares philosophical positions across traditions, identifies bridge concepts and incommensurabilities.
 
 **Capabilities**:
-- MUST identify functional analogues of concepts across traditions (e.g., Aristotelian eudaimonia → Confucian junzi ideal → Buddhist bodhisattva path).
+- MUST identify functional analogues of concepts across traditions (e.g., software modularity → mathematical structuralism → scientific reductionism).
 - MUST explicitly flag incommensurabilities where no satisfactory bridge exists.
 - MUST evaluate arguments within their native methodological frameworks before cross-comparison.
-- MUST avoid "colonizing" one tradition with another's categories (e.g., forcing Buddhist anatta into Cartesian substance dualism).
+- MUST avoid "colonizing" one tradition with another's categories (e.g., forcing software design patterns into Aristotelian teleology).
 
 **Output**: Cross-traditional comparison report with:
 - Tradition profiles (key assumptions, methodological norms, evaluative criteria)
@@ -305,7 +344,7 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 - MUST generate multiple competing positions (e.g., compatibilist vs incompatibilist free will; consequentialist vs deontological ethics).
 - MUST identify implicit assumptions, suppressed premises, and argumentative circularity.
 - MUST support both formal logical arguments (syllogistic, propositional, predicate) and informal argument schemes (analogical, abductive, phenomenological).
-- MUST evaluate arguments within their tradition's accepted norms (e.g., pramana standards in Indian philosophy, phenomenological reduction in Husserlian tradition).
+- MUST evaluate arguments within their tradition's accepted norms (e.g., formal proof standards in logic, phenomenological reduction in Husserlian tradition, type-safety criteria in software architecture).
 
 **Output**: Formal argument list with:
 - Premises, conclusion, inference rule, validity assessment
@@ -336,10 +375,10 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 **Role**: NEW specialized agent. Generates and evaluates phenomenological descriptions of lived experience.
 
 **Capabilities**:
-- MUST generate phenomenological descriptions using methodological frameworks (e.g., Husserlian epoché, Merleau-Pontyan embodied perception, Buddhist vipassana-based description).
+- MUST generate phenomenological descriptions using methodological frameworks (e.g., Husserlian epoché, Merleau-Pontyan embodied perception, technophenomenology of human-computer interaction).
 - MUST distinguish between first-person phenomenological claims and third-person scientific descriptions.
 - MUST flag when phenomenological claims require first-person validation from the user or from reported experiences in literature.
-- MUST support comparison of phenomenological descriptions across traditions (e.g., Husserl's noema vs Buddhist nimitta).
+- MUST support comparison of phenomenological descriptions across traditions (e.g., Husserl's noema vs technophenomenological interface transparency).
 
 **Output**: Phenomenological description with:
 - Methodological framework explicit
@@ -353,7 +392,7 @@ This mechanism ensures the **AI Co-Philosopher dramatically reduces routine expl
 **Role**: NEW specialized agent. Analyzes ethical dilemmas, normative frameworks, and moral arguments.
 
 **Capabilities**:
-- MUST identify the ethical framework(s) implicit in a dilemma or argument (consequentialist, deontological, virtue ethical, care ethical, Buddhist ethics, Confucian ethics, etc.).
+- MUST identify the ethical framework(s) implicit in a dilemma or argument (consequentialist, deontological, virtue ethical, care ethical, professional ethics in computing, research ethics in science, etc.).
 - MUST generate analyses from multiple normative frameworks.
 - MUST flag underdetermined dilemmas where no single framework yields a clear resolution.
 - MUST explicitly request the user's normative commitments when the analysis requires them.
@@ -451,7 +490,7 @@ project_id: "[UUID]"
 version: "[Document Version]"
 last_updated: "[ISO Date]"
 epistemic_status: "[Draft | Under Review | Final]"
-traditions_referenced: ["analytic", "phenomenology", "buddhist", ...]
+traditions_referenced: ["analytic", "phenomenology", "philosophy_of_technology", "philosophy_of_science", "philosophy_of_mathematics", "software_architecture", "model_theory", ...]
 ---
 
 # Introduction

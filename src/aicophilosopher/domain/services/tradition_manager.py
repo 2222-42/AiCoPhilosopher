@@ -2,6 +2,12 @@ import json
 from pathlib import Path
 from typing import Any
 
+DEFAULT_DOMAINS = [
+    "analytic", "continental",
+    "philosophy_of_technology", "philosophy_of_science",
+    "philosophy_of_mathematics", "software_architecture", "model_theory",
+]
+
 
 class TraditionManager:
     def __init__(self, traditions_dir: str | Path | None = None) -> None:
@@ -18,7 +24,12 @@ class TraditionManager:
         for filepath in sorted(self.traditions_dir.glob("*.json")):
             tradition_name = filepath.stem
             with open(filepath) as f:
-                self._profiles[tradition_name] = json.load(f)
+                profile = json.load(f)
+            self._profiles[tradition_name] = profile
+            for suffix in ("_philosophy", "_ethics"):
+                if tradition_name.endswith(suffix):
+                    alias = tradition_name[:-len(suffix)]
+                    self._profiles[alias] = profile
 
     def load_traditions(self) -> dict[str, dict[str, Any]]:
         self._ensure_loaded()

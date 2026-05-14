@@ -117,8 +117,8 @@
 
 ### 2.6 Reasoning Engine Skeleton
 
-- [x] T-020 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, buddhist, confucian, daoist); validates arguments against tradition norms; detects incommensurability
-  - **AC**: `load_traditions()` discovers all JSON files; `validate_argument(arg, "buddhist_philosophy")` returns norm violations; `check_incommensurability("anatta", "cartesian_ego")` returns True with explanation
+- [x] T-020 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/tradition_manager.py`: `TraditionManager` that loads JSON tradition profiles from `data/traditions/` (5 default traditions: analytic, continental, philosophy_of_technology, philosophy_of_science, philosophy_of_mathematics, software_architecture, model_theory); validates arguments against tradition norms; detects incommensurability
+  - **AC**: `load_traditions()` discovers all JSON files; `validate_argument(arg, "philosophy_of_technology")` returns norm violations; `check_incommensurability("software_abstraction", "mathematical_abstraction")` returns True with explanation
   - **Depends on**: T-019
 
 - [x] T-021 [DONE] [P] [Foundation] Implement `src/aicophilosopher/domain/services/uncertainty.py`: `UncertaintyLifecycle` class with `track()`, `manage()`, `communicate()` methods; state machine for `ReviewStatus` transitions; uncertainty registry sync with inline Markdown annotations
@@ -197,15 +197,33 @@
 ### Implementation for User Story 2
 
 - [x] T-043 [DONE] [US2] Implement `src/aicophilosopher/infrastructure/adapters/search_adapter.py`: `SearchTool` with adapters for PhilPapers API, SEP (scrape if no API), IEP, arXiv (cs.AI + humanities), Semantic Scholar; cross-traditional query expansion; tradition tag assignment; consent gate before external API calls
-  - **AC**: `search("free will", traditions=["analytic", "buddhist"])` returns results with tradition tags; consent dialog shown if `privacy.allow_external_search` unset; no project content transmitted (Constitution Principle I)
+  - **AC**: `search("abstraction", traditions=["analytic", "philosophy_of_technology"])` returns results with tradition tags; consent dialog shown if `privacy.allow_external_search` unset; no project content transmitted (Constitution Principle I)
   - **Depends on**: T-019, T-012
 
-- [x] T-044 [DONE] [US2] Implement `src/aicophilosopher/application/agents/literature_search.py`: `LiteratureSearchAgent` that uses `SearchTool`, performs cross-traditional literature bridging (e.g., "mind" → 心 xīn, citta, nous), generates structured bibliography with confidence scores and bridge notes
+- [x] T-044 [DONE] [US2] Implement `src/aicophilosopher/application/agents/literature_search.py`: `LiteratureSearchAgent` that uses `SearchTool`, performs cross-domain literature bridging (e.g., "abstraction" → software abstraction layers, mathematical abstraction, scientific model abstraction), generates structured bibliography with confidence scores and bridge notes
   - **AC**: Bibliography contains ≥1 bridge note per cross-traditional query; relevance score 0.0–1.0 for each paper; BibTeX entries valid; precision ≥70% on known queries (AC-002)
   - **Depends on**: T-043, T-032
 
-- [x] T-046 [DONE] [US2] Implement `src/aicophilosopher/application/agents/concept_analysis.py`: `ConceptAnalysisAgent` that performs necessary/sufficient condition analysis, distinction mapping (de re vs de dicto, 理 li vs 氣 qi), thought experiment generation (trolley, brain-in-a-vat, Zhuangzi's butterfly), conceptual genealogy, cross-traditional concept bridging with incommensurability flagging
+- [x] T-045 [DONE] [P] [US2] Implement `src/aicophilosopher/infrastructure/adapters/pdf_rag_adapter.py`: `PDFRAGTool` with PyMuPDF extraction, text chunking, ChromaDB indexing, local retrieval only; metadata extraction (title, author, abstract)
+  - **AC**: `ingest_pdf(path)` extracts text in <2s per 50 pages; `query("qualia")` returns relevant chunks; metadata accessible; no external transmission
+  - **Depends on**: T-014, T-019
+
+- [x] T-046 [DONE] [US2] Implement `src/aicophilosopher/application/agents/concept_analysis.py`: `ConceptAnalysisAgent` that performs necessary/sufficient condition analysis, distinction mapping (de re vs de dicto, formal specification vs implementation), thought experiment generation (trolley, brain-in-a-vat, Chinese room argument), conceptual genealogy, cross-traditional concept bridging with incommensurability flagging
   - **AC**: Concept map has ≥3 nodes with relationships; distinction matrix compares ≥2 traditions; thought experiments include epistemic status; confidence scores on all analyses; accuracy ≥80% on analytic concepts (AC-003)
+
+- [x] T-047 [DONE] [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema (Source, Confidence, Origin, Counter-argument strength, Tradition, Review status, Phenomenological grounding)
+  - **AC**: `parse("living_document.md")` returns frontmatter dict + list of annotations; invalid annotations raise `ValidationError`; annotation round-trip preserves all fields
+  - **Depends on**: T-037
+
+### 2.7 Domain-Aware Query Strategy (spec §3.6)
+
+- [ ] T-048 [US2] Implement `src/aicophilosopher/ports/query_port.py`: `PhilosophicalQueryStrategy` with semantic expansion, Core Domain detection, staged pipeline integration (Cheap→Expensive), and tradition-aware query generation
+  - **AC**: `PhilosophicalQueryStrategy.expand("moving sofa problem")` returns philosophically scoped queries including "philosophy of mathematics"; LLM-based expansion (not keyword matching); Core Domains automatically detected
+  - **Depends on**: T-012 (reads LLM config for cheap-model access)
+
+- [ ] T-049 [P] [US2] Implement `src/aicophilosopher/domain/services/core_domains.py`: Core Philosophical Domains registry (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory) with weighted priority, sub-traditions, and subtopic metadata; shared across all Agents
+  - **AC**: `CoreDomains.get("philosophy_of_mathematics")` returns domain profile with sub_traditions and expansion_terms; `CoreDomains.detect("moving sofa problem")` returns matching domain priorities; all 6 domains registered
+  - **Depends on**: T-020 (follows same domain/ pattern)
   - **Depends on**: T-032, T-020, T-021
 
 - [x] T-047 [DONE] [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema
@@ -275,7 +293,7 @@
   - **AC**: Comparison report contains tradition profiles, bridge concept map, incommensurability register, synthesis proposals
   - **Depends on**: T-032, T-020, T-021
 
-- [ ] T-063 [US4] Add 5 default tradition JSON profiles in `data/traditions/`: `analytic_philosophy.json`, `continental_philosophy.json`, `buddhist_philosophy.json`, `confucian_ethics.json`, `daoist_philosophy.json`
+- [x] T-063 [DONE] [US4] Add 5 default tradition JSON profiles in `data/traditions/`: `analytic_philosophy.json`, `continental_philosophy.json`, `philosophy_of_technology.json`, `philosophy_of_science.json`, `philosophy_of_mathematics.json`, `software_architecture.json`, `model_theory.json`
   - **AC**: Each profile has assumptions, norms, criteria, key figures, bridge warnings; `TraditionManager` loads all on startup
   - **Depends on**: T-020
 
@@ -448,4 +466,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-3 COMPLETE, Phase 4 (User Story 2) COMPLETE** — Ready for Phase 5 (User Story 3).
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-3 COMPLETE, Phase 4 (User Story 2) COMPLETE, T-063 DONE** — Ready for Phase 5 (User Story 3).

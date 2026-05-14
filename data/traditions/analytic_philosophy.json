@@ -1,0 +1,29 @@
+{
+  "name": "analytic_philosophy",
+  "display_name": "Analytic Philosophy",
+  "assumptions": [
+    "Clarity and precision of language are essential for philosophical progress",
+    "Logical analysis is a primary tool for addressing philosophical problems",
+    "Philosophical problems can often be dissolved or clarified through analysis of language",
+    "Arguments should be explicit, with premises and conclusion stated in standard form"
+  ],
+  "norms": [
+    {"keyword": "argument", "message": "Should present arguments in standard form with explicit premises"},
+    {"keyword": "premise", "message": "Should identify premises explicitly"},
+    {"keyword": "conclusion", "message": "Should state the conclusion explicitly"},
+    {"keyword": "validity", "message": "Should evaluate validity and soundness of arguments"}
+  ],
+  "criteria": ["logical rigor", "conceptual clarity", "argumentative precision", "engagement with contemporary literature"],
+  "key_figures": ["Frege", "Russell", "Wittgenstein (early)", "Quine", "Kripke", "Lewis", "Putnam", "Davidson", "Dummett"],
+  "classic_texts": [
+    "Frege, 'On Sense and Reference'",
+    "Russell, 'On Denoting'",
+    "Wittgenstein, Tractatus Logico-Philosophicus",
+    "Quine, 'Two Dogmas of Empiricism'",
+    "Kripke, Naming and Necessity"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["software abstraction", "mathematical abstraction"], "incompatible_with": ["logical analysis"], "explanation": "Software abstraction wraps behaviour behind interfaces; mathematical abstraction strips properties to expose formal structure. Analytic logical analysis may assume these are equivalent when they serve different epistemic purposes."},
+    {"concepts": ["formal specification", "implementation"], "incompatible_with": ["conceptual analysis"], "explanation": "Formal specification defines what a system should do; implementation defines how. Analytic conceptual analysis of 'correctness' must distinguish specification-level from implementation-level claims."}
+  ]
+}

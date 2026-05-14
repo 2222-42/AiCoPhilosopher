@@ -1,0 +1,29 @@
+{
+  "name": "philosophy_of_mathematics",
+  "display_name": "Philosophy of Mathematics",
+  "assumptions": [
+    "Mathematical objects (numbers, sets, structures) have a mode of existence that demands philosophical explanation",
+    "Mathematical truth differs in kind from empirical truth; its epistemological basis is distinct",
+    "Mathematical practice includes proof, definition, axiomatisation, and conceptual innovation—not just formal derivation",
+    "Different branches of mathematics raise different philosophical problems (set theory, category theory, geometry, computation)"
+  ],
+  "norms": [
+    {"keyword": "proof", "message": "Should evaluate the type and standards of mathematical proof"},
+    {"keyword": "consistency", "message": "Should address formal consistency and relative consistency proofs"},
+    {"keyword": "completeness", "message": "Should consider completeness and incompleteness results"},
+    {"keyword": "foundations", "message": "Should engage with foundational frameworks (ZFC, NF, HoTT, etc.)"}
+  ],
+  "criteria": ["mathematical precision", "logical rigour", "engagement with foundational literature", "awareness of metamathematical results"],
+  "key_figures": ["Frege", "Russell", "Hilbert", "Brouwer", "Gödel", "Tarski", "Cohen", "Maddy", "Field"],
+  "classic_texts": [
+    "Frege, 'The Foundations of Arithmetic'",
+    "Russell & Whitehead, 'Principia Mathematica' (introduction)",
+    "Gödel, 'On Formally Undecidable Propositions'",
+    "Benacerraf, 'What Numbers Could Not Be'",
+    "Maddy, 'Believing the Axioms'"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["mathematical abstraction", "software abstraction"], "incompatible_with": ["abstraction identity"], "explanation": "Mathematical abstraction removes irrelevant properties to expose formal structure; software abstraction hides implementation detail behind interfaces. The former is discovery-oriented; the latter is design-oriented. Direct conflation risks category error."},
+    {"concepts": ["proof", "verification"], "incompatible_with": ["equivalence thesis"], "explanation": "Mathematical proof is a social-epistemic practice involving understanding and explanation; formal verification is a mechanical procedure. The latter can guarantee correctness but does not constitute mathematical understanding."}
+  ]
+}

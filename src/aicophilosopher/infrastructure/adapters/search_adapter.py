@@ -1,4 +1,6 @@
+import re
 from typing import Any
+from xml.etree import ElementTree as ET
 
 import httpx
 
@@ -8,51 +10,61 @@ CROSS_TRADITIONAL_MAP: dict[str, dict[str, list[str]]] = {
     "mind": {
         "analytic": ["mind", "consciousness", "qualia"],
         "continental": ["geist", "dasein", "subjectivity"],
-        "buddhist": ["citta", "manas", "vijnana", "mind"],
-        "confucian": ["xin", "heart-mind"],
-        "daoist": ["xin", "heart-mind"],
+        "philosophy_of_technology": ["computational cognition", "technological mediation", "extended mind"],
+        "philosophy_of_mathematics": ["computability", "formal system", "undecidability"],
+        "software_architecture": ["computational model", "state machine", "agent"],
+        "model_theory": ["interpretation", "satisfaction", "model"],
     },
-    "self": {
-        "analytic": ["self", "personal identity", "ego"],
-        "continental": ["ipseity", "selfhood", "subject"],
-        "buddhist": ["anatta", "anatman", "no-self", "skandha"],
-        "confucian": ["self-cultivation", "junzi"],
-        "daoist": ["wu-wei", "ziran"],
+    "computation": {
+        "analytic": ["computation", "Turing", "functionalism", "algorithm"],
+        "continental": ["technics", "enframing", "technological rationality"],
+        "philosophy_of_technology": ["computational turn", "digital ontology", "algorithmic governance"],
+        "philosophy_of_mathematics": ["Church-Turing", "recursive function", "computability theory"],
+        "software_architecture": ["software design", "architectural pattern", "abstraction layer"],
+        "model_theory": ["finite model", "descriptive complexity", "logical framework"],
     },
-    "knowledge": {
-        "analytic": ["knowledge", "epistemology", "justification"],
-        "continental": ["savoir", "connaissance", "episteme"],
-        "buddhist": ["pramana", "jnana", "prajna"],
-        "confucian": ["zhi", "learning", "rectification of names"],
-        "daoist": ["zhi", "knowing", "mysterious knowledge"],
+    "abstraction": {
+        "analytic": ["abstraction", "universal", "concept", "nominalism"],
+        "continental": ["idealisation", "reduction", "essence"],
+        "philosophy_of_technology": ["abstraction layer", "interface", "black box"],
+        "philosophy_of_mathematics": ["abstract structure", "category theory", "isomorphism"],
+        "software_architecture": ["information hiding", "modularity", "separation of concerns"],
+        "model_theory": ["abstract model", "elementary equivalence", "categoricity"],
     },
-    "ethics": {
-        "analytic": ["ethics", "morality", "metaethics"],
-        "continental": ["ethos", "ethics of existence", "responsibility"],
-        "buddhist": ["sila", "karuna", "upaya"],
-        "confucian": ["ren", "yi", "li", "xiao"],
-        "daoist": ["de", "wu-wei ethics", "naturalness"],
-    },
-    "reality": {
-        "analytic": ["metaphysics", "ontology", "reality"],
-        "continental": ["being", "ontology", "difference"],
-        "buddhist": ["sunyata", "dharma", "tathata"],
-        "confucian": ["li", "qi", "taiji"],
-        "daoist": ["dao", "qi", "wu", "you"],
-    },
-    "free will": {
-        "analytic": ["free will", "determinism", "compatibilism", "libertarianism"],
-        "continental": ["freedom", "autonomy", "choice", "existentialism"],
-        "buddhist": ["karma", "pratityasamutpada", "volition", "cetana"],
-        "confucian": ["ming", "tian", "self-determination"],
-        "daoist": ["ziran", "wu-wei", "spontaneity"],
+    "model": {
+        "analytic": ["model", "representation", "simulation", "idealisation"],
+        "continental": ["model", "paradigm", "episteme"],
+        "philosophy_of_science": ["scientific model", "theoretical model", "idealisation"],
+        "philosophy_of_technology": ["computational model", "software model", "simulation"],
+        "software_architecture": ["domain model", "reference architecture", "design pattern"],
+        "model_theory": ["model-theoretic", "semantics", "satisfaction relation"],
     },
     "truth": {
         "analytic": ["truth", "correspondence", "coherence", "pragmatism"],
         "continental": ["aletheia", "unconcealment", "truth-event"],
-        "buddhist": ["satya", "dharma", "two truths"],
-        "confucian": ["cheng", "sincerity"],
-        "daoist": ["dao", "naturalness"],
+        "philosophy_of_mathematics": ["logical truth", "formal proof", "Gödel"],
+        "philosophy_of_science": ["scientific truth", "verisimilitude", "empirical adequacy"],
+        "model_theory": ["Tarski", "semantic truth", "validity"],
+    },
+    "correctness": {
+        "analytic": ["correctness", "rightness", "normativity"],
+        "software_architecture": ["formal verification", "type safety", "Hoare logic", "model checking"],
+        "philosophy_of_mathematics": ["proof", "validity", "soundness"],
+        "philosophy_of_science": ["falsification", "confirmation", "testing"],
+    },
+    "proof": {
+        "analytic": ["proof", "argument", "demonstration", "justification"],
+        "continental": ["phenomenological description", "hermeneutic evidence", "genealogy"],
+        "philosophy_of_mathematics": ["formal proof", "derivation", "incompleteness", "consistency"],
+        "software_architecture": ["formal verification", "type checking", "static analysis"],
+        "model_theory": ["completeness", "compactness", "Löwenheim-Skolem"],
+    },
+    "design": {
+        "analytic": ["design", "teleology", "function", "purpose"],
+        "continental": ["design", "enframing", "technological intentionality"],
+        "philosophy_of_technology": ["design ethics", "value-sensitive design", "technological mediation"],
+        "software_architecture": ["architectural design", "design pattern", "architectural decision"],
+        "philosophy_of_science": ["experimental design", "methodology", "research programme"],
     },
 }
 
@@ -63,12 +75,12 @@ def _generate_expanded_queries(query: str, traditions: list[str] | None) -> list
         return queries
     lower_q = query.lower().strip()
     for term, mapping in CROSS_TRADITIONAL_MAP.items():
-        if term in lower_q:
+        if re.search(rf"\b{re.escape(term)}\b", lower_q):
             for t in traditions:
                 expanded_terms = mapping.get(t, [])
                 for et in expanded_terms:
-                    expanded = query.lower().replace(term, et)
-                    if expanded != lower_q and expanded not in queries:
+                    expanded = re.sub(rf"\b{re.escape(term)}\b", et, query, count=1)
+                    if expanded != query and expanded not in queries:
                         queries.append(expanded)
             break
     for t in traditions:
@@ -79,48 +91,58 @@ def _generate_expanded_queries(query: str, traditions: list[str] | None) -> list
     return queries
 
 
+SHORT_TRADITION_KEYWORDS: dict[str, list[str]] = {}
+
+LONG_TRADITION_KEYWORDS: dict[str, list[str]] = {
+    "analytic": ["quine", "kripke", "possible world", "counterfactual", "proposition", "truth condition", "logical form"],
+    "continental": ["phenomenolog", "existential", "hermeneutic", "deconstruction", "foucault", "deleuze", "derrida", "heidegger"],
+    "philosophy_of_technology": ["technological mediation", "technological determinism", "human-computer interaction", "digital ethics", "postphenomenology"],
+    "philosophy_of_science": ["scientific realism", "paradigm", "falsification", "theory-laden", "underdetermination", "research programme"],
+    "philosophy_of_mathematics": ["foundations of mathematics", "Gödel", "incompleteness", "category theory", "structuralism", "formalism", "intuitionism"],
+    "software_architecture": ["software design", "design pattern", "modularity", "refactoring", "technical debt", "separation of concerns"],
+    "model_theory": ["model-theoretic", "Tarski", "formal semantics", "completeness theorem", "compactness", "Löwenheim-Skolem"],
+}
+
+
 def _assign_tradition_tag(result: dict[str, Any], traditions_hint: list[str] | None) -> str:
     if traditions_hint and len(traditions_hint) == 1:
         return traditions_hint[0]
     text = (result.get("title", "") + " " + result.get("abstract", "")).lower()
-    tradition_keywords = {
-        "analytic": ["quine", "kripke", "possible world", "counterfactual", "proposition", "truth condition", "logical form"],
-        "continental": ["phenomenolog", "existential", "hermeneutic", "deconstruction", "foucault", "deleuze", "derrida", "heidegger"],
-        "buddhist": ["buddha", "sutra", "karma", "nirvana", "sunyata", "dependent origination", "vipassana"],
-        "confucian": ["confucius", "mencius", "ren", "li", "junzi", "filial"],
-        "daoist": ["dao", "wu wei", "zhuangzi", "laozi", "qi", "naturalness"],
-    }
-    for tradition, keywords in tradition_keywords.items():
+
+    for tradition, keywords in LONG_TRADITION_KEYWORDS.items():
         for kw in keywords:
             if kw in text:
                 return tradition
+
+    for tradition, keywords in SHORT_TRADITION_KEYWORDS.items():
+        for kw in keywords:
+            if re.search(rf"\b{re.escape(kw)}\b", text):
+                return tradition
+
     return traditions_hint[0] if traditions_hint else "analytic"
 
 
 class ConsentGate:
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, allow_external: bool = False) -> None:
         self.config = config or Config()
-        self._consent_given = False
-
-    def check(self) -> bool:
-        if not self.config.allow_external_search:
-            return False
-        return True
+        self._consent_given = allow_external
 
     def grant(self) -> None:
         self._consent_given = True
 
+    def revoke(self) -> None:
+        self._consent_given = False
+
     def require(self) -> bool:
-        if self.check():
+        if self.config.allow_external_search:
             return True
         return self._consent_given
 
 
 class SearchTool:
     def __init__(self, allow_external: bool = False, config: Config | None = None) -> None:
-        self.allow_external = allow_external
         self.config = config or Config()
-        self.consent = ConsentGate(self.config)
+        self.consent = ConsentGate(self.config, allow_external=allow_external)
         self._timeout = 15.0
 
     async def _try_semantic_scholar(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
@@ -149,16 +171,16 @@ class SearchTool:
                 return []
 
     async def _try_arxiv(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        search_query = "+AND+".join(query.strip().split())
+        terms = query.strip().split()
+        search_query = "all:" + " AND all:".join(terms)
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
                 resp = await client.get(
-                    "http://export.arxiv.org/api/query",
-                    params={"search_query": f"all:{search_query}", "start": 0, "max_results": min(limit, 50)},
+                    "https://export.arxiv.org/api/query",
+                    params={"search_query": search_query, "start": 0, "max_results": min(limit, 50)},
                     headers={"Accept": "application/xml"},
                 )
                 resp.raise_for_status()
-                import xml.etree.ElementTree as ET
                 root = ET.fromstring(resp.text)
                 ns = {"a": "http://www.w3.org/2005/Atom"}
                 papers = []
@@ -201,26 +223,29 @@ class SearchTool:
         seen_titles: set[str] = set()
         results: list[dict[str, Any]] = []
 
-        for eq in expanded[:3]:
+        for eq in expanded[:5]:
             papers = await self._try_semantic_scholar(eq, limit=5)
             for p in papers:
                 title = p.get("title", "")
                 if title and title not in seen_titles:
                     seen_titles.add(title)
                     p["tradition_tag"] = _assign_tradition_tag(p, traditions)
-                    p["relevance_score"] = round(0.5 + (len(p.get("abstract", "")) / 1000) * 0.3, 2) if p.get("abstract") else 0.3
+                    abstract_len = len(p.get("abstract", ""))
+                    score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
+                    p["relevance_score"] = score
                     results.append(p)
 
-        if not results:
-            for eq in expanded[:2]:
-                papers = await self._try_arxiv(eq, limit=5)
-                for p in papers:
-                    title = p.get("title", "")
-                    if title and title not in seen_titles:
-                        seen_titles.add(title)
-                        p["tradition_tag"] = _assign_tradition_tag(p, traditions)
-                        p["relevance_score"] = round(0.5, 2)
-                        results.append(p)
+        for eq in expanded[:3]:
+            papers = await self._try_arxiv(eq, limit=5)
+            for p in papers:
+                title = p.get("title", "")
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    p["tradition_tag"] = _assign_tradition_tag(p, traditions)
+                    abstract_len = len(p.get("abstract", ""))
+                    score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
+                    p["relevance_score"] = score
+                    results.append(p)
 
         return results[:20]
 
@@ -228,25 +253,21 @@ class SearchTool:
         if not self.consent.require():
             return []
         papers = await self._try_semantic_scholar(query)
-        result_list: list[dict[str, object]] = [dict(p) for p in papers]
-        return result_list
+        return [dict(p) for p in papers]
 
     async def query_arxiv(self, query: str, **kwargs: object) -> list[dict[str, object]]:
         if not self.consent.require():
             return []
         papers = await self._try_arxiv(query)
-        result_list: list[dict[str, object]] = [dict(p) for p in papers]
-        return result_list
+        return [dict(p) for p in papers]
 
     async def query_philpapers(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        return [
-            {"title": f"PhilPapers result: {query}", "source": "philpapers", "relevance_score": 0.5},
-        ]
+        return []
 
     async def query_sep(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        encoded = query.replace(" ", "+")
+        slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:80]
         return [
-            {"title": f"SEP entry: {query}", "url": f"https://plato.stanford.edu/entries/{encoded}/", "source": "sep", "relevance_score": 0.8},
+            {"title": f"SEP entry: {query}", "url": f"https://plato.stanford.edu/entries/{slug}/", "source": "sep_stub", "relevance_score": 0.8},
         ]
 
     def _offline_results(self, query: str, traditions: list[str] | None = None) -> list[dict[str, Any]]:
@@ -274,4 +295,5 @@ class SearchTool:
     def set_consent(self, granted: bool) -> None:
         if granted:
             self.consent.grant()
-        self.allow_external = granted
+        else:
+            self.consent.revoke()
