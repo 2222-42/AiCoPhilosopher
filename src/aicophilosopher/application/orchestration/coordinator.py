@@ -101,7 +101,7 @@ class ProjectCoordinatorAgent(BaseAgent):
 
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
-            return {"error": "Cannot start workstream: no approved goals. Use `refine_goal` first."}
+            return {"error": "Cannot start workstream: no approved goals. Use `approve_goal` first."}
         return {
             "message": f"Workstream of type '{workstream_type}' proposed for goal: **{self._goal_proposed}**\n\nDo you want to proceed with this workstream?",
             "workstream_type": workstream_type,

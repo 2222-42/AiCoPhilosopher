@@ -1,7 +1,6 @@
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TextColumn
 from rich.table import Table
 from rich.tree import Tree
 
@@ -24,7 +23,7 @@ def progressive_disclosure(summary: str, details: str = "", suggestions: str = "
         console.print()
 
 
-def render_status(project_id: str, status_data: dict[str, int | bool | str]) -> None:
+def render_status(status_data: dict[str, int | bool | str]) -> None:
     table = Table(title="Epistemic Status Overview")
     table.add_column("Metric", style="cyan")
     table.add_column("Count", style="bold")
@@ -35,14 +34,10 @@ def render_status(project_id: str, status_data: dict[str, int | bool | str]) -> 
     console.print(table)
     console.print()
 
-    progress = Progress(
-        TextColumn("[progress.description]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-    )
-    with progress:
-        progress.add_task("Literature Search", total=100)
-        progress.add_task("Concept Analysis", total=100)
+    console.print()
+    console.print("[bold]Active Workstreams[/bold]")
+    console.print("  Literature Search — pending")
+    console.print("  Concept Analysis — pending")
 
 
 def render_document(content: str, section: str | None = None, show_annotations: bool = False) -> None:
