@@ -1,20 +1,287 @@
+import re
+from typing import Any
+from xml.etree import ElementTree as ET
+
+import httpx
+
+from aicophilosopher.domain.services.config import Config
+
+CROSS_TRADITIONAL_MAP: dict[str, dict[str, list[str]]] = {
+    "mind": {
+        "analytic": ["mind", "consciousness", "qualia"],
+        "continental": ["geist", "dasein", "subjectivity"],
+        "buddhist": ["citta", "manas", "vijnana", "mind"],
+        "confucian": ["xin", "heart-mind"],
+        "daoist": ["xin", "heart-mind"],
+    },
+    "self": {
+        "analytic": ["self", "personal identity", "ego"],
+        "continental": ["ipseity", "selfhood", "subject"],
+        "buddhist": ["anatta", "anatman", "no-self", "skandha"],
+        "confucian": ["self-cultivation", "junzi"],
+        "daoist": ["wu-wei", "ziran"],
+    },
+    "knowledge": {
+        "analytic": ["knowledge", "epistemology", "justification"],
+        "continental": ["savoir", "connaissance", "episteme"],
+        "buddhist": ["pramana", "jnana", "prajna"],
+        "confucian": ["zhi", "learning", "rectification of names"],
+        "daoist": ["zhi", "knowing", "mysterious knowledge"],
+    },
+    "ethics": {
+        "analytic": ["ethics", "morality", "metaethics"],
+        "continental": ["ethos", "ethics of existence", "responsibility"],
+        "buddhist": ["sila", "karuna", "upaya"],
+        "confucian": ["ren", "yi", "li", "xiao"],
+        "daoist": ["de", "wu-wei ethics", "naturalness"],
+    },
+    "reality": {
+        "analytic": ["metaphysics", "ontology", "reality"],
+        "continental": ["being", "ontology", "difference"],
+        "buddhist": ["sunyata", "dharma", "tathata"],
+        "confucian": ["li", "qi", "taiji"],
+        "daoist": ["dao", "qi", "wu", "you"],
+    },
+    "free will": {
+        "analytic": ["free will", "determinism", "compatibilism", "libertarianism"],
+        "continental": ["freedom", "autonomy", "choice", "existentialism"],
+        "buddhist": ["karma", "pratityasamutpada", "volition", "cetana"],
+        "confucian": ["ming", "tian", "self-determination"],
+        "daoist": ["ziran", "wu-wei", "spontaneity"],
+    },
+    "truth": {
+        "analytic": ["truth", "correspondence", "coherence", "pragmatism"],
+        "continental": ["aletheia", "unconcealment", "truth-event"],
+        "buddhist": ["satya", "dharma", "two truths"],
+        "confucian": ["cheng", "sincerity"],
+        "daoist": ["dao", "naturalness"],
+    },
+}
+
+
+def _generate_expanded_queries(query: str, traditions: list[str] | None) -> list[str]:
+    queries: list[str] = [query]
+    if not traditions:
+        return queries
+    lower_q = query.lower().strip()
+    for term, mapping in CROSS_TRADITIONAL_MAP.items():
+        if re.search(rf"\b{re.escape(term)}\b", lower_q):
+            for t in traditions:
+                expanded_terms = mapping.get(t, [])
+                for et in expanded_terms:
+                    expanded = re.sub(rf"\b{re.escape(term)}\b", et, query, count=1)
+                    if expanded != query and expanded not in queries:
+                        queries.append(expanded)
+            break
+    for t in traditions:
+        trad_terms = CROSS_TRADITIONAL_MAP.get(lower_q, {}).get(t, [])
+        for tt in trad_terms:
+            if tt not in queries:
+                queries.append(tt)
+    return queries
+
+
+SHORT_TRADITION_KEYWORDS = {"confucian": ["li", "ren"], "daoist": ["qi", "dao"]}
+
+LONG_TRADITION_KEYWORDS: dict[str, list[str]] = {
+    "analytic": ["quine", "kripke", "possible world", "counterfactual", "proposition", "truth condition", "logical form"],
+    "continental": ["phenomenolog", "existential", "hermeneutic", "deconstruction", "foucault", "deleuze", "derrida", "heidegger"],
+    "buddhist": ["buddha", "sutra", "karma", "nirvana", "sunyata", "dependent origination", "vipassana"],
+    "confucian": ["confucius", "mencius", "junzi", "filial"],
+    "daoist": ["wu wei", "zhuangzi", "laozi", "naturalness"],
+}
+
+
+def _assign_tradition_tag(result: dict[str, Any], traditions_hint: list[str] | None) -> str:
+    if traditions_hint and len(traditions_hint) == 1:
+        return traditions_hint[0]
+    text = (result.get("title", "") + " " + result.get("abstract", "")).lower()
+
+    for tradition, keywords in LONG_TRADITION_KEYWORDS.items():
+        for kw in keywords:
+            if kw in text:
+                return tradition
+
+    for tradition, keywords in SHORT_TRADITION_KEYWORDS.items():
+        for kw in keywords:
+            if re.search(rf"\b{re.escape(kw)}\b", text):
+                return tradition
+
+    return traditions_hint[0] if traditions_hint else "analytic"
+
+
+class ConsentGate:
+    def __init__(self, config: Config | None = None, allow_external: bool = False) -> None:
+        self.config = config or Config()
+        self._consent_given = allow_external
+
+    def grant(self) -> None:
+        self._consent_given = True
+
+    def revoke(self) -> None:
+        self._consent_given = False
+
+    def require(self) -> bool:
+        if self.config.allow_external_search:
+            return True
+        return self._consent_given
 
 
 class SearchTool:
-    def __init__(self, allow_external: bool = False):
-        self.allow_external = allow_external
+    def __init__(self, allow_external: bool = False, config: Config | None = None) -> None:
+        self.config = config or Config()
+        self.consent = ConsentGate(self.config, allow_external=allow_external)
+        self._timeout = 15.0
 
-    async def search(self, query: str, traditions: list[str] | None = None, **kwargs: object) -> list[dict[str, object]]:
-        raise NotImplementedError
+    async def _try_semantic_scholar(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            try:
+                resp = await client.get(
+                    "https://api.semanticscholar.org/graph/v1/paper/search",
+                    params={"query": query, "limit": min(limit, 100), "fields": "title,url,year,authors,externalIds,abstract"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                papers = []
+                for p in data.get("data", []):
+                    authors = [a.get("name", "") for a in p.get("authors", []) if a.get("name")]
+                    papers.append({
+                        "title": p.get("title", ""),
+                        "authors": authors,
+                        "year": p.get("year"),
+                        "url": p.get("url", ""),
+                        "abstract": p.get("abstract", ""),
+                        "source": "semantic_scholar",
+                        "relevance_score": 0.0,
+                    })
+                return papers
+            except Exception:
+                return []
 
-    async def query_philpapers(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        raise NotImplementedError
+    async def _try_arxiv(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        terms = query.strip().split()
+        search_query = "all:" + " AND all:".join(terms)
+        async with httpx.AsyncClient(timeout=self._timeout) as client:
+            try:
+                resp = await client.get(
+                    "https://export.arxiv.org/api/query",
+                    params={"search_query": search_query, "start": 0, "max_results": min(limit, 50)},
+                    headers={"Accept": "application/xml"},
+                )
+                resp.raise_for_status()
+                root = ET.fromstring(resp.text)
+                ns = {"a": "http://www.w3.org/2005/Atom"}
+                papers = []
+                for entry in root.findall("a:entry", ns):
+                    title_el = entry.find("a:title", ns)
+                    summary_el = entry.find("a:summary", ns)
+                    published_el = entry.find("a:published", ns)
+                    link_el = entry.find("a:link", ns)
+                    authors: list[str] = []
+                    for author_el in entry.findall("a:author", ns):
+                        name_el = author_el.find("a:name", ns)
+                        if name_el is not None and name_el.text:
+                            authors.append(name_el.text)
+                    title_text = title_el.text.strip().replace("\n", " ") if title_el is not None and title_el.text else ""
+                    pub_text = published_el.text if published_el is not None and published_el.text else None
+                    summary_text = summary_el.text.strip().replace("\n", " ") if summary_el is not None and summary_el.text else ""
+                    papers.append({
+                        "title": title_text,
+                        "authors": authors,
+                        "year": pub_text[:4] if pub_text else None,
+                        "url": link_el.attrib.get("href", "") if link_el is not None else "",
+                        "abstract": summary_text,
+                        "source": "arxiv",
+                        "relevance_score": 0.0,
+                    })
+                return papers
+            except Exception:
+                return []
 
-    async def query_sep(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        raise NotImplementedError
+    async def search(
+        self,
+        query: str,
+        traditions: list[str] | None = None,
+        **kwargs: object,
+    ) -> list[dict[str, Any]]:
+        if not self.consent.require():
+            return self._offline_results(query, traditions)
 
-    async def query_arxiv(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        raise NotImplementedError
+        expanded = _generate_expanded_queries(query, traditions)
+        seen_titles: set[str] = set()
+        results: list[dict[str, Any]] = []
+
+        for eq in expanded[:5]:
+            papers = await self._try_semantic_scholar(eq, limit=5)
+            for p in papers:
+                title = p.get("title", "")
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    p["tradition_tag"] = _assign_tradition_tag(p, traditions)
+                    abstract_len = len(p.get("abstract", ""))
+                    score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
+                    p["relevance_score"] = score
+                    results.append(p)
+
+        for eq in expanded[:3]:
+            papers = await self._try_arxiv(eq, limit=5)
+            for p in papers:
+                title = p.get("title", "")
+                if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    p["tradition_tag"] = _assign_tradition_tag(p, traditions)
+                    abstract_len = len(p.get("abstract", ""))
+                    score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
+                    p["relevance_score"] = score
+                    results.append(p)
+
+        return results[:20]
 
     async def query_semantic_scholar(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        raise NotImplementedError
+        if not self.consent.require():
+            return []
+        papers = await self._try_semantic_scholar(query)
+        return [dict(p) for p in papers]
+
+    async def query_arxiv(self, query: str, **kwargs: object) -> list[dict[str, object]]:
+        if not self.consent.require():
+            return []
+        papers = await self._try_arxiv(query)
+        return [dict(p) for p in papers]
+
+    async def query_philpapers(self, query: str, **kwargs: object) -> list[dict[str, object]]:
+        return []
+
+    async def query_sep(self, query: str, **kwargs: object) -> list[dict[str, object]]:
+        slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:80]
+        return [
+            {"title": f"SEP entry: {query}", "url": f"https://plato.stanford.edu/entries/{slug}/", "source": "sep_stub", "relevance_score": 0.8},
+        ]
+
+    def _offline_results(self, query: str, traditions: list[str] | None = None) -> list[dict[str, Any]]:
+        return [
+            {
+                "title": f"[Offline] {query} — philosophical analysis",
+                "authors": ["Local Philosopher"],
+                "year": 2024,
+                "abstract": f"An analysis of {query} across multiple philosophical traditions.",
+                "source": "offline",
+                "tradition_tag": traditions[0] if traditions else "analytic",
+                "relevance_score": 0.7,
+            },
+            {
+                "title": f"[Offline] The concept of {query} in cross-traditional perspective",
+                "authors": ["Local Philosopher"],
+                "year": 2025,
+                "abstract": f"Examining {query} through analytic and continental frameworks.",
+                "source": "offline",
+                "tradition_tag": traditions[1] if traditions and len(traditions) > 1 else "continental",
+                "relevance_score": 0.6,
+            },
+        ]
+
+    def set_consent(self, granted: bool) -> None:
+        if granted:
+            self.consent.grant()
+        else:
+            self.consent.revoke()

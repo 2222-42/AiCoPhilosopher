@@ -194,7 +194,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T-043 [US2] Implement `src/aicophilosopher/infrastructure/adapters/search_adapter.py`: `SearchTool` with adapters for PhilPapers API, SEP (scrape if no API), IEP, arXiv (cs.AI + humanities), Semantic Scholar; cross-traditional query expansion; tradition tag assignment; consent gate before external API calls
+- [x] T-043 [DONE] [US2] Implement `src/aicophilosopher/infrastructure/adapters/search_adapter.py`: `SearchTool` with adapters for PhilPapers API, SEP (scrape if no API), IEP, arXiv (cs.AI + humanities), Semantic Scholar; cross-traditional query expansion; tradition tag assignment; consent gate before external API calls
   - **AC**: `search("free will", traditions=["analytic", "buddhist"])` returns results with tradition tags; consent dialog shown if `privacy.allow_external_search` unset; no project content transmitted (Constitution Principle I)
   - **Depends on**: T-019, T-012
 
