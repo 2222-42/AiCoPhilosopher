@@ -1,10 +1,28 @@
 import asyncio
+import hashlib
 import os
+import re
 from typing import Any
 
 import fitz  # PyMuPDF
 
 from aicophilosopher.infrastructure.adapters.chroma_adapter import ChromaAdapter
+
+
+def _sanitize_collection_name(name: str) -> str:
+    name = re.sub(r"[^A-Za-z0-9._-]", "_", name)
+    name = re.sub(r"\.{2,}", ".", name)
+    name = name.strip("._-")
+    if len(name) < 3 or len(name) > 63:
+        suffix = hashlib.sha256(name.encode()).hexdigest()[:8]
+        base = name[:50] if name else "doc"
+        name = f"{base}_{suffix}"
+    if not name[0].isalnum() if name else True:
+        name = f"d_{name}"
+    if len(name) > 63:
+        name = name[:63]
+    name = name.strip("._-")
+    return name or "default_collection"
 
 
 def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
@@ -24,11 +42,12 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
 
 def _extract_metadata(doc: fitz.Document) -> dict[str, Any]:
     meta = doc.metadata
+    keywords_list = [k.strip() for k in meta.get("keywords", "").split(",") if k.strip()]
     return {
         "title": meta.get("title", "").strip(),
         "author": meta.get("author", "").strip(),
         "subject": meta.get("subject", "").strip(),
-        "keywords": [k.strip() for k in meta.get("keywords", "").split(",") if k.strip()],
+        "keywords": ", ".join(keywords_list),
         "page_count": doc.page_count,
     }
 
@@ -59,14 +78,14 @@ class PDFRAGTool:
 
         metadata = await asyncio.to_thread(_extract)
         chunks = metadata.pop("chunks", [])
-        collection = os.path.splitext(os.path.basename(path))[0]
+        collection = _sanitize_collection_name(os.path.splitext(os.path.basename(path))[0])
 
         await self.chroma.create_collection(collection, project_id=metadata.get("title") or collection)
         if chunks:
             await self.chroma.add_documents(
                 collection=collection,
                 documents=chunks,
-                metadata=[{"source": path, "chunk_idx": i, **metadata} for i in range(len(chunks))],
+                metadata=[{"source": path, "chunk_idx": i} for i in range(len(chunks))],
                 ids=[f"{collection}_chunk_{i}" for i in range(len(chunks))],
             )
         return {"collection": collection, "chunks": len(chunks), "metadata": metadata}
