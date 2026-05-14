@@ -127,7 +127,7 @@ The CLI is the primary human interface to the AI Co-Philosopher. All commands ar
 - **Arguments**:
   - `phenomenon` (str, required): Phenomenon to describe (e.g., "the experience of listening to music")
 - **Options**:
-  - `--framework`, `-f` (enum, optional): `husserlian`, `merleau_pontyan`, `buddhist_vipassana`
+  - `--framework`, `-f` (enum, optional): `husserlian`, `merleau_pontyan`, `technophenomenology`
 - **Returns**: Phenomenological description with methodological framework, epoché declarations, confidence scores
 
 #### `ethical analysis <dilemma>`
@@ -209,7 +209,7 @@ All errors follow a consistent format:
 | `E2001` | External service denied | "External search requires consent. Run `config privacy.allow_external_search true`." | `config privacy.allow_external_search true` |
 | `E2002` | LLM backend unavailable | "Claude API returned 429 (rate limit)." | `config llm.backend gemini` or wait |
 | `E3001` | Review deadlock | "Workstream 'ws-xyz' review process stalled after 5 rounds." | `steer ws-xyz "override review and accept with reservations"` or `pause ws-xyz` |
-| `E3002` | Incommensurability | "Cross-traditional comparison cannot bridge 'anatta' and 'Cartesian ego'." | `add note "User accepts incommensurability; proceed with parallel analyses."` |
+| `E3002` | Incommensurability | "Cross-traditional comparison cannot bridge 'software abstraction' and 'mathematical abstraction'." | `add note "User accepts incommensurability; proceed with parallel analyses."` |
 
 ---
 

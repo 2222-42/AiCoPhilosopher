@@ -1,0 +1,29 @@
+{
+  "name": "software_architecture",
+  "display_name": "Software Architecture",
+  "assumptions": [
+    "Software architecture is the set of significant design decisions about a software system's structure and behaviour",
+    "Architectural decisions embody trade-offs between competing quality attributes (performance, maintainability, security, usability)",
+    "Abstraction and modularity are essential intellectual tools for managing software complexity",
+    "Architectural styles and patterns carry implicit philosophical commitments about decomposition, control, and data flow"
+  ],
+  "norms": [
+    {"keyword": "modularity", "message": "Should evaluate how modules are defined, composed, and decoupled"},
+    {"keyword": "abstraction", "message": "Should consider the level and kind of abstraction employed"},
+    {"keyword": "interface", "message": "Should analyse interface contracts and their stability guarantees"},
+    {"keyword": "correctness", "message": "Should assess what correctness means and how it is verified"}
+  ],
+  "criteria": ["conceptual coherence", "fitness for purpose", "modifiability", "reusability", "testability"],
+  "key_figures": ["Parnas", "Dijkstra", "Brooks", "Hoare", "Meyer", "Jackson", "Gamma", "Shaw", "Garlan"],
+  "classic_texts": [
+    "Parnas, 'On the Criteria To Be Used in Decomposing Systems into Modules'",
+    "Brooks, 'The Mythical Man-Month'",
+    "Gamma et al., 'Design Patterns'",
+    "Shaw & Garlan, 'Software Architecture'",
+    "Dijkstra, 'Go To Statement Considered Harmful'"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["software modularity", "mathematical structuralism"], "incompatible_with": ["physical decomposition"], "explanation": "Software modularity is about information hiding and separation of concerns, not spatial or physical decomposition. Equating modules with mathematical structures ignores the design intentionality of modular boundaries."},
+    {"concepts": ["design pattern", "mathematical theorem"], "incompatible_with": ["formal provability"], "explanation": "Design patterns capture recurrent design wisdom and trade-offs; they are not formally provable solutions. Treating patterns as theorems conflates engineering heuristics with mathematical necessity."}
+  ]
+}

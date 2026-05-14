@@ -1,0 +1,29 @@
+{
+  "name": "philosophy_of_science",
+  "display_name": "Philosophy of Science",
+  "assumptions": [
+    "Scientific knowledge is developed through a combination of empirical evidence, theoretical reasoning, and methodological norms",
+    "The demarcation between science and non-science is philosophically significant and contestable",
+    "Scientific theories are underdetermined by evidence; theory choice involves both epistemic and pragmatic criteria",
+    "Scientific practice, not just scientific products, deserves philosophical analysis"
+  ],
+  "norms": [
+    {"keyword": "falsifiability", "message": "Should consider whether claims are falsifiable"},
+    {"keyword": "theory-ladenness", "message": "Should acknowledge that observation is theory-laden"},
+    {"keyword": "reduction", "message": "Should assess intertheoretic reduction claims carefully"},
+    {"keyword": "causation", "message": "Should evaluate causal claims with appropriate models"}
+  ],
+  "criteria": ["scientific accuracy", "logical consistency", "empirical adequacy", "methodological transparency"],
+  "key_figures": ["Popper", "Kuhn", "Lakatos", "Feyerabend", "Hempel", "Cartwright", "van Fraassen", "Hacking", "Suppes"],
+  "classic_texts": [
+    "Popper, 'The Logic of Scientific Discovery'",
+    "Kuhn, 'The Structure of Scientific Revolutions'",
+    "Lakatos, 'Falsification and the Methodology of Scientific Research Programmes'",
+    "van Fraassen, 'The Scientific Image'",
+    "Cartwright, 'How the Laws of Physics Lie'"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["scientific model", "software model"], "incompatible_with": ["model identity"], "explanation": "Scientific models aim at isomorphic or similar relations to target systems; software models aim at executable specification. Equating them conflates descriptive and prescriptive modelling."},
+    {"concepts": ["scientific reduction", "computational reduction"], "incompatible_with": ["strong reductionism"], "explanation": "Scientific reduction (Nagelian bridge principles) differs fundamentally from computational reduction (Church-Turing). The former concerns ontology; the latter concerns computability."}
+  ]
+}

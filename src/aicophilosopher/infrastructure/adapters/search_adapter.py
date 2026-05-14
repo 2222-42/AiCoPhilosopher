@@ -10,51 +10,61 @@ CROSS_TRADITIONAL_MAP: dict[str, dict[str, list[str]]] = {
     "mind": {
         "analytic": ["mind", "consciousness", "qualia"],
         "continental": ["geist", "dasein", "subjectivity"],
-        "buddhist": ["citta", "manas", "vijnana", "mind"],
-        "confucian": ["xin", "heart-mind"],
-        "daoist": ["xin", "heart-mind"],
+        "philosophy_of_technology": ["computational cognition", "technological mediation", "extended mind"],
+        "philosophy_of_mathematics": ["computability", "formal system", "undecidability"],
+        "software_architecture": ["computational model", "state machine", "agent"],
+        "model_theory": ["interpretation", "satisfaction", "model"],
     },
-    "self": {
-        "analytic": ["self", "personal identity", "ego"],
-        "continental": ["ipseity", "selfhood", "subject"],
-        "buddhist": ["anatta", "anatman", "no-self", "skandha"],
-        "confucian": ["self-cultivation", "junzi"],
-        "daoist": ["wu-wei", "ziran"],
+    "computation": {
+        "analytic": ["computation", "Turing", "functionalism", "algorithm"],
+        "continental": ["technics", "enframing", "technological rationality"],
+        "philosophy_of_technology": ["computational turn", "digital ontology", "algorithmic governance"],
+        "philosophy_of_mathematics": ["Church-Turing", "recursive function", "computability theory"],
+        "software_architecture": ["software design", "architectural pattern", "abstraction layer"],
+        "model_theory": ["finite model", "descriptive complexity", "logical framework"],
     },
-    "knowledge": {
-        "analytic": ["knowledge", "epistemology", "justification"],
-        "continental": ["savoir", "connaissance", "episteme"],
-        "buddhist": ["pramana", "jnana", "prajna"],
-        "confucian": ["zhi", "learning", "rectification of names"],
-        "daoist": ["zhi", "knowing", "mysterious knowledge"],
+    "abstraction": {
+        "analytic": ["abstraction", "universal", "concept", "nominalism"],
+        "continental": ["idealisation", "reduction", "essence"],
+        "philosophy_of_technology": ["abstraction layer", "interface", "black box"],
+        "philosophy_of_mathematics": ["abstract structure", "category theory", "isomorphism"],
+        "software_architecture": ["information hiding", "modularity", "separation of concerns"],
+        "model_theory": ["abstract model", "elementary equivalence", "categoricity"],
     },
-    "ethics": {
-        "analytic": ["ethics", "morality", "metaethics"],
-        "continental": ["ethos", "ethics of existence", "responsibility"],
-        "buddhist": ["sila", "karuna", "upaya"],
-        "confucian": ["ren", "yi", "li", "xiao"],
-        "daoist": ["de", "wu-wei ethics", "naturalness"],
-    },
-    "reality": {
-        "analytic": ["metaphysics", "ontology", "reality"],
-        "continental": ["being", "ontology", "difference"],
-        "buddhist": ["sunyata", "dharma", "tathata"],
-        "confucian": ["li", "qi", "taiji"],
-        "daoist": ["dao", "qi", "wu", "you"],
-    },
-    "free will": {
-        "analytic": ["free will", "determinism", "compatibilism", "libertarianism"],
-        "continental": ["freedom", "autonomy", "choice", "existentialism"],
-        "buddhist": ["karma", "pratityasamutpada", "volition", "cetana"],
-        "confucian": ["ming", "tian", "self-determination"],
-        "daoist": ["ziran", "wu-wei", "spontaneity"],
+    "model": {
+        "analytic": ["model", "representation", "simulation", "idealisation"],
+        "continental": ["model", "paradigm", "episteme"],
+        "philosophy_of_science": ["scientific model", "theoretical model", "idealisation"],
+        "philosophy_of_technology": ["computational model", "software model", "simulation"],
+        "software_architecture": ["domain model", "reference architecture", "design pattern"],
+        "model_theory": ["model-theoretic", "semantics", "satisfaction relation"],
     },
     "truth": {
         "analytic": ["truth", "correspondence", "coherence", "pragmatism"],
         "continental": ["aletheia", "unconcealment", "truth-event"],
-        "buddhist": ["satya", "dharma", "two truths"],
-        "confucian": ["cheng", "sincerity"],
-        "daoist": ["dao", "naturalness"],
+        "philosophy_of_mathematics": ["logical truth", "formal proof", "Gödel"],
+        "philosophy_of_science": ["scientific truth", "verisimilitude", "empirical adequacy"],
+        "model_theory": ["Tarski", "semantic truth", "validity"],
+    },
+    "correctness": {
+        "analytic": ["correctness", "rightness", "normativity"],
+        "software_architecture": ["formal verification", "type safety", "Hoare logic", "model checking"],
+        "philosophy_of_mathematics": ["proof", "validity", "soundness"],
+        "philosophy_of_science": ["falsification", "confirmation", "testing"],
+    },
+    "proof": {
+        "analytic": ["proof", "argument", "demonstration", "justification"],
+        "continental": ["phenomenological description", "hermeneutic evidence", "genealogy"],
+        "philosophy_of_mathematics": ["formal proof", "derivation", "incompleteness", "consistency"],
+        "software_architecture": ["formal verification", "type checking", "static analysis"],
+        "model_theory": ["completeness", "compactness", "Löwenheim-Skolem"],
+    },
+    "design": {
+        "analytic": ["design", "teleology", "function", "purpose"],
+        "continental": ["design", "enframing", "technological intentionality"],
+        "philosophy_of_technology": ["design ethics", "value-sensitive design", "technological mediation"],
+        "software_architecture": ["architectural design", "design pattern", "architectural decision"],
+        "philosophy_of_science": ["experimental design", "methodology", "research programme"],
     },
 }
 
@@ -81,14 +91,16 @@ def _generate_expanded_queries(query: str, traditions: list[str] | None) -> list
     return queries
 
 
-SHORT_TRADITION_KEYWORDS = {"confucian": ["li", "ren"], "daoist": ["qi", "dao"]}
+SHORT_TRADITION_KEYWORDS: dict[str, list[str]] = {}
 
 LONG_TRADITION_KEYWORDS: dict[str, list[str]] = {
     "analytic": ["quine", "kripke", "possible world", "counterfactual", "proposition", "truth condition", "logical form"],
     "continental": ["phenomenolog", "existential", "hermeneutic", "deconstruction", "foucault", "deleuze", "derrida", "heidegger"],
-    "buddhist": ["buddha", "sutra", "karma", "nirvana", "sunyata", "dependent origination", "vipassana"],
-    "confucian": ["confucius", "mencius", "junzi", "filial"],
-    "daoist": ["wu wei", "zhuangzi", "laozi", "naturalness"],
+    "philosophy_of_technology": ["technological mediation", "technological determinism", "human-computer interaction", "digital ethics", "postphenomenology"],
+    "philosophy_of_science": ["scientific realism", "paradigm", "falsification", "theory-laden", "underdetermination", "research programme"],
+    "philosophy_of_mathematics": ["foundations of mathematics", "Gödel", "incompleteness", "category theory", "structuralism", "formalism", "intuitionism"],
+    "software_architecture": ["software design", "design pattern", "modularity", "refactoring", "technical debt", "separation of concerns"],
+    "model_theory": ["model-theoretic", "Tarski", "formal semantics", "completeness theorem", "compactness", "Löwenheim-Skolem"],
 }
 
 

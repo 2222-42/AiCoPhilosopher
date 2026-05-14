@@ -1,0 +1,29 @@
+{
+  "name": "philosophy_of_technology",
+  "display_name": "Philosophy of Technology",
+  "assumptions": [
+    "Technology is not a neutral tool; it embodies values and shapes human existence",
+    "Technological artefacts mediate human perception, action, and social relations",
+    "Technological development is co-constituted with social, political, and economic forces",
+    "Technological design choices embed normative commitments that deserve philosophical scrutiny"
+  ],
+  "norms": [
+    {"keyword": "mediation", "message": "Should consider how technology mediates human-world relations"},
+    {"keyword": "design", "message": "Should analyse the normative implications of design choices"},
+    {"keyword": "artefact", "message": "Should examine artificial agency and object intentionality"},
+    {"keyword": "autonomy", "message": "Should address tensions between human autonomy and technological systems"}
+  ],
+  "criteria": ["technological literacy", "empirical grounding in case studies", "normative sensitivity to design", "awareness of STS (Science and Technology Studies)"],
+  "key_figures": ["Heidegger", "Ellul", "Winner", "Latour", "Ihde", "Verbeek", "Feenberg", "Borgmann", "Mitcham"],
+  "classic_texts": [
+    "Heidegger, 'The Question Concerning Technology'",
+    "Winner, 'Do Artifacts Have Politics?'",
+    "Latour, 'We Have Never Been Modern'",
+    "Ihde, 'Technology and the Lifeworld'",
+    "Verbeek, 'What Things Do'"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["software architecture", "technological mediation"], "incompatible_with": ["functionalist design"], "explanation": "Software architecture mediates user cognition and behaviour; treating architecture solely as functional structure ignores its normative and phenomenological dimensions."},
+    {"concepts": ["abstraction", "technological enframing"], "incompatible_with": ["computational reductionism"], "explanation": "Technological abstraction (Heideggerian Gestell) is not equivalent to mathematical abstraction. The former imposes a specific ontological stance; the latter is a purely formal operation."}
+  ]
+}

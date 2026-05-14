@@ -174,7 +174,7 @@ Sent by an agent when it encounters an intractable problem requiring human judgm
   "payload": {
     "requesting_agent": "ws-a1b2c3d4",
     "problem_type": "incommensurability",  // or "ethical_dilemma", "phenomenological_validation", "review_deadlock"
-    "problem_description": "Cannot construct valid bridge concept between 'anatta' (Buddhist) and 'Cartesian ego' (Western). The two frameworks deny each other's foundational assumptions.",
+    "problem_description": "Cannot construct valid bridge concept between 'software abstraction' (philosophy of technology) and 'mathematical abstraction' (philosophy of mathematics). The two frameworks use abstraction with different normative stakes and criteria.",
     "attempted_solutions": [
       "Tried functionalist reduction: failed due to differing criteria for persistence",
       "Tried neutral description: failed due to theory-ladenness of all descriptions"

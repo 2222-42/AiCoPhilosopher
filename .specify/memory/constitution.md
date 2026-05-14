@@ -1,24 +1,17 @@
 <!--
 Sync Impact Report
 ==================
-Version Change: N/A → 0.1.0 (Initial Ratification)
-Modified Principles: None (initial creation)
+Version Change: 0.1.0 → 0.2.0 (MINOR: new Architecture Constraints added)
+Modified Principles: None
 Added Sections:
-  - Core Principle I: Core Independence & Local-First Privacy
-  - Core Principle II: Philosophical Accuracy & Intellectual Honesty
-  - Core Principle III: Code Quality & Maintainability
-  - Core Principle IV: Testing Standards & Determinism
-  - Core Principle V: MVP-First Delivery & Continuous Improvement
-  - Architecture Constraints
-  - Development Workflow & Quality Gates
-  - Governance
+  - Architecture Constraint: Cost-Aware LLM Tiered Execution (§3.5)
+  - Architecture Constraint: Domain-Aware Query Strategy (§3.6)
 Removed Sections: None
 Templates Requiring Updates:
-  - .specify/templates/plan-template.md: ✅ Verified — Constitution Check gate is generic and compatible
-  - .specify/templates/spec-template.md: ✅ Verified — No outdated references; scope alignment maintained
-  - .specify/templates/tasks-template.md: ✅ Verified — Task categorization supports principle-driven tasks
-  - .github/agents/*.md: ✅ Verified — No outdated agent-specific references found
-  - .github/prompts/*.md: ✅ Verified — No outdated references found
+  - .specify/templates/plan-template.md: ✅ Verified — Constitution Check gate is generic
+  - .specify/templates/spec-template.md: ✅ Verified — Spec §3.5 and §3.6 already added
+  - .specify/templates/tasks-template.md: ✅ Verified — No changes needed
+  - .github/agents/*.md: ✅ Verified — No outdated references
 Follow-up TODOs: None
 -->
 
@@ -67,6 +60,8 @@ Rationale: Philosophical research tools are only useful if they exist and run. A
 - The core system SHALL be implemented in Python using LangGraph (or an equivalent stateful multi-agent framework) as the default orchestration layer.
 - The system MUST support an Adapter Pattern so that external orchestration layers can be plugged in without modifying core logic.
 - The system MUST use open-source components and be fully self-hostable.
+- **Cost-Aware LLM Tiered Execution (spec §3.5)**: Exploration/collection tasks (paper search, abstract retrieval) MUST use low-cost models; deep analysis/synthesis tasks MUST use high-quality models. An automatic LLM Router SHALL select the appropriate model per task tier. Cost logs MUST be recorded alongside the uncertainty registry.
+- **Domain-Aware Query Strategy (spec §3.6)**: Literature Search and Cross-Traditional Comparison Agents MUST use LLM-based semantic query expansion with Core Philosophical Domains (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory). Naive keyword matching is PROHIBITED.
 - All LLM outputs MUST be validated against Pydantic schemas before being accepted.
 - Failed tool calls SHALL be retried up to 3 times with exponential backoff, then escalated to the Project Coordinator.
 

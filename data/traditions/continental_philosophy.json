@@ -1,0 +1,29 @@
+{
+  "name": "continental_philosophy",
+  "display_name": "Continental Philosophy",
+  "assumptions": [
+    "Philosophy must engage with historical, cultural, and political contexts",
+    "The subject and experience are central to philosophical inquiry",
+    "Language, power, and social structures shape what counts as knowledge",
+    "Philosophical reflection includes critique of its own methods and assumptions"
+  ],
+  "norms": [
+    {"keyword": "phenomenolog", "message": "Should engage with phenomenological method or existential themes"},
+    {"keyword": "context", "message": "Should situate arguments in historical and cultural context"},
+    {"keyword": "critique", "message": "Should include self-reflexive critique of methodological assumptions"},
+    {"keyword": "interpretation", "message": "Should acknowledge hermeneutic dimensions of understanding"}
+  ],
+  "criteria": ["historical awareness", "critical self-reflection", "engagement with lived experience", "attention to language and power"],
+  "key_figures": ["Hegel", "Marx", "Nietzsche", "Heidegger", "Sartre", "Merleau-Ponty", "Foucault", "Derrida", "Deleuze", "Adorno", "Habermas"],
+  "classic_texts": [
+    "Hegel, Phenomenology of Spirit",
+    "Heidegger, Being and Time",
+    "Sartre, Being and Nothingness",
+    "Foucault, The Order of Things",
+    "Derrida, Of Grammatology"
+  ],
+  "bridge_warnings": [
+    {"concepts": ["technological enframing", "Dasein"], "incompatible_with": ["computational cognition"], "explanation": "Heideggerian Dasein is being-in-the-world through equipmental totality; computational models of cognition reduce this to information processing. Treating technological mediation as mere tool-use ignores the ontological stakes."},
+    {"concepts": ["critique", "architectural design"], "incompatible_with": ["neutral engineering"], "explanation": "Continental critique (Foucault, Feenberg) shows that technological design embeds power relations. Treating software architecture as value-neutral engineering ignores the political philosophy of technology."}
+  ]
+}
