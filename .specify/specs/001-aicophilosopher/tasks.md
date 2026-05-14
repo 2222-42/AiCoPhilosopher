@@ -160,7 +160,18 @@
   - **AC**: `create_workstream(type, goal)` initializes correct coordinator subclass; `pause()`/`resume()` transition status; `steer()` modifies active plan
   - **Depends on**: T-032, T-015
 
-**Checkpoint**: At this point, User Story 1 should be fully functional and testable independently. User can create project, clarify goals, manage workstreams, and view document.
+- [x] T-031 [DONE] [US1] Integration test for full clarification → workstream lifecycle in `tests/integration/test_clarification_workflow.py`: full lifecycle start→clarify→approve→start→pause→resume→status
+  - **AC**: End-to-end test passes; workstream status reflects commands within 30s (AC-007)
+
+- [x] T-035 [DONE] [US1] Implement `src/aicophilosopher/presentation/commands.py`: Click command definitions for all CLI commands
+  - **AC**: Each command parses arguments correctly; invalid arguments show help; `status` displays epistemic overview; `show dead ends` lists failed/abandoned (AC-008)
+  - **Depends on**: T-033, T-034
+
+- [x] T-036 [DONE] [US1] Implement `src/aicophilosopher/presentation/cli.py`: Rich-based terminal UI with live display, collapsible panels, Markdown rendering
+  - **AC**: `show document` renders Markdown; `status` shows live progress bars; collapsible [Details]/[Suggestions]; latency <30s (AC-007)
+  - **Depends on**: T-035
+
+**Checkpoint**: ✅ **User Story 1 COMPLETE** — User can create project, clarify goals, manage workstreams, and view document via CLI commands with Rich progressive disclosure. Ready for Phase 4 (User Story 2).
 
 ---
 
@@ -439,4 +450,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 2 COMPLETE** — All foundational tasks (T-010–T-022) done. Ready for Phase 3 (User Stories).
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-2 COMPLETE, Phase 3 (User Story 1) COMPLETE** — Ready for Phase 4 (User Story 2).
