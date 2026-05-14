@@ -210,6 +210,16 @@
   - **AC**: `parse("living_document.md")` returns frontmatter dict + list of annotations; invalid annotations raise `ValidationError`; annotation round-trip preserves all fields
   - **Depends on**: T-037
 
+### 2.7 Domain-Aware Query Strategy (spec §3.6)
+
+- [ ] T-048 [US2] Implement `src/aicophilosopher/ports/query_port.py`: `PhilosophicalQueryStrategy` with semantic expansion, Core Domain detection, staged pipeline integration (Cheap→Expensive), and tradition-aware query generation
+  - **AC**: `PhilosophicalQueryStrategy.expand("moving sofa problem")` returns philosophically scoped queries including "philosophy of mathematics"; LLM-based expansion (not keyword matching); Core Domains automatically detected
+  - **Depends on**: T-012 (reads LLM config for cheap-model access)
+
+- [ ] T-049 [P] [US2] Implement `src/aicophilosopher/domain/services/core_domains.py`: Core Philosophical Domains registry (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory) with weighted priority, sub-traditions, and subtopic metadata; shared across all Agents
+  - **AC**: `CoreDomains.get("philosophy_of_mathematics")` returns domain profile with sub_traditions and expansion_terms; `CoreDomains.detect("moving sofa problem")` returns matching domain priorities; all 6 domains registered
+  - **Depends on**: T-020 (follows same domain/ pattern)
+
 **Checkpoint**: User Stories 1 AND 2 should both work independently. User can search literature, analyze concepts, and see results in the living document.
 
 ---
