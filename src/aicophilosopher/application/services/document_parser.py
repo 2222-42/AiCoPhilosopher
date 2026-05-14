@@ -19,6 +19,15 @@ ANNOTATION_PATTERN = re.compile(r"""
 FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---", re.DOTALL)
 
 
+def _parse_numeric(raw: str | None, label: str) -> float | None:
+    if raw is None or not raw.strip():
+        return None
+    try:
+        return float(raw)
+    except (ValueError, TypeError):
+        raise ValidationError(f"{label} must be numeric, got: {raw!r}")
+
+
 class DocumentParser:
     async def parse(self, file_path: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         try:
@@ -40,23 +49,13 @@ class DocumentParser:
         annotations = []
         for match in ANNOTATION_PATTERN.finditer(content):
             ann: dict[str, Any] = {
-                "Source": match.group(1).strip(),
+                "source": match.group(1).strip(),
                 "origin": match.group(3).strip(),
                 "tradition": match.group(5).strip(),
                 "review_status": match.group(6).strip(),
+                "confidence": _parse_numeric(match.group(2).strip() if match.group(2) else None, "Confidence"),
+                "counter_argument_strength": _parse_numeric(match.group(4).strip() if match.group(4) else None, "Counter-argument strength"),
             }
-            raw_conf = match.group(2).strip() if match.group(2) else None
-            try:
-                ann["confidence"] = float(raw_conf) if raw_conf else None
-            except (ValueError, TypeError):
-                ann["confidence"] = None
-
-            raw_cas = match.group(4).strip() if match.group(4) else None
-            try:
-                ann["counter_argument_strength"] = float(raw_cas) if raw_cas else None
-            except (ValueError, TypeError):
-                ann["counter_argument_strength"] = None
-
             if match.group(7):
                 ann["phenomenological_grounding"] = match.group(7).strip()
             annotations.append(ann)
@@ -64,7 +63,7 @@ class DocumentParser:
         return frontmatter, annotations
 
     async def validate_annotations(self, annotations: list[dict[str, Any]]) -> bool:
-        required_fields = {"Source", "confidence", "origin", "counter_argument_strength",
+        required_fields = {"source", "confidence", "origin", "counter_argument_strength",
                           "tradition", "review_status"}
         for i, ann in enumerate(annotations):
             missing = required_fields - set(ann.keys())
