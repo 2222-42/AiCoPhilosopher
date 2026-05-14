@@ -226,12 +226,6 @@
   - **Depends on**: T-020 (follows same domain/ pattern)
   - **Depends on**: T-032, T-020, T-021
 
-- [x] T-047 [DONE] [US2] Implement `src/aicophilosopher/application/services/document_parser.py`: `DocumentParser` for parsing Markdown/YAML frontmatter, extracting margin annotations, validating annotation schema
-  - **AC**: `parse("living_document.md")` returns frontmatter dict + list of annotations; invalid annotations raise `ValidationError`
-  - **Depends on**: T-037
-
-**Checkpoint**: All User Story 2 tasks complete (T-040–T-047). Ready for Phase 5.
-
 ---
 
 ## Phase 5: User Story 3 - Argumentation, Critical Review & Synthesis (Priority: P1) 🎯 MVP
