@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from xml.etree import ElementTree as ET
 
 import httpx
 
@@ -114,11 +115,6 @@ class ConsentGate:
         self.config = config or Config()
         self._consent_given = allow_external
 
-    def check(self) -> bool:
-        if not self.config.allow_external_search and not self._consent_given:
-            return False
-        return True
-
     def grant(self) -> None:
         self._consent_given = True
 
@@ -163,16 +159,16 @@ class SearchTool:
                 return []
 
     async def _try_arxiv(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
-        search_query = "+AND+".join(query.strip().split())
+        terms = query.strip().split()
+        search_query = "all:" + " AND all:".join(terms)
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
                 resp = await client.get(
                     "https://export.arxiv.org/api/query",
-                    params={"search_query": f"all:{search_query}", "start": 0, "max_results": min(limit, 50)},
+                    params={"search_query": search_query, "start": 0, "max_results": min(limit, 50)},
                     headers={"Accept": "application/xml"},
                 )
                 resp.raise_for_status()
-                import xml.etree.ElementTree as ET
                 root = ET.fromstring(resp.text)
                 ns = {"a": "http://www.w3.org/2005/Atom"}
                 papers = []
@@ -234,7 +230,9 @@ class SearchTool:
                 if title and title not in seen_titles:
                     seen_titles.add(title)
                     p["tradition_tag"] = _assign_tradition_tag(p, traditions)
-                    p["relevance_score"] = min(p.get("relevance_score", 0.5), 1.0)
+                    abstract_len = len(p.get("abstract", ""))
+                    score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
+                    p["relevance_score"] = score
                     results.append(p)
 
         return results[:20]
@@ -255,8 +253,7 @@ class SearchTool:
         return []
 
     async def query_sep(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        import re as _re
-        slug = _re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:80]
+        slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:80]
         return [
             {"title": f"SEP entry: {query}", "url": f"https://plato.stanford.edu/entries/{slug}/", "source": "sep_stub", "relevance_score": 0.8},
         ]
