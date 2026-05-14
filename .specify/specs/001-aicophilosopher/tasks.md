@@ -226,6 +226,67 @@
   - **Depends on**: T-020 (follows same domain/ pattern)
   - **Depends on**: T-032, T-020, T-021
 
+---
+
+## Phase 5: User Story 3 - Argumentation, Critical Review & Synthesis (Priority: P1) 🎯 MVP
+
+**Goal**: User can reconstruct arguments, detect fallacies, generate counter-arguments, and synthesize everything into a coherent living document with full margin annotations
+
+**Independent Test**: Start `argumentation` workstream → get standard-form arguments with competing positions; start `critical_review` workstream → get fallacy inventory and counter-arguments; `synthesis` merges all into annotated living document
+
+### Tests for User Story 3
+
+- [x] T-050 [DONE] [P] [US3] Unit tests for `ArgumentationAgent` in `tests/unit/test_argumentation.py`: test standard form reconstruction, competing position generation, implicit premise identification
+  - **AC**: Tests FAIL before implementation; PASS after; ≥2 competing positions generated; each has premises + conclusion + inference rule (AC-004)
+
+- [x] T-051 [DONE] [P] [US3] Unit tests for `CriticalReviewAgent` in `tests/unit/test_critical_review.py`: test fallacy detection, counter-argument generation, adversarial review
+  - **AC**: Tests FAIL before implementation; PASS after; ≥1 counter-argument per argument; ≥70% validity rate on counter-arguments (AC-005)
+
+- [ ] T-052 [P] [US3] Integration test for argumentation → review → synthesis flow in `tests/integration/test_argument_review_synthesis.py`
+  - **AC**: End-to-end test passes; living document contains Arguments section with embedded margin annotations (AC-006)
+
+### Implementation for User Story 3
+
+- [ ] T-053 [US3] Implement `src/aicophilosopher/application/agents/argumentation.py`: `ArgumentationAgent` that reconstructs arguments in standard form (premises + conclusion + inference rule), generates multiple competing positions
+  - **AC**: Each argument has explicit premises/conclusion/inference rule; ≥2 distinct traditions represented; implicit assumptions listed
+  - **Depends on**: T-032, T-022, T-020
+
+- [ ] T-054 [US3] Implement `src/aicophilosopher/application/agents/critical_review.py`: `CriticalReviewAgent` that detects logical fallacies with severity ratings, evaluates validity/soundness/plausibility, generates counter-arguments, performs adversarial review
+  - **AC**: Fallacy inventory includes severity + correction; counter-argument tree has ≥1 node per argument; review confidence score present
+  - **Depends on**: T-032, T-022, T-020
+
+- [x] T-055 [DONE] [US3] Implement `src/aicophilosopher/application/services/review_process.py`: `ReviewProcess` class that orchestrates iterative multi-reviewer rounds (min 2, max 5 rounds), manages reviewer persistence, handles escalation
+  - **AC**: Review round completes when all approve; escalation at round 5; `stalled` status on escalation
+  - **Depends on**: T-034, T-021
+
+- [ ] T-056 [US3] Implement `src/aicophilosopher/application/agents/synthesis.py`: `SynthesisAgent` that merges workstream outputs into coherent living document sections, preserves margin annotations, generates conflict flags
+  - **AC**: Synthesized document has consistent voice; 100% of non-trivial claims annotated; conflicts flagged; synthesis confidence score included
+  - **Depends on**: T-037, T-047, T-055, T-021
+
+**Checkpoint**: User Stories 1, 2, AND 3 should all work independently. The MVP core is complete: clarification, literature search, concept analysis, argumentation, critical review, and synthesis all functional.
+
+---
+
+## Phase 6: User Story 4 - Cross-Traditional Comparison (Priority: P2)
+
+**Goal**: User can compare philosophical positions across traditions, identify bridge concepts, and flag incommensurabilities
+
+**Independent Test**: `compare traditions "mind"` returns tradition profiles, bridge concept map, and incommensurability register
+
+### Tests for User Story 4
+
+- [ ] T-060 [P] [US4] Unit tests for `CrossTraditionalComparisonAgent` in `tests/unit/test_cross_traditional.py`: test bridge identification, incommensurability detection, colonization prevention
+  - **AC**: Tests FAIL before implementation; PASS after; bridge map has valid edges; incommensurability register flags contested mappings
+
+- [ ] T-061 [P] [US4] Integration test for cross-traditional comparison → synthesis in `tests/integration/test_cross_traditional_synthesis.py`
+  - **AC**: End-to-end test passes; living document contains Cross-Traditional Perspectives section
+
+### Implementation for User Story 4
+
+- [ ] T-062 [US4] Implement `src/aicophilosopher/application/agents/cross_traditional.py`: `CrossTraditionalComparisonAgent` that identifies functional analogues across traditions, flags incommensurabilities, evaluates within native frameworks, avoids category colonization
+  - **AC**: Comparison report contains tradition profiles, bridge concept map, incommensurability register, synthesis proposals
+  - **Depends on**: T-032, T-020, T-021
+
 - [x] T-063 [DONE] [US4] Add 5 default tradition JSON profiles in `data/traditions/`: `analytic_philosophy.json`, `continental_philosophy.json`, `philosophy_of_technology.json`, `philosophy_of_science.json`, `philosophy_of_mathematics.json`, `software_architecture.json`, `model_theory.json`
   - **AC**: Each profile has assumptions, norms, criteria, key figures, bridge warnings; `TraditionManager` loads all on startup
   - **Depends on**: T-020
