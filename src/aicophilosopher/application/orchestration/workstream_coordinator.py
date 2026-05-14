@@ -74,6 +74,7 @@ class WorkstreamCoordinatorAgent(BaseAgent):
             return
         self.status = "completed"
         self._results = results
+        await self._log_update({"action": "complete", "message": "Workstream completed"})
 
     async def get_progress(self) -> dict[str, Any]:
         return {
