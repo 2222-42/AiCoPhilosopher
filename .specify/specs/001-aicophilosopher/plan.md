@@ -225,9 +225,11 @@ src/
 │   └── traditions/                       # JSON tradition profile files
 │       ├── analytic_philosophy.json
 │       ├── continental_philosophy.json
-│       ├── buddhist_philosophy.json
-│       ├── confucian_ethics.json
-│       └── daoist_philosophy.json
+│       ├── philosophy_of_technology.json
+│       ├── philosophy_of_science.json
+│       ├── philosophy_of_mathematics.json
+│       ├── software_architecture.json
+│       └── model_theory.json
 ├── docs/
 │   └── usage.md                         # User-facing documentation (post-MVP)
 ├── pyproject.toml                        # Modern Python packaging, dependencies, tool configs

@@ -34,7 +34,7 @@ LangGraph is the only mature Python framework that natively supports all three r
 **Rationale**:
 The specification requires local-first RAG over uploaded papers with tradition-aware metadata filtering (spec §4.2, §6.3). ChromaDB provides:
 1. **File-based persistence**: `PersistentClient` stores data in a local directory, requiring no external server process. This satisfies the local-first constraint (Constitution Principle I).
-2. **Metadata filtering**: `where={"tradition": "buddhist_philosophy"}` enables tradition-specific retrieval, which is critical for the Cross-Traditional Comparison Agent (spec §4.4).
+2. **Metadata filtering**: `where={"tradition": "philosophy_of_technology"}` enables tradition-specific retrieval, which is critical for the Cross-Traditional Comparison Agent (spec §4.4).
 3. **Simple Python API**: Single `pip install chromadb` with no system dependencies. Fits the self-hostable requirement (spec §9).
 
 **Alternatives considered**:
@@ -238,13 +238,13 @@ The Cross-Traditional Comparison Agent must evaluate arguments within native met
 **Tradition profile schema**:
 ```json
 {
-  "id": "buddhist_philosophy",
-  "name": "Buddhist Philosophy",
-  "assumptions": ["anatta (no-self)", "pratityasamutpada (dependent origination)"],
-  "methodological_norms": ["scriptural authority", "meditative insight", "logical analysis (pramana)"],
-  "evaluative_criteria": ["soteriological efficacy", "consistency with Abhidharma"],
-  "key_figures": ["Nagarjuna", "Vasubandhu", "Dharmakirti"],
-  "bridge_warnings": ["anatta vs Cartesian ego: incommensurable"]
+  "id": "philosophy_of_technology",
+  "name": "Philosophy of Technology",
+  "assumptions": ["technology is not neutral; it embodies values", "artefacts have politics (Winner)", "human-technology co-constitution"],
+  "methodological_norms": ["empirical case study", "conceptual analysis of technological mediation", "ethnography of use"],
+  "evaluative_criteria": ["conceptual clarity", "empirical grounding", "normative sensitivity", "technological plausibility"],
+  "key_figures": ["Heidegger", "Ellul", "Winner", "Latour", "Ihde", "Verbeek"],
+  "bridge_warnings": ["software abstraction vs mathematical abstraction: partial overlap but different normative stakes"]
 }
 ```
 
@@ -285,7 +285,7 @@ unreviewed → under_review → contested → accepted_with_reservations → rej
 ### Decision: `sentence-transformers/all-MiniLM-L6-v2` (default), user-configurable
 
 **Rationale**:
-The default model is small (80MB), fast, and works offline. However, philosophical texts contain technical jargon, non-English terms (e.g., 心 xīn, Dasein, ṣaḍdarśana), and nuanced argumentation.
+The default model is small (80MB), fast, and works offline. However, philosophical texts contain technical jargon, non-English terms (e.g., Dasein, epoché, mathesis), and nuanced argumentation.
 
 **Configuration**:
 ```yaml
