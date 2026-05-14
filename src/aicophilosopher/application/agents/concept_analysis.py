@@ -50,6 +50,7 @@ DISTINCTIONS: dict[str, list[dict[str, str]]] = {
     "mind": [
         {"concept_a": "qualia", "concept_b": "intentionality", "distinction_type": "phenomenal vs semantic", "description": "Qualia are the felt qualities of experience; intentionality is the aboutness or directedness of mental states.", "tradition": "analytic"},
         {"concept_a": "functional role", "concept_b": "phenomenal character", "distinction_type": "functionalist vs qualia", "description": "Functionalism defines mental states by their causal role; phenomenalism by their felt quality. The explanatory gap separates them.", "tradition": "analytic"},
+        {"concept_a": "computational cognition", "concept_b": "embodied mind", "distinction_type": "disembodied vs situated", "description": "Computational cognition treats mind as abstract information processing; embodied mind (Merleau-Ponty, Varela) insists cognition is constituted through bodily interaction with the environment.", "tradition": "philosophy_of_technology"},
     ],
     "computation": [
         {"concept_a": "syntax", "concept_b": "semantics", "distinction_type": "formal vs interpretive", "description": "Syntax concerns formal symbol manipulation rules; semantics concerns meaning and reference. The gap between them is central to AI philosophy.", "tradition": "analytic"},

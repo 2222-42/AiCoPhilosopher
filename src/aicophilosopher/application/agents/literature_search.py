@@ -51,17 +51,15 @@ class LiteratureSearchAgent:
         for concept, trad_notes in BRIDGE_NOTES.items():
             if concept in lower_q or lower_q in concept:
                 for cross_key, note_text in trad_notes.items():
-                    if any(t in cross_key for t in traditions):
+                    parts = cross_key.split("→")
+                    if len(parts) == 2 and parts[0] in traditions and parts[1] in traditions:
                         matched = True
-                        parts = cross_key.split("→")
-                        if len(parts) == 2:
-                            src, dst = parts
-                            notes.append({
-                                "from_tradition": src,
-                                "to_tradition": dst,
-                                "note": note_text,
-                                "confidence_score": 0.7,
-                            })
+                        notes.append({
+                            "from_tradition": parts[0],
+                            "to_tradition": parts[1],
+                            "note": note_text,
+                            "confidence_score": 0.7,
+                        })
         if not matched and len(traditions) >= 2:
             for i in range(len(traditions)):
                 for j in range(i + 1, len(traditions)):

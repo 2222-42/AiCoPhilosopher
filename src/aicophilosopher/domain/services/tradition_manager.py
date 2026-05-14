@@ -24,7 +24,12 @@ class TraditionManager:
         for filepath in sorted(self.traditions_dir.glob("*.json")):
             tradition_name = filepath.stem
             with open(filepath) as f:
-                self._profiles[tradition_name] = json.load(f)
+                profile = json.load(f)
+            self._profiles[tradition_name] = profile
+            for suffix in ("_philosophy", "_ethics"):
+                if tradition_name.endswith(suffix):
+                    alias = tradition_name[:-len(suffix)]
+                    self._profiles[alias] = profile
 
     def load_traditions(self) -> dict[str, dict[str, Any]]:
         self._ensure_loaded()
