@@ -60,7 +60,7 @@ class ProjectCoordinatorAgent(BaseAgent):
         self._turn_count += 1
         self.dialogue_history.append({"role": "user", "content": user_input})
 
-        if self._turn_count > len(CLARIFICATION_QUESTIONS):
+        if self._turn_count >= len(CLARIFICATION_QUESTIONS):
             goal = self._synthesize_goal()
             self._goal_proposed = goal
             return {
@@ -80,6 +80,8 @@ class ProjectCoordinatorAgent(BaseAgent):
     def _handle_refine_goal(self, user_input: str) -> dict[str, Any]:
         if not self._goal_proposed:
             return {"error": "No goal has been proposed yet. Please continue the dialogue."}
+        if self._goal_approved:
+            return {"error": "Goal is already approved. Cannot refine an approved goal."}
         self.dialogue_history.append({"role": "user", "content": user_input})
         revised_goal = self._synthesize_goal()
         self._goal_proposed = revised_goal
@@ -95,7 +97,7 @@ class ProjectCoordinatorAgent(BaseAgent):
         self._goal_approved = True
         return {
             "message": f"Goal approved! You can now launch workstreams using the `start workstream` command.\n\nApproved goal: **{self._goal_proposed}**",
-            "dialogue_state": "goals_approved",
+            "dialogue_state": "goal_approved",
             "approved_goal": self._goal_proposed,
         }
 
@@ -126,7 +128,7 @@ class ProjectCoordinatorAgent(BaseAgent):
             "goal_approved": self._goal_approved,
             "proposed_goal": self._goal_proposed,
             "turn_count": self._turn_count,
-            "dialogue_state": "goals_approved" if self._goal_approved else ("goal_proposed" if self._goal_proposed else "clarifying"),
+            "dialogue_state": "goal_approved" if self._goal_approved else ("goal_proposed" if self._goal_proposed else "clarifying"),
             "active_hypotheses": 0,
             "refuted_hypotheses": 0,
             "under_review": 0,
@@ -139,7 +141,7 @@ class ProjectCoordinatorAgent(BaseAgent):
 
     def get_dialogue_state(self) -> str:
         if self._goal_approved:
-            return "goals_approved"
+            return "goal_approved"
         elif self._goal_proposed:
             return "goal_proposed"
         elif self._turn_count == 0:

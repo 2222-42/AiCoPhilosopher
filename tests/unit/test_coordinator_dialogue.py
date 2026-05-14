@@ -39,9 +39,9 @@ async def test_goal_approval_transition(coordinator: ProjectCoordinatorAgent) ->
             break
 
     result = coordinator._handle_approve_goal()
-    assert result["dialogue_state"] == "goals_approved"
+    assert result["dialogue_state"] == "goal_approved"
     assert result.get("approved_goal") is not None
-    assert coordinator.get_dialogue_state() == "goals_approved"
+    assert coordinator.get_dialogue_state() == "goal_approved"
 
 
 @pytest.mark.asyncio

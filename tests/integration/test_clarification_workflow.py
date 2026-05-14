@@ -37,7 +37,7 @@ async def test_full_clarification_workflow(coordinator: ProjectCoordinatorAgent)
 
     # Step 3: Approve goal
     result = coordinator._handle_approve_goal()
-    assert result["dialogue_state"] == "goals_approved"
+    assert result["dialogue_state"] == "goal_approved"
 
     # Step 4: Propose and start workstream
     result = await coordinator._handle_propose_workstream("literature_search")
@@ -66,10 +66,10 @@ async def test_full_clarification_workflow(coordinator: ProjectCoordinatorAgent)
     # Step 8: Status
     status = await coordinator._get_status_summary()
     assert status.get("goal_approved") is True
-    assert status.get("dialogue_state") == "goals_approved"
+    assert status.get("dialogue_state") == "goal_approved"
 
     # Step 9: Complete workstream
-    ws.complete("Literature review complete.")
+    await ws.complete("Literature review complete.")
     assert ws.status == "completed"
 
     # Step 10: Workstream progress
