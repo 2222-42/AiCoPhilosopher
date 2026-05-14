@@ -4,10 +4,10 @@ from typing import Any
 
 from aicophilosopher.application.orchestration.base import BaseAgent
 
-WORKSTREAM_TYPE_MAP: dict[str, type] = {}
+WORKSTREAM_TYPE_MAP: dict[str, type["WorkstreamCoordinatorAgent"]] = {}
 
 
-def register_workstream_type(name: str, coordinator_class: type) -> None:
+def register_workstream_type(name: str, coordinator_class: type["WorkstreamCoordinatorAgent"]) -> None:
     WORKSTREAM_TYPE_MAP[name] = coordinator_class
 
 
@@ -45,7 +45,7 @@ class WorkstreamCoordinatorAgent(BaseAgent):
         await self._log_update({"action": "pause", "message": f"Workstream '{self.workstream_id}' paused"})
 
     async def resume(self) -> None:
-        if self.status != "paused":
+        if self.status not in ("paused", "stalled"):
             return
         self.status = "running"
         await self._log_update({"action": "resume", "message": f"Workstream '{self.workstream_id}' resumed"})
@@ -55,17 +55,26 @@ class WorkstreamCoordinatorAgent(BaseAgent):
             raise RuntimeError(f"Cannot steer workstream in state: {self.status}")
         await self._log_update({"action": "steer", "instruction": instruction})
 
-    def fail(self, reason: str) -> None:
+    async def fail(self, reason: str) -> None:
+        if self.status in ("completed", "failed"):
+            return
         self.status = "failed"
         self._results = f"## Failed: {reason}"
+        await self._log_update({"action": "fail", "reason": reason})
 
-    def stall(self, reason: str) -> None:
+    async def stall(self, reason: str) -> None:
+        if self.status in ("completed", "failed", "stalled"):
+            return
         self.status = "stalled"
         self._results = f"## Stalled: {reason}"
+        await self._log_update({"action": "stall", "reason": reason})
 
-    def complete(self, results: str) -> None:
+    async def complete(self, results: str) -> None:
+        if self.status in ("completed", "failed"):
+            return
         self.status = "completed"
         self._results = results
+        await self._log_update({"action": "complete", "message": "Workstream completed"})
 
     async def get_progress(self) -> dict[str, Any]:
         return {
@@ -98,7 +107,7 @@ class WorkstreamCoordinatorAgent(BaseAgent):
     def create_workstream(ws_type: str, goal: dict[str, Any], **kwargs: Any) -> "WorkstreamCoordinatorAgent":
         coord_cls = WORKSTREAM_TYPE_MAP.get(ws_type, WorkstreamCoordinatorAgent)
         ws_id = f"ws-{uuid.uuid4().hex[:8]}"
-        return coord_cls(  # type: ignore[no-any-return]
+        return coord_cls(
             workstream_id=ws_id,
             workstream_type=ws_type,
             goal_statement=goal,
