@@ -1,3 +1,5 @@
+import re
+
 
 class CoreDomain:
     def __init__(
@@ -23,9 +25,9 @@ class CoreDomain:
             "key": self.key,
             "display_name": self.display_name,
             "priority": self.priority,
-            "sub_traditions": self.sub_traditions,
-            "expansion_terms": self.expansion_terms,
-            "keywords": self.keywords,
+            "sub_traditions": list(self.sub_traditions),
+            "expansion_terms": list(self.expansion_terms),
+            "keywords": list(self.keywords),
             "description": self.description,
         }
 
@@ -269,7 +271,8 @@ class CoreDomains:
             score = 0.0
             matched: list[str] = []
             for keyword in domain.keywords:
-                if keyword.lower() in query_lower:
+                pattern = rf"\b{re.escape(keyword.lower())}\b"
+                if re.search(pattern, query_lower):
                     score += 1.0 / len(domain.keywords)
                     matched.append(keyword)
             if matched:
