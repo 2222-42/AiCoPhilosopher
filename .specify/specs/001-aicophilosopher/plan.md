@@ -20,6 +20,8 @@ AiCoPhilosopher v2.0 is a stateful, hierarchical multi-agent workbench for philo
 2. **Uncertainty Lifecycle Management**: First-class uncertainty tracking with confidence scores, counter-argument strength, tradition validity maps, and explicit review status
 3. **Dialectical History Preservation**: All refuted hypotheses, abandoned arguments, and failed explorations retained as permanent project artifacts
 4. **Cross-Traditional Comparison Engine**: Prevents category colonization by evaluating arguments within native methodological frameworks before bridging
+5. **Cost-Aware LLM Routing (spec §3.5)**: Multi-tier execution with cheap models for exploration, high-quality models for deep analysis; automatic LLM Router
+6. **Domain-Aware Query Strategy (spec §3.6)**: LLM-based semantic query expansion with Core Philosophical Domains (Philosophy of Mathematics, Logic, etc.)
 
 ## Technical Context
 
@@ -131,7 +133,8 @@ src/
 │   │   │   ├── __init__.py
 │   │   │   ├── logic_engine.py          # Formal validity, contradiction detection (Z3-free pure logic)
 │   │   │   ├── tradition_manager.py     # Tradition profiles, norm enforcement, incommensurability
-│   │   │   └── uncertainty.py           # Uncertainty lifecycle transitions, confidence scoring
+│   │   │   ├── uncertainty.py           # Uncertainty lifecycle transitions, confidence scoring
+│   │   │   └── core_domains.py          # Core Philosophical Domains (§3.6: PhilMath, Logic, Pragmatism, PhilScience, PhilTech, Model Theory)
 │   │   ├── exceptions.py               # Domain-specific exceptions
 │   │   └── note.py                      # Note entity (user annotations in workspace)
 │   ├── application/
@@ -162,12 +165,13 @@ src/
 │   │       └── synthesis.py
 │   ├── ports/                            # Abstract interfaces (typing.Protocol only, no external deps)
 │   │   ├── __init__.py
-│   │   ├── llm_port.py                  # generate(), embed()
+│   │   ├── llm_port.py                  # generate(), embed(), LLMProfile, LLMRoutingConfig
 │   │   ├── storage_port.py              # save_project(), load_project(), query_uncertainty(), save_note()
 │   │   ├── reviewer_port.py             # request_review(), submit_verdict()
 │   │   ├── dialectical_history_port.py  # append_move(), query_history()
 │   │   ├── search_port.py               # query_philpapers(), query_sep(), query_arxiv()
-│   │   └── message_port.py              # send(), receive(), broadcast()
+│   │   ├── message_port.py              # send(), receive(), broadcast()
+│   │   └── query_port.py                # PhilosophicalQueryStrategy (§3.6)
 │   ├── infrastructure/
 │   │   ├── __init__.py
 │   │   └── adapters/

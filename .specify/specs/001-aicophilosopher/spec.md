@@ -215,6 +215,45 @@ For literature-search and exploration workstreams, **cost-optimised multi-stage 
 
 This mechanism ensures the **AI Co-Philosopher dramatically reduces routine exploration costs** while reserving Kimi K2.6's philosophical depth for the core analytical work that demands it.
 
+### 3.6 Domain-Aware Query Strategy (Mandatory)
+
+Literature Review Workstream and Cross-Traditional Comparison Agent **must** use a philosophically sophisticated query strategy, avoiding naive keyword matching.
+
+#### 3.6.1 Core Philosophical Domains (First-Class Treatment)
+
+The following domains are **Core Domains** with explicit priority and expansion:
+
+- **Philosophy of Mathematics** (foundations, structuralism, formalism, intuitionism, mathematical realism/anti-realism)
+- **Logic** (model theory, proof theory, non-classical logics, categorial logic, modal logic)
+- **Pragmatism** (Peirce, James, Dewey, Rorty, neopragmatism, pragmatic naturalism)
+- **Philosophy of Science** (scientific realism/anti-realism, epistemology of science, underdetermination, theory change, STS)
+- **Philosophy of Technology** (post-phenomenology, technological mediation, STS, critical theory of technology, AI ethics)
+- **Model Theory** (applications to philosophy, philosophical logic, structuralism, category-theoretic foundations, model-theoretic semantics)
+
+These domains receive **weighted priority during Query Expansion**, automatically including relevant subtopics (e.g., structuralism, formalism, causal inference, computational philosophy, technological mediation).
+
+#### 3.6.2 Query Strategy Requirements
+
+1. **Semantic Query Expansion**
+   - Naive keyword matching is **prohibited**; LLM-based (Cheap-tier permitted) **semantic expansion** is mandatory.
+   - Automatically detect Core Domains from user queries and generate philosophically optimised expanded queries.
+   - Example: "moving sofa problem" → `philosophy of mathematics + computational geometry + intuitionism + continuous mathematics`
+
+2. **Tradition-Aware Query**
+   - Recognise sub-traditions within Core Domains (Logicism, Intuitionism, Formalism, Structuralism, Category-theoretic foundations) alongside broad traditions (Analytic, Continental, Pragmatist, Eastern).
+
+3. **Staged Query Pipeline** (tied to Cost-Aware §3.5)
+   - **Stage 1 (CHEAP)**: Broad exploration query generation + Abstract retrieval.
+   - **Stage 2 (EXPENSIVE: Kimi K2.6)**: Deep critical review and concept mapping **only** for papers highly relevant to Core Domains.
+
+#### 3.6.3 Implementation Requirements (Ports & Adapters)
+
+- Define `PhilosophicalQueryStrategy` in `ports/query_port.py`.
+- `infrastructure/adapters/search_adapter.py` **must** fully conform to this strategy (the naive keyword dict from PR #11 is to be replaced incrementally).
+- Core Domains are defined in `domain/core_domains.py` (or constitution) and shared across all Agents.
+
+This mechanism ensures the **AI Co-Philosopher accurately understands the user's specialist philosophical interests, producing high-quality philosophical literature discovery without relying on naive search heuristics**.
+
 ## 4. Agent Specifications
 
 ### 4.1 Project Coordinator Agent
