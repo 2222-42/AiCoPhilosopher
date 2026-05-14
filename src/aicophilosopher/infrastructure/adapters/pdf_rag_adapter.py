@@ -8,6 +8,8 @@ from aicophilosopher.infrastructure.adapters.chroma_adapter import ChromaAdapter
 
 
 def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    if overlap >= chunk_size:
+        raise ValueError(f"overlap ({overlap}) must be less than chunk_size ({chunk_size})")
     words = text.split()
     chunks: list[str] = []
     start = 0
@@ -16,9 +18,7 @@ def _chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str
         chunk = " ".join(words[start:end])
         if chunk.strip():
             chunks.append(chunk)
-        start += chunk_size - overlap
-        if start < 0:
-            break
+        start += max(1, chunk_size - overlap)
     return chunks
 
 
@@ -61,7 +61,7 @@ class PDFRAGTool:
         chunks = metadata.pop("chunks", [])
         collection = os.path.splitext(os.path.basename(path))[0]
 
-        await self.chroma.create_collection(collection, project_id=metadata.get("title", collection))
+        await self.chroma.create_collection(collection, project_id=metadata.get("title") or collection)
         if chunks:
             await self.chroma.add_documents(
                 collection=collection,
@@ -72,8 +72,8 @@ class PDFRAGTool:
         return {"collection": collection, "chunks": len(chunks), "metadata": metadata}
 
     async def query(self, query: str, **kwargs: object) -> list[dict[str, Any]]:
-        collection = str(kwargs.get("collection", ""))
-        where = kwargs.get("where")
+        collection = str(kwargs.pop("collection", ""))
+        where = kwargs.pop("where", None)
         where_dict: dict[str, Any] | None = None
         if isinstance(where, dict):
             where_dict = where
