@@ -242,16 +242,16 @@
 - [x] T-051 [DONE] [P] [US3] Unit tests for `CriticalReviewAgent` in `tests/unit/test_critical_review.py`: test fallacy detection, counter-argument generation, adversarial review
   - **AC**: Tests FAIL before implementation; PASS after; ≥1 counter-argument per argument; ≥70% validity rate on counter-arguments (AC-005)
 
-- [ ] T-052 [P] [US3] Integration test for argumentation → review → synthesis flow in `tests/integration/test_argument_review_synthesis.py`
+- [x] T-052 [DONE] [P] [US3] Integration test for argumentation → review → synthesis flow in `tests/integration/test_argument_review_synthesis.py`
   - **AC**: End-to-end test passes; living document contains Arguments section with embedded margin annotations (AC-006)
 
 ### Implementation for User Story 3
 
-- [ ] T-053 [US3] Implement `src/aicophilosopher/application/agents/argumentation.py`: `ArgumentationAgent` that reconstructs arguments in standard form (premises + conclusion + inference rule), generates multiple competing positions
+- [x] T-053 [DONE] [US3] Implement `src/aicophilosopher/application/agents/argumentation.py`: `ArgumentationAgent` that reconstructs arguments in standard form (premises + conclusion + inference rule), generates multiple competing positions
   - **AC**: Each argument has explicit premises/conclusion/inference rule; ≥2 distinct traditions represented; implicit assumptions listed
   - **Depends on**: T-032, T-022, T-020
 
-- [ ] T-054 [US3] Implement `src/aicophilosopher/application/agents/critical_review.py`: `CriticalReviewAgent` that detects logical fallacies with severity ratings, evaluates validity/soundness/plausibility, generates counter-arguments, performs adversarial review
+- [x] T-054 [DONE] [US3] Implement `src/aicophilosopher/application/agents/critical_review.py`: `CriticalReviewAgent` that detects logical fallacies with severity ratings, evaluates validity/soundness/plausibility, generates counter-arguments, performs adversarial review
   - **AC**: Fallacy inventory includes severity + correction; counter-argument tree has ≥1 node per argument; review confidence score present
   - **Depends on**: T-032, T-022, T-020
 
@@ -259,7 +259,7 @@
   - **AC**: Review round completes when all approve; escalation at round 5; `stalled` status on escalation
   - **Depends on**: T-034, T-021
 
-- [ ] T-056 [US3] Implement `src/aicophilosopher/application/agents/synthesis.py`: `SynthesisAgent` that merges workstream outputs into coherent living document sections, preserves margin annotations, generates conflict flags
+- [x] T-056 [DONE] [US3] Implement `src/aicophilosopher/application/agents/synthesis.py`: `SynthesisAgent` that merges workstream outputs into coherent living document sections, preserves margin annotations, generates conflict flags
   - **AC**: Synthesized document has consistent voice; 100% of non-trivial claims annotated; conflicts flagged; synthesis confidence score included
   - **Depends on**: T-037, T-047, T-055, T-021
 
@@ -460,4 +460,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-13 | **Status**: **Phase 0-3 COMPLETE, Phase 4 (User Story 2) COMPLETE, T-063 DONE** — Ready for Phase 5 (User Story 3).
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-16 | **Status**: **Phase 0-5 COMPLETE** — Phases 1-5 (US1/US2/US3 MVP) DONE. Ready for Phase 6 (US4) or Phase 7 (Polish).
