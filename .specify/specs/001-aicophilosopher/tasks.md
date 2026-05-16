@@ -217,11 +217,11 @@
 
 ### 2.7 Domain-Aware Query Strategy (spec §3.6)
 
-- [ ] T-048 [US2] Implement `src/aicophilosopher/ports/query_port.py`: `PhilosophicalQueryStrategy` with semantic expansion, Core Domain detection, staged pipeline integration (Cheap→Expensive), and tradition-aware query generation
+- [x] T-048 [DONE] [US2] Implement `src/aicophilosopher/ports/query_port.py`: `PhilosophicalQueryStrategy` with semantic expansion, Core Domain detection, staged pipeline integration (Cheap→Expensive), and tradition-aware query generation
   - **AC**: `PhilosophicalQueryStrategy.expand("moving sofa problem")` returns philosophically scoped queries including "philosophy of mathematics"; LLM-based expansion (not keyword matching); Core Domains automatically detected
   - **Depends on**: T-012 (reads LLM config for cheap-model access)
 
-- [ ] T-049 [P] [US2] Implement `src/aicophilosopher/domain/services/core_domains.py`: Core Philosophical Domains registry (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory) with weighted priority, sub-traditions, and subtopic metadata; shared across all Agents
+- [x] T-049 [DONE] [P] [US2] Implement `src/aicophilosopher/domain/services/core_domains.py`: Core Philosophical Domains registry (Philosophy of Mathematics, Logic, Pragmatism, Philosophy of Science, Philosophy of Technology, Model Theory) with weighted priority, sub-traditions, and subtopic metadata; shared across all Agents
   - **AC**: `CoreDomains.get("philosophy_of_mathematics")` returns domain profile with sub_traditions and expansion_terms; `CoreDomains.detect("moving sofa problem")` returns matching domain priorities; all 6 domains registered
   - **Depends on**: T-020 (follows same domain/ pattern)
   - **Depends on**: T-032, T-020, T-021
