@@ -51,6 +51,9 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/anomalyco/AiCoPhilosopher"
 
+[project.scripts]
+aicophilosopher = "aicophilosopher.presentation.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["aicophilosopher*"]
