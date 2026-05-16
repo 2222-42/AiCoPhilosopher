@@ -275,15 +275,15 @@
 
 ### Tests for User Story 4
 
-- [ ] T-060 [P] [US4] Unit tests for `CrossTraditionalComparisonAgent` in `tests/unit/test_cross_traditional.py`: test bridge identification, incommensurability detection, colonization prevention
+- [x] T-060 [DONE] [P] [US4] Unit tests for `CrossTraditionalComparisonAgent` in `tests/unit/test_cross_traditional.py`: test bridge identification, incommensurability detection, colonization prevention
   - **AC**: Tests FAIL before implementation; PASS after; bridge map has valid edges; incommensurability register flags contested mappings
 
-- [ ] T-061 [P] [US4] Integration test for cross-traditional comparison → synthesis in `tests/integration/test_cross_traditional_synthesis.py`
+- [x] T-061 [DONE] [P] [US4] Integration test for cross-traditional comparison → synthesis in `tests/integration/test_cross_traditional_synthesis.py`
   - **AC**: End-to-end test passes; living document contains Cross-Traditional Perspectives section
 
 ### Implementation for User Story 4
 
-- [ ] T-062 [US4] Implement `src/aicophilosopher/application/agents/cross_traditional.py`: `CrossTraditionalComparisonAgent` that identifies functional analogues across traditions, flags incommensurabilities, evaluates within native frameworks, avoids category colonization
+- [x] T-062 [DONE] [US4] Implement `src/aicophilosopher/application/agents/cross_traditional.py`: `CrossTraditionalComparisonAgent` that identifies functional analogues across traditions, flags incommensurabilities, evaluates within native frameworks, avoids category colonization
   - **AC**: Comparison report contains tradition profiles, bridge concept map, incommensurability register, synthesis proposals
   - **Depends on**: T-032, T-020, T-021
 
@@ -460,4 +460,4 @@ With multiple developers:
 
 ---
 
-**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-16 | **Status**: **Phase 0-5 COMPLETE** — Phases 1-5 (US1/US2/US3 MVP) DONE. Ready for Phase 6 (US4) or Phase 7 (Polish).
+**Tasks Version**: 1.0.0 | **Last Updated**: 2026-05-16 | **Status**: **Phase 0-6 COMPLETE** — All user stories (US1-4) DONE. Ready for Phase 7 (Polish).
