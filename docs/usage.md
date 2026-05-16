@@ -21,7 +21,7 @@ See [QUICKSTART.md](QUICKSTART.md) for setup instructions.
 Start with a philosophical question — it can be as vague as you like:
 
 ```bash
-aicophilosopher new project "What is abstraction?"
+aicophilosopher new-project "What is abstraction?"
 ```
 
 This creates a persistent workspace under `projects/<project_id>/` containing:
@@ -36,7 +36,7 @@ This creates a persistent workspace under `projects/<project_id>/` containing:
 The Project Coordinator Agent will help refine your question through Socratic dialogue:
 
 ```bash
-aicophilosopher refine goal
+aicophilosopher refine-goal
 ```
 
 The agent asks clarifying questions about:
@@ -51,7 +51,7 @@ Continue until the goal is approved. You can stop at any time.
 ### Literature Search
 
 ```bash
-aicophilosopher start workstream literature_search
+aicophilosopher start-workstream literature_search
 ```
 
 The agent searches PhilPapers, SEP, IEP, arXiv, and Semantic Scholar. Results include:
@@ -63,7 +63,7 @@ The agent searches PhilPapers, SEP, IEP, arXiv, and Semantic Scholar. Results in
 ### Concept Analysis
 
 ```bash
-aicophilosopher start workstream concept_analysis
+aicophilosopher start-workstream concept_analysis
 ```
 
 Performs:
@@ -75,7 +75,7 @@ Performs:
 ### Argumentation
 
 ```bash
-aicophilosopher start workstream argumentation
+aicophilosopher start-workstream argumentation
 ```
 
 Reconstructs arguments in standard form:
@@ -87,7 +87,7 @@ Reconstructs arguments in standard form:
 ### Critical Review
 
 ```bash
-aicophilosopher start workstream critical_review
+aicophilosopher start-workstream critical_review
 ```
 
 Evaluates arguments:
@@ -99,13 +99,13 @@ Evaluates arguments:
 ### Cross-Traditional Comparison
 
 ```bash
-aicophilosopher start workstream cross_traditional
+aicophilosopher start-workstream cross_traditional
 ```
 
 Or:
 
 ```bash
-aicophilosopher compare traditions "abstraction"
+aicophilosopher compare-traditions "abstraction"
 ```
 
 Compares concepts across traditions, identifies bridges and incommensurabilities.
@@ -126,9 +126,9 @@ Shows epistemic overview:
 ### View Results
 
 ```bash
-aicophilosopher show document
-aicophilosopher show hypotheses
-aicophilosopher show dead ends
+aicophilosopher show-document
+aicophilosopher show-hypotheses
+aicophilosopher show-dead-ends
 ```
 
 ### Steer Workstreams
@@ -142,14 +142,14 @@ aicophilosopher steer <workstream_id> "deepen analysis on abstraction layers"
 ### Add Notes
 
 ```bash
-aicophilosopher add note "Consider comparing with Husserl's eidetic reduction"
-aicophilosopher add note --attach-to hypothesis-3 "Needs more evidence"
+aicophilosopher add-note "Consider comparing with Husserl's eidetic reduction"
+aicophilosopher add-note --attach-to hypothesis-3 "Needs more evidence"
 ```
 
 ## Synthesizing Results
 
 ```bash
-aicophilosopher start workstream synthesis
+aicophilosopher start-workstream synthesis
 ```
 
 The Synthesis Agent merges all workstream outputs into the living document with:
@@ -170,25 +170,25 @@ aicophilosopher export latex      # For academic submission (deferred)
 
 ```bash
 # Start a project
-aicophilosopher new project "Can machines think?"
+aicophilosopher new-project "Can machines think?"
 
 # Refine the question
-aicophilosopher refine goal
+aicophilosopher refine-goal
 # > Agent: Which traditions are most relevant? (analytic, continental, philosophy_of_technology)
 # > You: analytic and philosophy_of_technology
 # > Agent: Approved. Launching workstreams...
 
 # Run workstreams
-aicophilosopher start workstream literature_search
-aicophilosopher start workstream concept_analysis
-aicophilosopher start workstream argumentation
+aicophilosopher start-workstream literature_search
+aicophilosopher start-workstream concept_analysis
+aicophilosopher start-workstream argumentation
 
 # Review progress
 aicophilosopher status
-aicophilosopher show hypotheses
+aicophilosopher show-hypotheses
 
 # After review, synthesize
-aicophilosopher start workstream synthesis
+aicophilosopher start-workstream synthesis
 
 # Export
 aicophilosopher export markdown
@@ -200,7 +200,7 @@ All core features work without network access:
 
 ```bash
 export ALLOW_EXTERNAL_SEARCH=false
-aicophilosopher new project "What is truth?"
+aicophilosopher new-project "What is truth?"
 ```
 
 Literature search will be limited to locally ingested PDFs (via `add note --attach`), but argumentation, concept analysis, critical review, and synthesis all function fully.

@@ -71,6 +71,33 @@ class TestConstitutionIOfflineOperation:
         assert result["synthesized_document"]
         assert result["synthesis_confidence"] is not None
 
+    @pytest.mark.asyncio
+    async def test_literature_search_offline(self) -> None:
+        """AC-009: LiteratureSearchAgent must function without network."""
+        from aicophilosopher.application.agents.literature_search import (
+            LiteratureSearchAgent,
+        )
+
+        # SearchTool has network fallback built in; agent with None search_tool
+        # still works structurally via the mock SearchTool default.
+        agent = LiteratureSearchAgent(agent_id="test")
+        result = await agent.run("abstraction")
+        assert "bibliography" in result
+        assert "bridge_notes" in result
+        assert "confidence" in result
+
+    @pytest.mark.asyncio
+    async def test_concept_analysis_offline(self) -> None:
+        """AC-009: ConceptAnalysisAgent must function without network."""
+        from aicophilosopher.application.agents.concept_analysis import (
+            ConceptAnalysisAgent,
+        )
+
+        agent = ConceptAnalysisAgent(agent_id="test")
+        result = await agent.run("abstraction")
+        assert "concept_map" in result
+        assert "confidence" in result
+
 
 # ---------------------------------------------------------------------------
 # T-074 — Constitution Principle II: Intellectual Honesty
