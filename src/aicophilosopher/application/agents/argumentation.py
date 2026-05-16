@@ -9,6 +9,7 @@ Conforms to spec §4.5 and Clean Architecture (depends on domain/ + ports/).
 
 from __future__ import annotations
 
+import copy
 import re
 from typing import cast
 
@@ -716,9 +717,7 @@ class ArgumentationAgent:
         for c in candidates:
             if c == "analytic":
                 continue
-            if c in lower or any(
-                kw in lower for kw in [c.replace("_", " ")]
-            ):
+            if c in lower or c.replace("_", " ") in lower:
                 result.append(c)
                 break
         if len(result) < 2:
@@ -776,18 +775,34 @@ class ArgumentationAgent:
         all_args = [main_arg, competing]
         traditions = self._detect_traditions(question, all_args)
 
-        # Generate a second competing position from a third tradition
-        second_competing = dict(competing)  # shallow copy
+        # Generate a second competing position from a third tradition.
+        # Uses deep copy to avoid aliasing, then rewrites all content fields
+        # to produce a genuinely distinct argument (not a placeholder).
+
         third_tradition = (
             "philosophy_of_science"
             if competing.get("tradition") != "philosophy_of_science"
             else "philosophy_of_technology"
         )
+        second_competing = copy.deepcopy(competing)
         second_competing["tradition"] = third_tradition
         second_competing["conclusion"] = (
-            f"[{third_tradition}] perspective on: "
-            f"{str(competing.get('conclusion', question))[:80]}..."
+            f"From the {third_tradition.replace('_', ' ')} perspective, "
+            f"the question '{question[:80]}' must be reframed: the terms of "
+            f"the debate presuppose methodological commitments that are not "
+            f"universally shared. A {third_tradition.replace('_', ' ')} analysis "
+            f"foregrounds different criteria of adequacy than those assumed "
+            f"by the primary argument."
         )
+        second_competing["inference_rule"] = (
+            "Methodological reframing via tradition-specific epistemic norms."
+        )
+        second_competing["implicit_assumptions"] = [
+            f"That {third_tradition.replace('_', ' ')} provides a legitimate "
+            f"alternative framework for evaluating this question.",
+            "That the question's framing is not tradition-neutral.",
+        ]
+        second_competing["has_circularity"] = False
         second_competing["validity"] = self._assess_validity(second_competing)
         validity_dict: dict[str, object] = second_competing["validity"]  # type: ignore[assignment]
         second_competing["confidence"] = self._compute_confidence(

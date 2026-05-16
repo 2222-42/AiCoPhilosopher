@@ -48,13 +48,13 @@ _FALLACY_PATTERNS: list[tuple[str, str, str, str]] = [
     ),
     (
         "straw man",
-        r"straw\s*man|misrepresent",
+        r"straw\s*man|strawman",
         "medium",
         "Misrepresenting an opponent's position to make it easier to attack.",
     ),
     (
         "begging the question",
-        r"beg(ging)?\s+the\s+question|circular|cicular",
+        r"beg(ging)?\s+the\s+question|circular\b",
         "high",
         "The conclusion is assumed in the premises; the argument provides "
         "no independent support.",
@@ -196,9 +196,8 @@ class CriticalReviewAgent:
     # ------------------------------------------------------------------
     # Fallacy detection
     # ------------------------------------------------------------------
-    @staticmethod
-    def _detect_fallacies(
-        arguments: list[dict[str, object]],
+    def _detect_fallacies(  # noqa: C901 (two-stage detection is inherently complex)
+        self, arguments: list[dict[str, object]]
     ) -> list[dict[str, object]]:
         fallacies: list[dict[str, object]] = []
         for i, arg in enumerate(arguments):
@@ -218,15 +217,35 @@ class CriticalReviewAgent:
                         "matched_pattern": pattern,
                     })
 
-        # Also check for circularity via LogicEngine
+        self._detect_structural_fallacies(arguments, fallacies)
+
+        # Also check for circularity via substring containment
         for i, arg in enumerate(arguments):
             premises = cast("list[str]", arg.get("premises", []))
             conclusion = str(arg.get("conclusion", ""))
             if premises and conclusion:
-                # Simple circularity: conclusion appears verbatim in premises
-                conc_lower = conclusion.lower().strip(".")
+                # Circularity: conclusion appears in premises.
+                # Short conclusions (<30 chars) use word-boundary matching
+                # to avoid false positives like "Socrates is mortal" inside
+                # "Whatever entails that Socrates is mortal".
+                conc_clean = conclusion.strip().lower().rstrip(".")
+                if len(conc_clean) < 30:
+                    word_pat = re.compile(
+                        r"\b" + re.escape(conc_clean) + r"\b", re.IGNORECASE
+                    )
+
+                    def _word_boundary_match(premise: object) -> bool:
+                        return bool(word_pat.search(str(premise)))
+
+                    match_fn = _word_boundary_match
+                else:
+
+                    def _substring_match(premise: object) -> bool:
+                        return conc_clean in str(premise).lower()
+
+                    match_fn = _substring_match
                 for p in premises:
-                    if conc_lower in str(p).lower():
+                    if match_fn(p):
                         already = any(
                             f["argument_index"] == i and f["name"] == "begging the question"
                             for f in fallacies
@@ -244,6 +263,80 @@ class CriticalReviewAgent:
                             })
 
         return fallacies
+
+    @staticmethod
+    def _detect_structural_fallacies(
+        arguments: list[dict[str, object]],
+        fallacies: list[dict[str, object]],
+    ) -> None:
+        """Detect formal fallacies by analyzing argument structure, not self-labels."""
+        for i, arg in enumerate(arguments):
+            premises = cast("list[str]", arg.get("premises", []))
+            conclusion = str(arg.get("conclusion", ""))
+            if len(premises) != 2 or not conclusion:
+                continue
+            p0 = str(premises[0]).lower()
+            p1 = str(premises[1]).lower()
+            has_cond_0 = p0.startswith("if ") and (" then " in p0 or "," in p0)
+            has_cond_1 = p1.startswith("if ") and (" then " in p1 or "," in p1)
+            if not (has_cond_0 or has_cond_1):
+                continue
+            cond_premise = str(premises[0] if has_cond_0 else premises[1])
+            other_premise = str(premises[1] if has_cond_0 else premises[0])
+            then_parts = cond_premise.replace(", then ", " then ").split(" then ", 1)
+            consequent = then_parts[1].strip().rstrip(".") if len(then_parts) > 1 else ""
+            other_clean = other_premise.strip().rstrip(".")
+            conc_clean = conclusion.strip().rstrip(".")
+            if not (consequent and other_clean and conc_clean):
+                continue
+            # Affirming consequent
+            if other_clean in (consequent, consequent.lower()) and conc_clean not in (
+                consequent, consequent.lower()
+            ):
+                already = any(
+                    f["argument_index"] == i and f["name"] == "affirming the consequent"
+                    for f in fallacies
+                )
+                if not already:
+                    fallacies.append({
+                        "argument_index": i,
+                        "name": "affirming the consequent",
+                        "severity": "high",
+                        "explanation": (
+                            "Invalid form detected: the argument has a "
+                            "conditional premise and the second premise affirms "
+                            "the consequent rather than the antecedent."
+                        ),
+                        "matched_pattern": "structural:affirming_consequent",
+                    })
+            # Denying antecedent
+            antecedent = (
+                cond_premise.split(" if ", 1)[1].split(" then")[0]
+                if " if " in cond_premise
+                else cond_premise[3:].split(" then")[0]
+                if cond_premise.startswith("if ")
+                else ""
+            ).strip().rstrip(".")
+            if antecedent and other_clean in (
+                "not " + antecedent,
+                "not " + antecedent.lower(),
+            ):
+                already = any(
+                    f["argument_index"] == i and f["name"] == "denying the antecedent"
+                    for f in fallacies
+                )
+                if not already:
+                    fallacies.append({
+                        "argument_index": i,
+                        "name": "denying the antecedent",
+                        "severity": "high",
+                        "explanation": (
+                            "Invalid form detected: the argument denies the "
+                            "antecedent of the conditional rather than "
+                            "affirming it."
+                        ),
+                        "matched_pattern": "structural:denying_antecedent",
+                    })
 
     # ------------------------------------------------------------------
     # Validity / Soundness / Plausibility evaluation
@@ -530,8 +623,37 @@ class CriticalReviewAgent:
             try:
                 llm_result = await self._llm_review(arguments, reviews, fallacies)
                 if llm_result:
-                    fallacies = cast("list[dict[str, object]]", llm_result.get("fallacies", fallacies))
-                    counter_arguments = cast("list[dict[str, object]]", llm_result.get("counter_arguments", counter_arguments))
+                    llm_fallacies = cast(
+                        "list[dict[str, object]]",
+                        llm_result.get("fallacies", fallacies),
+                    )
+                    llm_counters = cast(
+                        "list[dict[str, object]]",
+                        llm_result.get("counter_arguments", counter_arguments),
+                    )
+                    # Validate LLM output preserves AC-005 invariant:
+                    # ≥1 counter-argument per input argument.
+                    num_args = len(arguments)
+                    llm_arg_indices = {
+                        int(cast("float", c.get("argument_index", -1)))
+                        for c in llm_counters
+                    }
+                    if len(llm_arg_indices) >= num_args:
+                        fallacies = llm_fallacies
+                        counter_arguments = llm_counters
+                    else:
+                        # LLM output insufficient; merge with heuristic
+                        heuristic_indices = {
+                            int(cast("float", c.get("argument_index", -1)))
+                            for c in counter_arguments
+                        }
+                        missing = heuristic_indices - llm_arg_indices
+                        merged = list(llm_counters)
+                        for c in counter_arguments:
+                            if int(cast("float", c.get("argument_index", -1))) in missing:
+                                merged.append(c)
+                        fallacies = llm_fallacies
+                        counter_arguments = merged
                     llm_used = True
             except (OSError, ConnectionError, RuntimeError):
                 pass
