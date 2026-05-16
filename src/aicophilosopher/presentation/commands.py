@@ -1,8 +1,95 @@
+"""CLI commands — wired to actual project creation and agent execution."""
+
+from __future__ import annotations
+
+import json
 import uuid
+from datetime import UTC, datetime
+from pathlib import Path
 
 import click
 
+DEFAULT_WORKSPACE = Path("projects")
+CURRENT_PROJECT_FILE = Path(".current_project")
 
+
+def _get_workspace() -> Path:
+    return DEFAULT_WORKSPACE
+
+
+def _ensure_workspace() -> None:
+    _get_workspace().mkdir(parents=True, exist_ok=True)
+
+
+def _project_dir(project_id: str) -> Path:
+    return _get_workspace() / project_id
+
+
+def _create_project_structure(project_id: str, title: str, question: str | None = None) -> Path:
+    """Create the full project directory tree."""
+    base = _project_dir(project_id)
+    base.mkdir(parents=True, exist_ok=True)
+
+    # metadata.json
+    metadata = {
+        "project_id": project_id,
+        "title": title,
+        "original_question": question or title,
+        "status": "created",
+        "created_at": datetime.now(UTC).isoformat(),
+        "workstreams": {},
+        "hypotheses": [],
+    }
+    (base / "metadata.json").write_text(json.dumps(metadata, indent=2))
+
+    # living_document.md with YAML frontmatter
+    frontmatter = f"""---
+title: "{title}"
+project_id: "{project_id}"
+status: "draft"
+created: "{datetime.now(UTC).isoformat()}"
+traditions_referenced: []
+---
+
+# {title}
+
+## Introduction
+
+{question or title}
+
+_This living document will be populated by AI Co-Philosopher agents as you run workstreams._
+"""
+    (base / "living_document.md").write_text(frontmatter)
+
+    # Subdirectories
+    for sub in ("workstreams", "conceptual_genealogy", "artifacts",
+                "margin_notes", "logs"):
+        (base / sub).mkdir(exist_ok=True)
+
+    # Derived export files (empty JSONL)
+    (base / "dialectical_history.jsonl").touch()
+    (base / "hypotheses.jsonl").touch()
+    (base / "uncertainty_registry.json").write_text("[]")
+
+    # Register as current project
+    CURRENT_PROJECT_FILE.write_text(project_id)
+
+    return base
+
+
+def _get_current_project_id() -> str | None:
+    if CURRENT_PROJECT_FILE.exists():
+        return CURRENT_PROJECT_FILE.read_text().strip()
+    return None
+
+
+def _save_current_project(project_id: str) -> None:
+    CURRENT_PROJECT_FILE.write_text(project_id)
+
+
+# ---------------------------------------------------------------------------
+# CLI group
+# ---------------------------------------------------------------------------
 @click.group()
 def cli() -> None:
     """AI Co-Philosopher — An agentic workbench for philosophical research."""
@@ -11,58 +98,208 @@ def cli() -> None:
 @cli.command()
 @click.argument("title")
 @click.option("--question", "-q", help="Initial philosophical question")
-@click.option("--directory", "-d", help="Custom workspace directory")
-def new_project(title: str, question: str | None = None, directory: str | None = None) -> None:
+def new_project(title: str, question: str | None = None) -> None:
     """Create a new philosophical research project."""
+    _ensure_workspace()
+    project_id = f"proj-{uuid.uuid4().hex[:8]}"
+    base = _create_project_structure(project_id, title, question)
+
     click.echo(f"Project created: {title}")
-    if question:
-        click.echo(f"Initial question: {question}")
+    click.echo(f"ID: {project_id}")
+    click.echo(f"Location: {base}")
+    click.echo()
     click.echo("Project Coordinator: Welcome to the AI Co-Philosopher.")
+    click.echo()
+    click.echo("Next steps:")
+    click.echo(f"  aicophilosopher refine-goal     — clarify your question")
+    click.echo(f"  aicophilosopher start-workstream literature_search")
 
 
 @cli.command()
-def list_projects() -> None:
+@click.argument("project_id", required=False)
+def list_projects(project_id: str | None = None) -> None:
     """List all projects with status summary."""
-    click.echo("No projects yet. Use `new project` to create one.")
+    _ensure_workspace()
+    projects = sorted(_get_workspace().iterdir())
+    if not projects:
+        click.echo("No projects yet. Use `new-project` to create one.")
+        return
+
+    for p in projects:
+        if p.is_dir():
+            meta_file = p / "metadata.json"
+            if meta_file.exists():
+                meta = json.loads(meta_file.read_text())
+                status = meta.get("status", "?")
+                title = meta.get("title", p.name)
+                click.echo(f"  [{p.name}] {title} — {status}")
+            else:
+                click.echo(f"  [{p.name}] (no metadata)")
 
 
 @cli.command()
-@click.argument("project_id")
-def open_project(project_id: str) -> None:
+@click.argument("project_id", required=False)
+def open_project(project_id: str | None = None) -> None:
     """Resume an existing project."""
-    click.echo(f"Opening project: {project_id}")
+    _ensure_workspace()
+    if project_id is None:
+        # Try to open current
+        project_id = _get_current_project_id()
+        if project_id is None:
+            click.echo("No current project. Use `open-project <id>` or `list-projects`.")
+            return
+    proj_dir = _project_dir(project_id)
+    if not proj_dir.exists():
+        click.echo(f"Project '{project_id}' not found.")
+        return
+    _save_current_project(project_id)
+    meta = json.loads((proj_dir / "metadata.json").read_text())
+    click.echo(f"Opened project: {meta.get('title', project_id)}")
+    click.echo(f"Status: {meta.get('status', '?')}")
 
 
 @cli.command()
 @click.argument("project_id")
 def archive_project(project_id: str) -> None:
     """Archive a completed or inactive project."""
+    proj_dir = _project_dir(project_id)
+    if not proj_dir.exists():
+        click.echo(f"Project '{project_id}' not found.")
+        return
     click.confirm("This will make the project read-only. Continue?", abort=True)
+    meta = json.loads((proj_dir / "metadata.json").read_text())
+    meta["status"] = "archived"
+    (proj_dir / "metadata.json").write_text(json.dumps(meta, indent=2))
     click.echo(f"Project '{project_id}' archived.")
 
 
 @cli.command()
 def refine_goal() -> None:
-    """Enter or continue dialectical clarification dialogue."""
+    """Enter Socratic clarification dialogue."""
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project. Use `new-project` or `open-project` first.")
+        return
     click.echo("Project Coordinator: Let's refine your research goal.")
-    click.echo("What aspects of this question would you like to focus on?")
+    click.echo()
+    click.echo("[This is an interactive dialogue. In full MVP, the coordinator")
+    click.echo(" agent engages in Socratic questioning until the goal is refined.]")
+    click.echo()
+    click.echo("For now, you can launch workstreams directly:")
+    click.echo("  aicophilosopher start-workstream argumentation")
 
 
 @cli.command()
 @click.argument("workstream_type", type=click.Choice([
-    "literature_search", "concept_analysis", "cross_traditional_comparison",
+    "literature_search", "concept_analysis", "cross_traditional",
     "argumentation", "critical_review", "synthesis",
 ]))
-@click.option("--goal", "-g", help="Goal ID to attach workstream to")
 @click.option("--instructions", "-i", help="Additional instructions")
-def start_workstream(workstream_type: str, goal: str | None = None, instructions: str | None = None) -> None:
-    """Propose and launch a new workstream."""
-    click.echo(f"Workstream '{workstream_type}' proposed.")
-    if goal:
-        click.echo(f"Attached to goal: {goal}")
-    if instructions:
-        click.echo(f"Instructions: {instructions}")
-    click.echo("Project Coordinator: Do you want to proceed with this workstream? (y/N)")
+def start_workstream(workstream_type: str, instructions: str | None = None) -> None:
+    """Launch a workstream using the appropriate AI agent."""
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project. Use `new-project` or `open-project` first.")
+        return
+
+    click.echo(f"Launching {workstream_type} workstream...")
+
+    # Dispatch to actual agent
+    import asyncio
+
+    async def _run() -> None:
+        if workstream_type == "argumentation":
+            from aicophilosopher.application.agents.argumentation import (
+                ArgumentationAgent,
+            )
+            agent = ArgumentationAgent(agent_id=f"cli-{proj_id}")
+            result = await agent.run(
+                instructions or "Analyze the key arguments for and against this position."
+            )
+            click.echo()
+            click.echo("=== Argumentation Results ===")
+            for i, arg in enumerate(result["arguments"], 1):
+                click.echo(f"\nPosition {i} [{arg.get('tradition', '?')}]:")
+                click.echo(f"  Conclusion: {arg.get('conclusion', '')}")
+                click.echo(f"  Confidence: {arg.get('confidence', '?')}")
+            click.echo(f"\nCompeting positions: {len(result.get('competing_positions', []))}")
+
+        elif workstream_type == "critical_review":
+            from aicophilosopher.application.agents.critical_review import (
+                CriticalReviewAgent,
+            )
+            agent = CriticalReviewAgent(agent_id=f"cli-{proj_id}")
+            # First get arguments, then review
+            from aicophilosopher.application.agents.argumentation import (
+                ArgumentationAgent,
+            )
+            arg_agent = ArgumentationAgent(agent_id=f"cli-arg-{proj_id}")
+            arg_result = await arg_agent.run(
+                instructions or "Analyze the key arguments."
+            )
+            review_input = arg_result["arguments"] + arg_result["competing_positions"]
+            result = await agent.run(review_input)
+            click.echo()
+            click.echo("=== Critical Review ===")
+            click.echo(f"Fallacies found: {len(result['fallacies'])}")
+            for f in result["fallacies"]:
+                click.echo(f"  [{f.get('severity', '?')}] {f.get('name', '?')}")
+            click.echo(f"Counter-arguments: {len(result['counter_arguments'])}")
+
+        elif workstream_type == "cross_traditional":
+            from aicophilosopher.application.agents.cross_traditional import (
+                CrossTraditionalComparisonAgent,
+            )
+            agent = CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}")
+            result = await agent.run(instructions or "abstraction")
+            click.echo()
+            click.echo("=== Cross-Traditional Comparison ===")
+            click.echo(f"Bridges found: {len(result['bridge_map'])}")
+            click.echo(f"Incommensurabilities: {len(result['incommensurability_register'])}")
+
+        elif workstream_type == "synthesis":
+            from aicophilosopher.application.agents.synthesis import (
+                SynthesisAgent,
+            )
+            agent = SynthesisAgent(agent_id=f"cli-{proj_id}")
+            result = await agent.run([
+                {
+                    "workstream_id": "ws-1",
+                    "type": "argumentation",
+                    "results": "Argument analysis results would go here.",
+                    "confidence": 0.7,
+                    "claims": [{"text": "Key finding", "confidence": 0.8,
+                                "origin": "analysis"}],
+                },
+            ])
+            click.echo()
+            click.echo("=== Synthesis ===")
+            click.echo(result["synthesized_document"][:500])
+
+        elif workstream_type == "literature_search":
+            from aicophilosopher.application.agents.literature_search import (
+                LiteratureSearchAgent,
+            )
+            agent = LiteratureSearchAgent(agent_id=f"cli-{proj_id}")
+            result = await agent.run(instructions or "abstraction")
+            click.echo()
+            click.echo("=== Literature Search ===")
+            click.echo(f"Results: {result.get('result_count', 0)}")
+            click.echo(f"Bridge notes: {len(result.get('bridge_notes', []))}")
+
+        elif workstream_type == "concept_analysis":
+            from aicophilosopher.application.agents.concept_analysis import (
+                ConceptAnalysisAgent,
+            )
+            agent = ConceptAnalysisAgent(agent_id=f"cli-{proj_id}")
+            result = await agent.run(instructions or "abstraction")
+            click.echo()
+            click.echo("=== Concept Analysis ===")
+            click.echo(f"Concept map: {result.get('concept_map', 'no data')}")
+
+    asyncio.run(_run())
+    click.echo()
+    click.echo(f"Workstream '{workstream_type}' completed.")
 
 
 @cli.command()
@@ -84,74 +321,106 @@ def resume(workstream_id: str) -> None:
 @click.argument("instruction")
 def steer(workstream_id: str, instruction: str) -> None:
     """Direct steering of a specific workstream."""
-    click.echo(f"Steering command received for '{workstream_id}': {instruction}")
-
-
-@cli.command()
-@click.option("--status", "filter_status", type=click.Choice(["active", "abandoned", "refined", "refuted"]), help="Filter by hypothesis status")
-@click.option("--tradition", help="Filter by epistemic tradition")
-def show_hypotheses(filter_status: str | None = None, tradition: str | None = None) -> None:
-    """Display hypothesis history with epistemic status."""
-    click.echo("Hypothesis History:")
-    click.echo("  No hypotheses yet. Start a workstream to generate hypotheses.")
-
-
-@cli.command()
-def show_dead_ends() -> None:
-    """Display failed explorations and refuted arguments."""
-    click.echo("Failed Explorations (Dead Ends):")
-    click.echo("  No dead ends yet.")
-
-
-@cli.command()
-@click.argument("text")
-@click.option("--attach-to", help="Hypothesis/claim/workstream ID to link note to")
-def add_note(text: str, attach_to: str | None = None) -> None:
-    """Add user note to workspace."""
-    note_id = f"note-{uuid.uuid4().hex[:4]}"
-    click.echo(f"Note added: {note_id}")
-    if attach_to:
-        click.echo(f"Attached to: {attach_to}")
-
-
-@cli.command()
-@click.argument("topic")
-@click.option("--traditions", "-t", help="Specific traditions to compare")
-def compare_traditions(topic: str, traditions: str | None = None) -> None:
-    """Request cross-traditional comparison."""
-    click.echo(f"Comparing traditions on: {topic}")
-    if traditions:
-        click.echo(f"Traditions: {traditions}")
-
-
-@cli.command()
-def export() -> None:
-    """Export living document to external format."""
-    click.echo("Export format: markdown (default)")
-    click.echo("Use `export latex` for LaTeX output (post-MVP).")
+    click.echo(f"Steering '{workstream_id}': {instruction}")
 
 
 @cli.command()
 def status() -> None:
     """Display system-wide status overview."""
-    click.echo("Epistemic Status Overview:")
-    click.echo("  Active hypotheses: 0")
-    click.echo("  Refuted: 0")
-    click.echo("  Under review: 0")
-    click.echo("  Stalled: 0")
-    click.echo()
-    click.echo("Active Workstreams:")
-    click.echo("  No active workstreams.")
-    click.echo()
-    click.echo("LLM Backend: ollama (connected)")
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project.")
+        return
+    proj_dir = _project_dir(proj_id)
+    if not proj_dir.exists():
+        click.echo(f"Project directory missing: {proj_dir}")
+        return
+
+    meta = json.loads((proj_dir / "metadata.json").read_text())
+    click.echo(f"Project: {meta.get('title', proj_id)}")
+    click.echo(f"Status: {meta.get('status', '?')}")
+    click.echo(f"Workstreams: {len(meta.get('workstreams', {}))}")
+    click.echo(f"Hypotheses: {len(meta.get('hypotheses', []))}")
 
 
 @cli.command()
 def show_document() -> None:
     """Display the current living document."""
-    click.echo("# Living Document")
-    click.echo()
-    click.echo("No document content yet. Start a workstream to generate content.")
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project.")
+        return
+    doc_path = _project_dir(proj_id) / "living_document.md"
+    if not doc_path.exists():
+        click.echo("No document yet.")
+        return
+    click.echo(doc_path.read_text())
+
+
+@cli.command()
+@click.option("--status", "filter_status",
+              type=click.Choice(["active", "abandoned", "refined", "refuted"]))
+def show_hypotheses(filter_status: str | None = None) -> None:
+    """Display hypothesis history."""
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project.")
+        return
+    click.echo("No hypotheses yet. Start a workstream to generate them.")
+
+
+@cli.command()
+def show_dead_ends() -> None:
+    """Display failed explorations."""
+    click.echo("No dead ends yet.")
+
+
+@cli.command()
+@click.argument("text")
+@click.option("--attach-to", help="Hypothesis/claim ID to attach to")
+def add_note(text: str, attach_to: str | None = None) -> None:
+    """Add user note to workspace."""
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        click.echo("No active project.")
+        return
+    note_id = f"note-{uuid.uuid4().hex[:4]}"
+    click.echo(f"Note [{note_id}]: {text}")
+    if attach_to:
+        click.echo(f"  Attached to: {attach_to}")
+
+
+@cli.command()
+@click.argument("topic")
+@click.option("--traditions", "-t", help="Comma-separated traditions")
+def compare_traditions(topic: str, traditions: str | None = None) -> None:
+    """Cross-traditional comparison using the agent."""
+    import asyncio
+    from aicophilosopher.application.agents.cross_traditional import (
+        CrossTraditionalComparisonAgent,
+    )
+
+    trad_list = [t.strip() for t in traditions.split(",")] if traditions else None
+
+    async def _run() -> None:
+        agent = CrossTraditionalComparisonAgent(agent_id="cli-ct")
+        kwargs: dict[str, object] = {}
+        if trad_list:
+            kwargs["traditions"] = trad_list
+        result = await agent.run(topic, **kwargs)
+        click.echo(f"\n=== Cross-Traditional: {topic} ===")
+        click.echo(f"Bridges: {len(result['bridge_map'])}")
+        click.echo(f"Incommensurabilities: {len(result['incommensurability_register'])}")
+
+    asyncio.run(_run())
+
+
+@cli.command()
+@click.argument("fmt", required=False, default="markdown",
+              type=click.Choice(["markdown", "html", "latex"]))
+def export(fmt: str = "markdown") -> None:
+    """Export living document."""
+    click.echo(f"Export format: {fmt}")
 
 
 @cli.command()
@@ -162,14 +431,14 @@ def config(key: str | None = None, value: str | None = None) -> None:
     if key is None:
         click.echo("Current configuration:")
         click.echo("  llm.backend: ollama")
-        click.echo("  privacy.allow_external_search: false")
+        click.echo("  workspace: ./projects/")
+    elif value is None:
+        raise click.UsageError(f"Usage: config <key> <value>")
     else:
-        if value is None:
-            raise click.UsageError(f"'config {key}' requires a value. Usage: config <key> <value>")
-        click.echo(f"Config '{key}' set to: {value}")
+        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP)")
 
 
 @cli.command()
 def request_help() -> None:
-    """Explicitly request human assistance flag from coordinator."""
-    click.echo("Help request sent to Project Coordinator.")
+    """Request human assistance from Project Coordinator."""
+    click.echo("Help request sent.")
