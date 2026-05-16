@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
 """Performance benchmark (T-076) + Memory profiling (T-078).
 
-Verifies:
-  AC-007: workstream lifecycle (start/pause/resume/status) <30s
-  AC-008: hypothesis/argument retrieval <5s
-  AC-001: multi-turn agent dialogue <2min per turn
-  T-078: peak memory <500MB under 5-workstream concurrent load
+NOTE: This benchmark measures agent-level response times in heuristic
+(no-LLM) mode.  Full production AC validation requires the running
+workstream coordinator, persistence layer, and CLI lifecycle — these
+are exercised by the integration test suite, not this script.
+
+AC-007: Agent pipeline simulating workstream lifecycle <30s
+AC-008: Hypothesis generation + dead-end extraction <5s
+AC-001: Per-turn agent dialogue <2min/turn (5 turns)
+T-078: Peak memory <500MB under 5 concurrent agent loads
 """
 
 from __future__ import annotations
 
 import asyncio
+import sys
 import time
 import tracemalloc
+from typing import Any
 
 from aicophilosopher.application.agents.argumentation import ArgumentationAgent
 from aicophilosopher.application.agents.concept_analysis import ConceptAnalysisAgent
@@ -23,8 +29,7 @@ from aicophilosopher.application.agents.cross_traditional import (
 from aicophilosopher.application.agents.literature_search import LiteratureSearchAgent
 from aicophilosopher.application.agents.synthesis import SynthesisAgent
 
-# Known-good arguments for review agent
-SAMPLE_ARGUMENT = {
+SAMPLE_ARGUMENT: dict[str, object] = {
     "premises": ["If P then Q", "Q"],
     "conclusion": "P",
     "inference_rule": "Affirming the consequent",
@@ -32,7 +37,7 @@ SAMPLE_ARGUMENT = {
     "confidence": 0.3,
 }
 
-SAMPLE_SYNTH_OUTPUT = [{
+SAMPLE_SYNTH_INPUT: list[dict[str, object]] = [{
     "workstream_id": "ws-1",
     "type": "argumentation",
     "results": "## Test Result",
@@ -40,237 +45,200 @@ SAMPLE_SYNTH_OUTPUT = [{
     "claims": [{"text": "test claim", "confidence": 0.8, "origin": "test"}],
 }]
 
-SAMPLE_ARGUMENT_OUTPUT = [{
-    "workstream_id": "ws-arg",
-    "type": "argumentation",
-    "results": "## Argument",
-    "confidence": 0.7,
-    "claims": [{"text": "Compatibilism is viable", "confidence": 0.8,
-                "origin": "arg"}],
-}, {
-    "workstream_id": "ws-cr",
-    "type": "critical_review",
-    "results": "## Review",
-    "confidence": 0.6,
-    "claims": [{"text": "Fallacy detected", "confidence": 0.7, "origin": "cr"}],
-}]
-
 
 class Timer:
-    """Context manager: measure elapsed time with label."""
+    """Measure elapsed wall-clock time."""
 
     def __init__(self, label: str) -> None:
         self.label = label
         self.elapsed: float = 0.0
 
     def __enter__(self) -> Timer:
-        self.start = time.perf_counter()
+        self._start = time.perf_counter()
         return self
 
     def __exit__(self, *args: object) -> None:
-        self.elapsed = time.perf_counter() - self.start
-
-    def result(self) -> dict[str, float]:
-        return {"label": self.label, "time_s": round(self.elapsed, 4)}
+        self.elapsed = time.perf_counter() - self._start
 
 
 # ---------------------------------------------------------------------------
-# AC-007: Workstream lifecycle benchmark
+# AC-007: Agent pipeline (workstream lifecycle proxy)
 # ---------------------------------------------------------------------------
-async def benchmark_ac007_workstream_lifecycle() -> dict[str, float]:
-    """Simulate workstream start→run→pause→resume→status cycle."""
-    with Timer("ac007_workstream_lifecycle") as t:
-        # Initialize agents
-        arg = ArgumentationAgent("ws-bench-arg")
-        cr = CriticalReviewAgent("ws-bench-cr")
-        syn = SynthesisAgent("ws-bench-syn")
+async def bench_ac007() -> tuple[str, float]:
+    label = "ac007_agent_pipeline"
+    with Timer(label) as t:
+        arg = ArgumentationAgent("ws-arg")
+        cr = CriticalReviewAgent("ws-cr")
+        syn = SynthesisAgent("ws-syn")
 
-        # Run argumentation (workstream start)
         arg_result = await arg.run("Is free will compatible with determinism?")
-
-        # Simulate pause → resume cycle: re-run with different question
-        arg_result2 = await arg.run("What is the nature of consciousness?")
-
-        # Run review on the arguments
         review_input = arg_result["arguments"] + arg_result["competing_positions"]
         cr_result = await cr.run(review_input)
+        syn_result = await syn.run([{
+            "workstream_id": "ws-arg",
+            "type": "argumentation",
+            "results": str(arg_result.get("arguments", [{}])[0].get("conclusion", "")),
+            "confidence": 0.7,
+            "claims": [{"text": "test", "confidence": 0.8, "origin": "arg"}],
+        }])
 
-        # Synthesize (status reflection)
-        syn_result = await syn.run(SAMPLE_ARGUMENT_OUTPUT)
-
-        # Verify outputs
-        assert arg_result["arguments"]
         assert cr_result["reviews"]
         assert syn_result["synthesized_document"]
 
-    return t.result()
+    return label, t.elapsed
 
 
 # ---------------------------------------------------------------------------
-# AC-008: Hypothesis/argument retrieval benchmark
+# AC-008: Hypothesis generation + filtering
 # ---------------------------------------------------------------------------
-async def benchmark_ac008_retrieval() -> dict[str, float]:
-    """Simulate show-hypotheses / show-dead-ends retrieval."""
-    with Timer("ac008_hypothesis_retrieval") as t:
-        # Run argumentation to generate hypotheses
-        arg = ArgumentationAgent("ret-bench-arg")
+async def bench_ac008() -> tuple[str, float]:
+    label = "ac008_hypothesis_filtering"
+    with Timer(label) as t:
+        arg = ArgumentationAgent("ret-arg")
         result = await arg.run("Does God exist?")
 
-        # Simulate hypothesis listing (extract all claims)
-        hypotheses = []
+        # Extract all hypotheses
+        hypotheses: list[str] = []
         for a in result["arguments"]:
-            if a.get("conclusion"):
-                hypotheses.append(a["conclusion"])
+            conc = a.get("conclusion")
+            if conc:
+                hypotheses.append(str(conc))
         for p in result.get("competing_positions", []):
-            if p.get("conclusion"):
-                hypotheses.append(p["conclusion"])
+            conc = p.get("conclusion")
+            if conc:
+                hypotheses.append(str(conc))
 
-        # Simulate dead-ends retrieval: filter by low confidence
-        dead_ends = [
-            a for a in result["arguments"]
-            if a.get("confidence", 0) < 0.5
-        ]
+        # Identify low-confidence as dead ends
+        dead_ends = [a for a in result["arguments"]
+                      if float(a.get("confidence", 0)) < 0.5]
 
         assert len(hypotheses) >= 2
         assert isinstance(dead_ends, list)
 
-    return t.result()
+    return label, t.elapsed
 
 
 # ---------------------------------------------------------------------------
-# AC-001: Multi-turn clarification loop benchmark
+# AC-001: Per-turn timing (5-turn loop)
 # ---------------------------------------------------------------------------
-async def benchmark_ac001_clarification() -> dict[str, float]:
-    """Simulate ≤5 turns of Socratic clarification dialogue."""
-    with Timer("ac001_clarification_turns") as t:
-        questions = [
-            "Is free will compatible with determinism?",
-            "What is the nature of consciousness?",
-            "Does God exist?",
-            "What is abstraction?",
-            "Can machines think?",
-        ]
+async def bench_ac001() -> tuple[str, float, float]:
+    """Returns (label, max_turn_time, total_time)."""
+    label = "ac001_clarification_turns"
+    questions = [
+        "Is free will compatible with determinism?",
+        "What is the nature of consciousness?",
+        "Does God exist?",
+        "What is abstraction?",
+        "Can machines think?",
+    ]
 
-        arg = ArgumentationAgent("clar-bench")
-        for q in questions[:5]:  # max 5 turns
-            result = await arg.run(q)
-            assert result["arguments"]
+    turn_times: list[float] = []
+    t_total = Timer("ac001_total")
+    with t_total:
+        arg = ArgumentationAgent("clar-arg")
+        for q in questions:
+            with Timer(f"turn_{q[:20]}") as tt:
+                result = await arg.run(q)
+                assert result["arguments"]
+            turn_times.append(tt.elapsed)
 
-    return t.result()
+    return label, max(turn_times), t_total.elapsed
 
 
 # ---------------------------------------------------------------------------
-# Agent-level benchmarks
+# Agent baselines
 # ---------------------------------------------------------------------------
-async def benchmark_agents() -> list[dict[str, float]]:
-    """Run individual agents for baseline timing."""
-    results: list[dict[str, float]] = []
-
-    agents: list[tuple[str, object, object]] = [
+async def bench_agents() -> list[tuple[str, float]]:
+    results: list[tuple[str, float]] = []
+    agents: list[tuple[str, Any, Any]] = [
         ("lit_search", LiteratureSearchAgent("bl"), "abstraction"),
         ("concept_analysis", ConceptAnalysisAgent("bc"), "abstraction"),
     ]
-
-    for name, agent, input_data in agents:
+    for name, agent, inp in agents:
         with Timer(name) as t:
-            await agent.run(input_data)  # type: ignore[arg-type]
-        results.append(t.result())
-
+            await agent.run(inp)  # type: ignore[arg-type]
+        results.append((name, t.elapsed))
     return results
 
 
 # ---------------------------------------------------------------------------
-# T-078: Memory profiling with 5 concurrent workstreams
+# T-078: Memory with 5 concurrent agent types
 # ---------------------------------------------------------------------------
-def benchmark_concurrent_memory() -> dict[str, float]:
-    """Measure peak memory under 5 concurrent workstream load."""
+def bench_memory() -> tuple[str, float]:
     tracemalloc.start()
 
     async def _run() -> None:
-        # 5 different workstream types
         tasks = [
-            ArgumentationAgent("mem-arg").run("Is free will real?"),
-            CriticalReviewAgent("mem-cr").run([SAMPLE_ARGUMENT]),
-            CrossTraditionalComparisonAgent("mem-ct").run("abstraction"),
-            SynthesisAgent("mem-syn").run(SAMPLE_SYNTH_OUTPUT),
-            ConceptAnalysisAgent("mem-ca").run("consciousness"),
+            ArgumentationAgent("m1").run("free will"),
+            CriticalReviewAgent("m2").run([SAMPLE_ARGUMENT]),
+            CrossTraditionalComparisonAgent("m3").run("abstraction"),
+            SynthesisAgent("m4").run(SAMPLE_SYNTH_INPUT),
+            ConceptAnalysisAgent("m5").run("consciousness"),
         ]
         await asyncio.gather(*tasks)
 
     asyncio.run(_run())
-    current, peak = tracemalloc.get_traced_memory()
+    _current, peak = tracemalloc.get_traced_memory()
     tracemalloc.stop()
-    return {
-        "label": "t078_concurrent_5_workstreams",
-        "peak_memory_mb": round(peak / (1024 * 1024), 2),
-        "current_memory_mb": round(current / (1024 * 1024), 2),
-    }
+    return "t078_memory_5_agents", round(peak / (1024 * 1024), 2)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-def main() -> None:
+def main() -> int:
     print("=" * 60)
-    print("AiCoPhilosopher Performance Benchmark (T-076 + T-078)")
+    print("AiCoPhilosopher Benchmark (T-076 + T-078)")
+    print("Agent-level heuristic mode — see notes in source")
     print("=" * 60)
 
-    all_pass = True
-    results: list[dict[str, float]] = []
+    failed = 0
 
-    # AC-007: workstream lifecycle
-    print("\n--- AC-007: Workstream Lifecycle (< 30s) ---")
-    r = asyncio.run(benchmark_ac007_workstream_lifecycle())
-    results.append(r)
-    status = "PASS" if r["time_s"] < 30.0 else "FAIL"
-    if status == "FAIL":
-        all_pass = False
-    print(f"  {r['label']:35s}: {r['time_s']:8.4f}s [{status}]")
+    def check(name: str, val: float, limit: float, unit: str = "s") -> str:
+        nonlocal failed
+        ok = val < limit
+        if not ok:
+            failed += 1
+        status = "PASS" if ok else "FAIL"
+        print(f"  {name:40s} {val:8.4f}{unit} [{status}]  limit={limit}{unit}")
+        return status
 
-    # AC-008: hypothesis retrieval
-    print("\n--- AC-008: Hypothesis Retrieval (< 5s) ---")
-    r = asyncio.run(benchmark_ac008_retrieval())
-    results.append(r)
-    status = "PASS" if r["time_s"] < 5.0 else "FAIL"
-    if status == "FAIL":
-        all_pass = False
-    print(f"  {r['label']:35s}: {r['time_s']:8.4f}s [{status}]")
+    # AC-007
+    print("\n--- AC-007: Agent pipeline (< 30s) ---")
+    label, t = asyncio.run(bench_ac007())
+    check(label, t, 30.0)
 
-    # AC-001: clarification turns
-    print("\n--- AC-001: Clarification ≤5 turns (< 2min/turn) ---")
-    r = asyncio.run(benchmark_ac001_clarification())
-    results.append(r)
-    status = "PASS" if r["time_s"] < 600.0 else "FAIL"
-    if status == "FAIL":
-        all_pass = False
-    print(f"  {r['label']:35s}: {r['time_s']:8.4f}s [{status}]")
+    # AC-008
+    print("\n--- AC-008: Hypothesis filtering (< 5s) ---")
+    label, t = asyncio.run(bench_ac008())
+    check(label, t, 5.0)
+
+    # AC-001 (per-turn)
+    print("\n--- AC-001: Per-turn agent dialogue (< 120s/turn) ---")
+    label, max_turn, total = asyncio.run(bench_ac001())
+    check(f"{label}_max_turn", max_turn, 120.0)
+    check(f"{label}_total_5turns", total, 600.0)
 
     # Agent baselines
     print("\n--- Agent Baselines ---")
-    for r in asyncio.run(benchmark_agents()):
-        results.append(r)
-        status = "PASS" if r["time_s"] < 5.0 else "FAIL"
-        print(f"  {r['label']:35s}: {r['time_s']:8.4f}s [{status}]")
+    for name, t in asyncio.run(bench_agents()):
+        check(name, t, 5.0)
 
-    # T-078: memory
-    print("\n--- T-078: Memory (< 500MB, 5 concurrent workstreams) ---")
-    r = benchmark_concurrent_memory()
-    results.append(r)
-    status = "PASS" if r["peak_memory_mb"] < 500 else "FAIL"
-    if status == "FAIL":
-        all_pass = False
-    print(f"  Peak memory:     {r['peak_memory_mb']:8.1f} MB [{status}]")
-    print(f"  Current memory:  {r['current_memory_mb']:8.1f} MB")
+    # T-078
+    print("\n--- T-078: Memory (< 500MB, 5 concurrent agents) ---")
+    label, peak_mb = bench_memory()
+    check(label, peak_mb, 500.0, unit="MB")
 
     # Summary
     print("\n" + "=" * 60)
-    if all_pass:
+    if failed == 0:
         print("RESULT: ALL CHECKS PASSED")
     else:
-        print("RESULT: SOME CHECKS FAILED")
-    print(f"Total benchmarks: {len(results)}")
+        print(f"RESULT: {failed} CHECK(S) FAILED")
+    print(f"Mode: heuristic (no LLM) — production timing may differ with LLM")
     print("=" * 60)
+    return 1 if failed > 0 else 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
