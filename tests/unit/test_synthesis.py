@@ -77,11 +77,23 @@ class TestEpistemicAnnotations:
         assert "annotations" in result
         annotations = result["annotations"]
         assert isinstance(annotations, list)
+        assert len(annotations) >= 2, (
+            f"Expected ≥2 annotations for non-trivial claims, got {len(annotations)}"
+        )
+        required_fields = {"annotation_id", "claim", "confidence", "origin",
+                           "workstream_id", "workstream_type"}
+        for ann in annotations:
+            missing = required_fields - set(ann.keys())
+            assert not missing, f"Annotation missing fields: {missing}"
 
     @pytest.mark.asyncio
     async def test_annotations_link_to_source(self, agent: Any) -> None:
         result = await agent.run(SAMPLE_OUTPUTS)
-        for ann in result.get("annotations", []):
+        annotations = result.get("annotations", [])
+        assert len(annotations) >= 2, (
+            "Must have annotations from sample outputs"
+        )
+        for ann in annotations:
             assert "source" in ann or "origin" in ann or "workstream_id" in ann, (
                 "Each annotation must trace back to its source workstream"
             )
