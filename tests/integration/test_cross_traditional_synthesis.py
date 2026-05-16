@@ -34,26 +34,40 @@ class TestCrossTraditionalSynthesis:
 
         # 'abstraction' should have bridges from BRIDGE_NOTES
         bridge_traditions: set[str] = set()
+        has_high_confidence_bridge = False
+        has_non_contested = False
         for b in result["bridge_map"]:
             bridge_traditions.add(str(b["source_tradition"]))
             bridge_traditions.add(str(b["target_tradition"]))
-        assert len(bridge_traditions) >= 2
+            if float(b.get("confidence", 0)) >= 0.65:
+                has_high_confidence_bridge = True
+            if not b.get("contested", True):
+                has_non_contested = True
+        assert len(bridge_traditions) >= 2, "Must span ≥2 traditions"
+        assert has_high_confidence_bridge, (
+            "BRIDGE_NOTES lookup should yield high-confidence bridges"
+        )
+        assert has_non_contested, (
+            "Abstraction has well-established cross-traditional bridges"
+        )
 
     @pytest.mark.asyncio
     async def test_truth_incommensurability(self, agent: Any) -> None:
         """Truth should trigger the analytic/continental incommensurability pattern."""
         result = await agent.run("truth")
         register = result["incommensurability_register"]
-        descriptions = " ".join(
-            str(e.get("explanation", "")) for e in register
+        # Must reference specific traditions, not just generic fallback
+        has_analytic = any(
+            "analytic" in str(e.get("explanation", "")).lower()
+            for e in register
         )
-        # Should mention analytic/continental or Tarski/Heidegger
-        has_incomm = (
-            "analytic" in descriptions.lower()
-            and "continental" in descriptions.lower()
+        has_continental = any(
+            "continental" in str(e.get("explanation", "")).lower()
+            for e in register
         )
-        assert has_incomm or len(register) >= 1, (
-            "Truth should surface incommensurability between traditions"
+        assert has_analytic and has_continental, (
+            "Truth must surface analytic/continental incommensurability "
+            "(Tarski vs Heidegger), not just generic fallback"
         )
 
     @pytest.mark.asyncio
