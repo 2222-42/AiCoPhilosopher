@@ -30,7 +30,7 @@ python -c "import aicophilosopher; print(aicophilosopher.__version__)"
 ### 1. Create a project
 
 ```bash
-aicophilosopher new project "What is the nature of abstraction?"
+aicophilosopher new-project "What is the nature of abstraction?"
 ```
 
 This creates a persistent workspace under `projects/<project_id>/`.
@@ -38,7 +38,7 @@ This creates a persistent workspace under `projects/<project_id>/`.
 ### 2. Refine your question
 
 ```bash
-aicophilosopher refine goal
+aicophilosopher refine-goal
 ```
 
 The Project Coordinator Agent will engage in Socratic dialogue to clarify your question across philosophical traditions. Respond to its questions until the goal is approved.
@@ -46,24 +46,24 @@ The Project Coordinator Agent will engage in Socratic dialogue to clarify your q
 ### 3. Launch workstreams
 
 ```bash
-aicophilosopher start workstream literature_search -t "analytic,continental,philosophy_of_technology"
-aicophilosopher start workstream concept_analysis
-aicophilosopher start workstream argumentation
+aicophilosopher start-workstream literature_search -t "analytic,continental,philosophy_of_technology"
+aicophilosopher start-workstream concept_analysis
+aicophilosopher start-workstream argumentation
 ```
 
 ### 4. Monitor progress
 
 ```bash
 aicophilosopher status
-aicophilosopher show document
+aicophilosopher show-document
 ```
 
 ### 5. Review and steer
 
 ```bash
-aicophilosopher show hypotheses
-aicophilosopher show dead ends
-aicophilosopher steers <workstream_id> "deepen analysis on abstraction layers"
+aicophilosopher show-hypotheses
+aicophilosopher show-dead-ends
+aicophilosopher steer <workstream_id> "deepen analysis on abstraction layers"
 ```
 
 ### 6. Export
@@ -79,7 +79,7 @@ The AI Co-Philosopher operates fully offline by default. To disable external sea
 
 ```bash
 export ALLOW_EXTERNAL_SEARCH=false
-aicophilosopher new project "What is truth?"
+aicophilosopher new-project "What is truth?"
 ```
 
 All core features (argumentation, concept analysis, critical review, synthesis) work without network access.
