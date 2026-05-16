@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from aicophilosopher.application.agents.literature_search import BRIDGE_NOTES
+from aicophilosopher.domain.data.bridge_notes import BRIDGE_NOTES
 from aicophilosopher.domain.services.tradition_manager import (
     DEFAULT_DOMAINS,
     TraditionManager,
@@ -155,28 +155,39 @@ class CrossTraditionalComparisonAgent:
         # 4. Colonization warnings
         warnings = self._build_colonization_warnings(topic, traditions)
 
-        # 5. Overall confidence
+        # 5. Overall confidence (initial; may be recomputed after LLM)
         confidence = self._compute_overall_confidence(
             bridge_map, incomm_register, warnings
         )
 
-        # 6. LLM augmentation (best-effort)
+        # 6. LLM augmentation (best-effort, with output validation)
         llm_used = False
         if self._llm is not None and kwargs.get("use_llm", True):
             try:
                 llm_result = await self._llm_compare(topic, traditions, bridge_map)
                 if llm_result:
-                    bridge_map = cast(
-                        "list[dict[str, object]]",
-                        llm_result.get("bridge_map", bridge_map),
-                    )
-                    incomm_register = cast(
-                        "list[dict[str, object]]",
-                        llm_result.get(
-                            "incommensurability_register", incomm_register
-                        ),
-                    )
+                    raw_bridges = llm_result.get("bridge_map")
+                    raw_incomm = llm_result.get("incommensurability_register")
+                    # Validate shape before accepting
+                    if isinstance(raw_bridges, list) and all(
+                        isinstance(b, dict) and "source_tradition" in b
+                        for b in raw_bridges
+                    ):
+                        bridge_map = cast(
+                            "list[dict[str, object]]", raw_bridges
+                        )
+                    if isinstance(raw_incomm, list) and all(
+                        isinstance(e, dict) and "explanation" in e
+                        for e in raw_incomm
+                    ):
+                        incomm_register = cast(
+                            "list[dict[str, object]]", raw_incomm
+                        )
                     llm_used = True
+                    # Recompute confidence with potentially updated data
+                    confidence = self._compute_overall_confidence(
+                        bridge_map, incomm_register, warnings
+                    )
             except (OSError, ConnectionError, RuntimeError):
                 pass
 
@@ -254,7 +265,7 @@ class CrossTraditionalComparisonAgent:
             if pat["tradition_a"] in traditions and pat["tradition_b"] in traditions:
                 register.append(dict(pat))
 
-        if not register:
+        if not register and len(traditions) >= 2:
             # Generic incommensurability for any multi-tradition comparison
             register.append({
                 "tradition_a": traditions[0] if traditions else "analytic",
