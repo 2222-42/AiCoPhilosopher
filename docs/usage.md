@@ -136,7 +136,7 @@ aicophilosopher show dead ends
 ```bash
 aicophilosopher pause <workstream_id>
 aicophilosopher resume <workstream_id>
-aicophilosopher steers <workstream_id> "deepen analysis on abstraction layers"
+aicophilosopher steer <workstream_id> "deepen analysis on abstraction layers"
 ```
 
 ### Add Notes
