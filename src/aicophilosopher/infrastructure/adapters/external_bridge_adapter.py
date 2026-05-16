@@ -15,7 +15,6 @@ import logging
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,9 @@ logger = logging.getLogger(__name__)
 class AuditLogger:
     """JSONL audit trail for external bridge interactions."""
 
-    def __init__(self, log_path: str | Path = "external_bridge.jsonl") -> None:
+    def __init__(self, log_path: str | Path | None = None) -> None:
+        if log_path is None:
+            log_path = Path("logs") / "external_bridge.jsonl"
         self._path = Path(log_path)
 
     def log(
@@ -118,6 +119,16 @@ class ExternalAgentBridge(ABC):
 
         Checks consent, attempts external call, and falls back to
         internal execution on failure.
+
+        Response schema:
+          - success:   {\"status\": \"success\", \"data\": <_send result>}
+          - denied:    {\"status\": \"consent_denied\", \"data\": {}, \"error\": ...}
+          - fallback:  {\"status\": \"fallback\", \"data\": {}, \"message\": ...}
+
+        Note: On success, ``response[\"data\"]`` contains the raw result from
+        ``_send()`` (which may have its own ``status`` field). Consumers
+        should check ``response[\"status\"]`` for the overall outcome and
+        inspect ``response[\"data\"]`` for bridge-specific payload.
 
         Args:
             endpoint: Logical endpoint name (e.g., 'delegate_task').
