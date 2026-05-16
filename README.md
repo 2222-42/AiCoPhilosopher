@@ -11,7 +11,7 @@ git clone https://github.com/2222-42/AiCoPhilosopher.git
 cd AiCoPhilosopher
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-aicophilosopher new project "What is abstraction?"
+aicophilosopher new-project "What is abstraction?"
 ```
 
 See [QUICKSTART.md](QUICKSTART.md) for detailed setup and a guided tutorial.
