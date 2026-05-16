@@ -76,6 +76,10 @@ class SynthesisAgent:
         # 5. Assemble document
         doc = self._assemble_document(title, sections, conflicts)
 
+        # 5b. Apply output format (spec §4.9: Markdown/LaTeX/HTML)
+        output_format = str(kwargs.get("format", "markdown")).lower()
+        doc = self._apply_format(doc, output_format)
+
         # 6. Compute synthesis confidence
         confidence = self._compute_synthesis_confidence(workstream_outputs, conflicts)
 
@@ -305,6 +309,63 @@ class SynthesisAgent:
         diversity_bonus = min(0.1, (len(outputs) - 1) * 0.03)
 
         return round(max(0.0, min(1.0, avg_ws - conflict_penalty + diversity_bonus)), 4)
+
+    # ------------------------------------------------------------------
+    # Format conversion (spec §4.9)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _apply_format(doc: str, fmt: str) -> str:  # noqa: C901
+        """Apply output format conversion. Markdown is the default."""
+        if fmt in ("markdown", "md", ""):
+            return doc
+        if fmt in ("html", "htm"):
+            # Basic HTML wrapping: convert headings and paragraphs
+            lines = doc.split("\n")
+            html_lines = [
+                "<!DOCTYPE html>",
+                "<html><head><meta charset=\"utf-8\">"
+                "<title>Synthesis</title></head><body>",
+            ]
+            in_paragraph = False
+            for line in lines:
+                stripped = line.strip()
+                if stripped.startswith("# "):
+                    if in_paragraph:
+                        html_lines.append("</p>")
+                        in_paragraph = False
+                    html_lines.append(f"<h1>{stripped[2:]}</h1>")
+                elif stripped.startswith("## "):
+                    if in_paragraph:
+                        html_lines.append("</p>")
+                        in_paragraph = False
+                    html_lines.append(f"<h2>{stripped[3:]}</h2>")
+                elif stripped == "---":
+                    if in_paragraph:
+                        html_lines.append("</p>")
+                        in_paragraph = False
+                    html_lines.append("<hr>")
+                elif stripped == "":
+                    if in_paragraph:
+                        html_lines.append("</p>")
+                        in_paragraph = False
+                else:
+                    if not in_paragraph:
+                        html_lines.append("<p>")
+                        in_paragraph = True
+                    else:
+                        html_lines.append("<br>")
+                    html_lines.append(stripped)
+            if in_paragraph:
+                html_lines.append("</p>")
+            html_lines.append("</body></html>")
+            return "\n".join(html_lines)
+        if fmt in ("latex", "tex"):
+            return (
+                "% LaTeX output not yet implemented. "
+                "Returning Markdown as fallback.\n\n" + doc
+            )
+        # Unknown format: return markdown unchanged
+        return doc
 
     # ------------------------------------------------------------------
     # LLM augmentation
