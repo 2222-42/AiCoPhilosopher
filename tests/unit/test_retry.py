@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
-from aicophilosopher.application.services.retry import retry_call, with_retry
+from aicophilosopher.application.services.retry import (
+    DEFAULT_MAX_ATTEMPTS,
+    retry_call,
+    with_retry,
+)
 
 
 class TestRetryCall:
@@ -17,7 +23,7 @@ class TestRetryCall:
             call_count += 1
             return "ok"
 
-        result = await retry_call(lambda: succeed(), max_attempts=3)
+        result = await retry_call(lambda: succeed(), max_attempts=4)
         assert result == "ok"
         assert call_count == 1
 
@@ -33,15 +39,14 @@ class TestRetryCall:
             return "recovered"
 
         result = await retry_call(
-            lambda: fail_then_succeed(),
-            max_attempts=3,
-            base_delay=0.01,
+            lambda: fail_then_succeed(), max_attempts=4, base_delay=0.01
         )
         assert result == "recovered"
         assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_exhausts_retries_and_raises(self) -> None:
+        """Default max_attempts=4 means first attempt + 3 retries."""
         call_count = 0
 
         async def always_fail() -> str:
@@ -51,11 +56,24 @@ class TestRetryCall:
 
         with pytest.raises(ConnectionError, match="persistent"):
             await retry_call(
-                lambda: always_fail(),
-                max_attempts=3,
-                base_delay=0.01,
+                lambda: always_fail(), max_attempts=4, base_delay=0.01
             )
-        assert call_count == 3
+        assert call_count == 4  # 1 first + 3 retries
+
+    @pytest.mark.asyncio
+    async def test_custom_max_attempts(self) -> None:
+        call_count = 0
+
+        async def always_fail() -> str:
+            nonlocal call_count
+            call_count += 1
+            raise ConnectionError("fail")
+
+        with pytest.raises(ConnectionError):
+            await retry_call(
+                lambda: always_fail(), max_attempts=2, base_delay=0.01
+            )
+        assert call_count == 2
 
     @pytest.mark.asyncio
     async def test_non_retryable_exception_raised_immediately(self) -> None:
@@ -67,33 +85,8 @@ class TestRetryCall:
             raise ValueError("not retryable")
 
         with pytest.raises(ValueError, match="not retryable"):
-            await retry_call(
-                lambda: value_error(),
-                max_attempts=3,
-                base_delay=0.01,
-            )
-        assert call_count == 1  # No retries for ValueError
-
-    @pytest.mark.asyncio
-    async def test_exponential_backoff_timing(self) -> None:
-        call_count = 0
-
-        async def fail_with_timing() -> str:
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                raise ConnectionError("fail")
-            return "ok"
-
-        # Use a mock approach: verify delay values
-        result = await retry_call(
-            lambda: fail_with_timing(),
-            max_attempts=3,
-            base_delay=0.01,
-            backoff_factor=2.0,
-        )
-        assert result == "ok"
-        assert call_count == 2
+            await retry_call(lambda: value_error(), max_attempts=4, base_delay=0.01)
+        assert call_count == 1
 
     @pytest.mark.asyncio
     async def test_delay_capped_at_max(self) -> None:
@@ -108,7 +101,7 @@ class TestRetryCall:
 
         result = await retry_call(
             lambda: fail_twice(),
-            max_attempts=3,
+            max_attempts=4,
             base_delay=0.01,
             backoff_factor=10.0,
             max_delay=0.02,
@@ -118,9 +111,9 @@ class TestRetryCall:
 
     @pytest.mark.asyncio
     async def test_escalation_callback_called_on_exhaustion(self) -> None:
-        escalation_log: list[tuple[str, int, Exception]] = []
+        escalation_log: list[tuple[str, int, BaseException]] = []
 
-        def on_escalation(name: str, attempts: int, exc: Exception) -> None:
+        def on_escalation(name: str, attempts: int, exc: BaseException) -> None:
             escalation_log.append((name, attempts, exc))
 
         async def always_fail() -> str:
@@ -138,13 +131,53 @@ class TestRetryCall:
         assert escalation_log[0][0] == "test_op"
         assert escalation_log[0][1] == 2
 
+    @pytest.mark.asyncio
+    async def test_async_escalation_callback(self) -> None:
+        """Async escalation callbacks are awaited (Copilot review fix)."""
+        escalation_log: list[tuple[str, int, BaseException]] = []
+
+        async def async_escalation(name: str, attempts: int, exc: BaseException) -> None:
+            await asyncio.sleep(0.001)
+            escalation_log.append((name, attempts, exc))
+
+        async def always_fail() -> str:
+            raise ConnectionError("dead")
+
+        with pytest.raises(ConnectionError):
+            await retry_call(
+                lambda: always_fail(),
+                max_attempts=2,
+                base_delay=0.01,
+                escalation_callback=async_escalation,
+                name="async_test",
+            )
+        assert len(escalation_log) == 1
+        assert escalation_log[0][0] == "async_test"
+
+    @pytest.mark.asyncio
+    async def test_invalid_max_attempts_raises(self) -> None:
+        """max_attempts < 1 should raise ValueError (Copilot review fix)."""
+        async def dummy() -> str:
+            return "ok"
+
+        with pytest.raises(ValueError, match="max_attempts must be >= 1"):
+            await retry_call(lambda: dummy(), max_attempts=0)
+
+        with pytest.raises(ValueError, match="max_attempts must be >= 1"):
+            await retry_call(lambda: dummy(), max_attempts=-1)
+
+    @pytest.mark.asyncio
+    async def test_default_is_four_attempts(self) -> None:
+        """DEFAULT_MAX_ATTEMPTS = 4 (first attempt + 3 retries)."""
+        assert DEFAULT_MAX_ATTEMPTS == 4
+
 
 class TestWithRetryDecorator:
     @pytest.mark.asyncio
     async def test_decorator_retries(self) -> None:
         call_count = 0
 
-        @with_retry(max_attempts=3, base_delay=0.01)
+        @with_retry(max_attempts=4, base_delay=0.01)
         async def flaky() -> str:
             nonlocal call_count
             call_count += 1
@@ -164,3 +197,28 @@ class TestWithRetryDecorator:
 
         with pytest.raises(ConnectionError):
             await dead()
+
+    @pytest.mark.asyncio
+    async def test_decorator_three_retries(self) -> None:
+        """Default max_attempts=4 means first call + 3 retries."""
+        call_count = 0
+
+        @with_retry(base_delay=0.01)
+        async def flaky_three() -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count < 4:
+                raise ConnectionError(f"fail {call_count}")
+            return "finally"
+
+        result = await flaky_three()
+        assert result == "finally"
+        assert call_count == 4
+
+    @pytest.mark.asyncio
+    async def test_decorator_invalid_max_attempts(self) -> None:
+        with pytest.raises(ValueError, match="max_attempts must be >= 1"):
+
+            @with_retry(max_attempts=0)
+            async def bad() -> str:
+                return "ok"  # pragma: no cover
