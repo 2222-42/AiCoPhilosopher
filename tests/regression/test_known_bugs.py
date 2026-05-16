@@ -30,18 +30,29 @@ class TestRegressionPR19ShallowCopy:
         positions = result.get("competing_positions", [])
         assert len(positions) >= 2
 
-        # Modify one position's assumptions
+        # Verify positions are distinct objects before any mutation
         pos0 = positions[0]
         pos1 = positions[1]
-        original_len = len(pos0.get("implicit_assumptions", []))
-        pos0["implicit_assumptions"] = list(pos0.get("implicit_assumptions", []))
+        assert pos0 is not pos1, "Competing positions must be distinct objects"
 
-        # pos1 should be unaffected (deep copy)
-        assert pos1.get("implicit_assumptions") is not pos0["implicit_assumptions"]
+        # Verify nested lists are distinct (deep copy, not shared)
+        assumptions0 = pos0.get("implicit_assumptions", [])
+        assumptions1 = pos1.get("implicit_assumptions", [])
+        assert assumptions0 is not assumptions1, (
+            "Nested lists must not be shared (shallow copy bug)"
+        )
+
+        # Mutate pos0 in-place and verify pos1 is unaffected
+        original_len1 = len(assumptions1)
+        if isinstance(assumptions0, list):
+            assumptions0.append("TEST_MARKER_DO_NOT_PROPAGATE")
+            assert len(assumptions1) == original_len1, (
+                "In-place mutation leaked to other position"
+            )
 
 
 # ---------------------------------------------------------------------------
-# PR #20: Straw man regex false positive + cicular typo
+# PR #20: Straw man regex false positive + circular typo
 # ---------------------------------------------------------------------------
 class TestRegressionPR20StrawManCircularity:
     """Bug: 'misrepresent' substring triggered straw man on innocent text.
@@ -115,10 +126,14 @@ class TestRegressionPR23EmptyTraditions:
         """Empty traditions must not produce fabricated incommensurability entries."""
         agent = CrossTraditionalComparisonAgent(agent_id="reg-004")
         result = await agent.run("abstraction", traditions=[])
-        # Should not fabricate analytic/continental when no traditions given
-        register = result["incommensurability_register"]
         # With empty traditions, no comparisons possible
         assert result["traditions_compared"] == 0
+        assert result["incommensurability_register"] == [], (
+            "Empty traditions must not fabricate incommensurability entries"
+        )
+        assert result["bridge_map"] == [], (
+            "Empty traditions must not fabricate bridge entries"
+        )
 
     @pytest.mark.asyncio
     async def test_single_tradition_no_self_comparison(self) -> None:

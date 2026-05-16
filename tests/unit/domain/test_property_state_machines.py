@@ -9,16 +9,22 @@ Covers: WorkstreamStatus, HypothesisStatus, ReviewStatus state machines.
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from aicophilosopher.domain.value_objects.enums import (
     HypothesisStatus,
+    ProjectStatus,
+    ReviewStatus,
     WorkstreamStatus,
 )
 
 # ---------------------------------------------------------------------------
-# Valid transition maps
+# Valid transition maps (normative, not from current production code)
+# Note: Production code currently lacks a centralized transition validator.
+# These maps document the intended invariants; T-071 verifies the maps are
+# internally consistent. Full lifecycle enforcement is deferred.
 # ---------------------------------------------------------------------------
 
 WORKSTREAM_VALID_TRANSITIONS: dict[WorkstreamStatus, set[WorkstreamStatus]] = {
@@ -41,9 +47,29 @@ HYPOTHESIS_VALID_TRANSITIONS: dict[HypothesisStatus, set[HypothesisStatus]] = {
 }
 
 
+REVIEW_VALID_TRANSITIONS: dict[ReviewStatus, set[ReviewStatus]] = {
+    ReviewStatus.UNREVIEWED: {ReviewStatus.UNDER_REVIEW},
+    ReviewStatus.UNDER_REVIEW: {ReviewStatus.CONTESTED,
+                                 ReviewStatus.ACCEPTED_WITH_RESERVATIONS,
+                                 ReviewStatus.REJECTED},
+    ReviewStatus.CONTESTED: {ReviewStatus.UNDER_REVIEW, ReviewStatus.REJECTED,
+                              ReviewStatus.ACCEPTED_WITH_RESERVATIONS},
+    ReviewStatus.ACCEPTED_WITH_RESERVATIONS: set(),  # terminal
+    ReviewStatus.REJECTED: set(),                   # terminal
+}
+
+PROJECT_VALID_TRANSITIONS: dict[ProjectStatus, set[ProjectStatus]] = {
+    ProjectStatus.CREATED: {ProjectStatus.CLARIFYING, ProjectStatus.ACTIVE,
+                             ProjectStatus.ARCHIVED},
+    ProjectStatus.CLARIFYING: {ProjectStatus.ACTIVE, ProjectStatus.ARCHIVED},
+    ProjectStatus.ACTIVE: {ProjectStatus.ARCHIVED},
+    ProjectStatus.ARCHIVED: set(),  # terminal
+}
+
+
 def is_valid_transition(
-    from_state: WorkstreamStatus | HypothesisStatus,
-    to_state: WorkstreamStatus | HypothesisStatus,
+    from_state: WorkstreamStatus | HypothesisStatus | ReviewStatus | ProjectStatus,
+    to_state: WorkstreamStatus | HypothesisStatus | ReviewStatus | ProjectStatus,
     valid_map: dict,
 ) -> bool:
     return to_state in valid_map.get(from_state, set())
@@ -98,18 +124,83 @@ class TestWorkstreamStatusProperties:
         )
 
     @given(st.lists(st.sampled_from(list(WorkstreamStatus)), min_size=1, max_size=10))
-    def test_transition_chain_is_all_valid(self, chain: list[WorkstreamStatus]) -> None:
-        """Any list where each adjacent pair is a valid transition must not fail."""
+    def test_transition_chain_no_crash(self, chain: list[WorkstreamStatus]) -> None:
+        """Any list of statuses: validation function must not crash."""
         for i in range(len(chain) - 1):
             is_valid = is_valid_transition(
                 chain[i], chain[i + 1], WORKSTREAM_VALID_TRANSITIONS
             )
-            # Just verify the function doesn't crash; validity depends on the chain
             assert isinstance(is_valid, bool)
 
 
 # ---------------------------------------------------------------------------
-# HypothesisStatus property tests
+# ReviewStatus property tests
+# ---------------------------------------------------------------------------
+
+class TestReviewStatusProperties:
+    """ReviewStatus state machine invariants (hypothesis)."""
+
+    @given(
+        st.sampled_from(list(ReviewStatus)),
+        st.sampled_from(list(ReviewStatus)),
+    )
+    def test_valid_transitions_accepted(
+        self, from_state: ReviewStatus, to_state: ReviewStatus
+    ) -> None:
+        if to_state in REVIEW_VALID_TRANSITIONS.get(from_state, set()):
+            assert is_valid_transition(
+                from_state, to_state, REVIEW_VALID_TRANSITIONS
+            )
+
+    @given(
+        st.sampled_from(list(ReviewStatus)),
+        st.sampled_from(list(ReviewStatus)),
+    )
+    def test_invalid_transitions_rejected(
+        self, from_state: ReviewStatus, to_state: ReviewStatus
+    ) -> None:
+        assume(
+            to_state not in REVIEW_VALID_TRANSITIONS.get(from_state, set())
+        )
+        assert not is_valid_transition(
+            from_state, to_state, REVIEW_VALID_TRANSITIONS
+        )
+
+    @given(st.sampled_from(list(ReviewStatus)))
+    def test_terminal_states_have_no_exits(self, state: ReviewStatus) -> None:
+        valid_targets = REVIEW_VALID_TRANSITIONS[state]
+        if state in (ReviewStatus.ACCEPTED_WITH_RESERVATIONS, ReviewStatus.REJECTED):
+            assert valid_targets == set()
+
+
+# ---------------------------------------------------------------------------
+# ProjectStatus property tests
+# ---------------------------------------------------------------------------
+
+class TestProjectStatusProperties:
+    """ProjectStatus state machine invariants (hypothesis)."""
+
+    @given(
+        st.sampled_from(list(ProjectStatus)),
+        st.sampled_from(list(ProjectStatus)),
+    )
+    def test_valid_transitions_accepted(
+        self, from_state: ProjectStatus, to_state: ProjectStatus
+    ) -> None:
+        if to_state in PROJECT_VALID_TRANSITIONS.get(from_state, set()):
+            assert is_valid_transition(
+                from_state, to_state, PROJECT_VALID_TRANSITIONS
+            )
+
+    @given(st.sampled_from(list(ProjectStatus)))
+    def test_archived_is_terminal(self, state: ProjectStatus) -> None:
+        """ARCHIVED must have no outgoing transitions."""
+        if state == ProjectStatus.ARCHIVED:
+            assert PROJECT_VALID_TRANSITIONS[state] == set()
+
+
+# ---------------------------------------------------------------------------
+# Enum integrity
 # ---------------------------------------------------------------------------
 
 class TestHypothesisStatusProperties:
@@ -161,19 +252,19 @@ class TestEnumIntegrity:
     """All enum values must be resolvable from strings (deserialization safety)."""
 
     @given(st.text(min_size=1, max_size=50))
-    def test_workstream_status_from_string_does_not_crash(self, s: str) -> None:
-        """Deserialization with unknown values should raise ValueError, not crash."""
-        try:
+    def test_workstream_status_rejects_unknown(self, s: str) -> None:
+        """Unknown strings must raise ValueError."""
+        known = {e.value for e in WorkstreamStatus}
+        assume(s not in known)
+        with pytest.raises(ValueError):
             WorkstreamStatus(s)
-        except ValueError:
-            pass  # expected for unknown values
 
     @given(st.text(min_size=1, max_size=50))
-    def test_hypothesis_status_from_string_does_not_crash(self, s: str) -> None:
-        try:
+    def test_hypothesis_status_rejects_unknown(self, s: str) -> None:
+        known = {e.value for e in HypothesisStatus}
+        assume(s not in known)
+        with pytest.raises(ValueError):
             HypothesisStatus(s)
-        except ValueError:
-            pass
 
     @given(st.sampled_from(list(WorkstreamStatus)))
     def test_workstream_roundtrip(self, state: WorkstreamStatus) -> None:
