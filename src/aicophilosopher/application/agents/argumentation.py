@@ -595,13 +595,13 @@ class ArgumentationAgent:
         if template is None:
             return {
                 "premises": [
-                    "Different philosophical traditions approach '{topic}' with "
+                    f"Different philosophical traditions approach '{topic}' with "
                     "different methodological commitments.",
                     "What counts as a valid argument depends on the epistemic "
                     "norms of the tradition within which it is evaluated.",
                 ],
                 "conclusion": (
-                    "A competing analysis of '{topic}' would foreground "
+                    f"A competing analysis of '{topic}' would foreground "
                     "different assumptions and reach a different conclusion "
                     "when evaluated under alternative methodological frameworks."
                 ),
