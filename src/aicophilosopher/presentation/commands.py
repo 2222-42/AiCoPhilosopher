@@ -238,6 +238,10 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
 
     click.echo(f"Launching {workstream_type} workstream...")
 
+    # Load project question as default instruction
+    proj_meta = json.loads((_project_dir(proj_id) / "metadata.json").read_text())
+    default_query = str(proj_meta.get("original_question", proj_meta.get("title", "")))
+
     # Parse traditions if provided
     trad_list: list[str] | None = None
     if traditions:
@@ -257,7 +261,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
             )
             agent = ArgumentationAgent(agent_id=f"cli-{proj_id}")
             result = await agent.run(
-                instructions or "Analyze the key arguments for and against this position.",
+                instructions or default_query,
                 **kwargs,
             )
             click.echo()
@@ -279,7 +283,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
             )
             arg_agent = ArgumentationAgent(agent_id=f"cli-arg-{proj_id}")
             arg_result = await arg_agent.run(
-                instructions or "Analyze the key arguments.",
+                instructions or default_query,
                 **kwargs,
             )
             review_input = arg_result["arguments"] + arg_result["competing_positions"]
@@ -296,7 +300,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
                 CrossTraditionalComparisonAgent,
             )
             agent = CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction", **kwargs)
+            result = await agent.run(instructions or default_query, **kwargs)
             click.echo()
             click.echo("=== Cross-Traditional Comparison ===")
             click.echo(f"Bridges found: {len(result['bridge_map'])}")
@@ -326,7 +330,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
                 LiteratureSearchAgent,
             )
             agent = LiteratureSearchAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction", **kwargs)
+            result = await agent.run(instructions or default_query, **kwargs)
             click.echo()
             click.echo("=== Literature Search ===")
             click.echo(f"Results: {result.get('result_count', 0)}")
@@ -337,7 +341,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
                 ConceptAnalysisAgent,
             )
             agent = ConceptAnalysisAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction", **kwargs)
+            result = await agent.run(instructions or default_query, **kwargs)
             click.echo()
             click.echo("=== Concept Analysis ===")
             click.echo(f"Concept map: {result.get('concept_map', 'no data')}")
