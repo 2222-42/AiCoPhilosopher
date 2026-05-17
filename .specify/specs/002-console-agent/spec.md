@@ -66,7 +66,7 @@ Power users who know exactly what they want can use `/` shortcuts (`/search`, `/
 
 **Acceptance Scenarios**:
 
-1. **Given** the REPL is active, **When** the user types `/help`, **Then** all available commands are listed with brief descriptions, grouped by category (Session, Inquiry, Steering, View, Other).
+1. **Given** the REPL is active, **When** the user types `/help`, **Then** all available commands are listed with brief descriptions, grouped by category (Session, Inquiry, Steering, View, Export & Data, Help & Config) as defined in `contracts/repl-commands.md`.
 
 2. **Given** a running workstream `ws-001`, **When** the user types `/pause ws-001`, **Then** the workstream transitions to `paused` status and the coordinator confirms, all within 5 seconds.
 
@@ -100,15 +100,15 @@ A philosopher executes the complete philosophical workflowâ€”initial question â†
 
 ### Edge Cases
 
-- **NLU misclassification**: When the coordinator cannot confidently classify the user's intent from natural language, it MUST ask a clarifying question rather than silently taking a wrong action. The confidence threshold for silent action is configurable (default: 0.85). Below threshold, the coordinator says "I want to make sure I understandâ€”did you mean [interpretation A] or [interpretation B]?"
+- **NLU misclassification**: When the coordinator cannot confidently classify the user's intent from natural language, it MUST ask a clarifying question rather than silently taking a wrong action. The confidence threshold for silent action is `nlu.confidence_threshold` (default: 0.85). Below threshold, the coordinator says "I want to make sure I understandâ€”did you mean [interpretation A] or [interpretation B]?"
 
 - **Empty/incomplete input**: When the user types empty input or an incomplete sentence (e.g., just "free will"), the coordinator treats it as the start of an inquiry and asks "What about free will are you interested in exploring?"
 
-- **Command injection via natural language**: Natural language input that resembles a slash command (e.g., "What does /search do?") MUST be treated as natural language, not as a command. Only input starting with `/` at position 0 is treated as a slash command.
+- **Command injection via natural language**: Natural language input that resembles a slash command (e.g., "What does /search do?") MUST be treated as natural language, not as a command. Only input that starts with `/` after trimming leading whitespace is treated as a slash command.
 
-- **Session corruption on crash**: If the process crashes (SIGKILL, power loss), session state is recovered from the most recent successful atomic write (every coordinator response triggers a checkpoint). At most one dialogue turn is lost.
+- **Session corruption on crash**: If the process crashes (SIGKILL, power loss), session state is recovered from the most recent persisted dialogue turn (per FR-009, turns are persisted incrementally). At most the single unpersisted in-flight turn is lost. The session row is marked `paused` with `exit_reason = 'crash'` on next startup's stale-reclaim sweep.
 
-- **Concurrent session conflict**: A project MUST NOT have two active REPL sessions simultaneously. If the user attempts to open a project that already has an active session (possibly from another terminal), the system warns and offers to either terminate the other session or open in read-only mode.
+- **Concurrent session conflict**: A project MUST NOT have two live active REPL sessions simultaneously. Stale active sessions (crashed process, PID not running, heartbeat expired) are automatically detected and reclaimed on startup. If the user attempts to open a project that has a genuinely live active session (possibly from another terminal), the system warns and offers to either terminate the other session or open in read-only mode.
 
 - **Very long sessions**: Sessions spanning thousands of dialogue turns MUST degrade gracefully. The active LLM context window includes only the last N turns + summaries of older context blocks. The full dialogue history remains persisted and searchable.
 
@@ -132,11 +132,11 @@ A philosopher executes the complete philosophical workflowâ€”initial question â†
 
 - **FR-003**: System MUST classify user intent from natural language input using the Project Coordinator's NLU capabilities. Supported intent categories: `start_inquiry`, `clarify_question`, `propose_workstream`, `steer_workstream`, `request_status`, `request_detail`, `request_export`, `approve_action`, `reject_action`, `ask_question`, `inject_information`, `request_help`, `pause_session`, `resume_session`, `archive_project`, `compare_traditions`.
 
-- **FR-004**: When NLU confidence is below the configurable threshold (default: 0.85), the coordinator MUST ask a clarifying question before acting. It MUST NOT silently execute a low-confidence interpretation.
+- **FR-004**: When NLU confidence is below the configurable threshold `nlu.confidence_threshold` (default: 0.85), the coordinator MUST ask a clarifying question before acting. It MUST NOT silently execute a low-confidence interpretation.
 
 - **FR-005**: System MUST support `/` prefix shortcuts as explicit commands that bypass NLU classification entirely. Full slash command set defined in `contracts/repl-commands.md`.
 
-- **FR-006**: Input starting with `/` at character position 0 MUST be routed to the slash command handler. `/` appearing elsewhere in natural language input MUST NOT trigger command routing.
+- **FR-006**: Input starting with `/` after trimming leading whitespace MUST be routed to the slash command handler. `/` appearing elsewhere in natural language input MUST NOT trigger command routing. Leading whitespace is stripped before the `/` check to accommodate accidental spaces from copy/paste or bracketed-paste terminals.
 
 - **FR-007**: System MUST render all coordinator responses using progressive disclosure: **Summary** (always visible), **Epistemic Status** (always visible), **Active Workstreams** (always visible), **[Details]** (collapsed by default), **[Suggestions]** (collapsed by default).
 
@@ -144,15 +144,15 @@ A philosopher executes the complete philosophical workflowâ€”initial question â†
 
 - **FR-008**: System MUST maintain a `SessionState` for each REPL session, including: `session_id`, `project_id`, `status` (active/paused/closed), `created_at`, `last_active_at`, `dialogue_history`, `context_blocks`, `current_focus`, `pending_approvals`, `active_workstreams`.
 
-- **FR-009**: On `/exit`, `/quit`, Ctrl+D (EOF), or SIGTERM, the system MUST atomically persist the full `SessionState` to the project's SQLite database (session row, all pending dialogue turns, all context blocks in a single transaction). Workstreams marked `running` MUST continue execution via LangGraph checkpointing, independent of the REPL process.
+- **FR-009**: Every `DialogueTurn` MUST be persisted to SQLite before the coordinator's next response is rendered to the user (incremental per-turn persist). On `/exit`, `/quit`, Ctrl+D (EOF), SIGTERM, SIGHUP, or SIGINT, the system MUST flush any pending writes, finalize the session row, and mark the session status as `paused` in a single transaction. On SIGKILL or power loss, crash recovery from the last persisted turn applies. Workstreams marked `running` MUST continue execution via LangGraph checkpointing, independent of the REPL process.
 
-- **FR-010**: On `aicophilosopher` startup with no `--project` argument, the system MUST list all projects with their last-active timestamps and session status. The user MUST be able to select a project by number, by ID, or by typing a new question to start fresh.
+- **FR-010**: On `aicophilosopher` startup with no `--project` argument, the system MUST list all projects with their last-active timestamps and session status. The user MUST be able to select a project by its displayed list number, by full project ID, or by typing a new question to start fresh. Disambiguation rule: if the input is purely numeric and matches a displayed list number, it selects that project; if it matches a valid UUID format, it is treated as a project ID; otherwise it is treated as a new question.
 
 - **FR-011**: On session resume, the coordinator MUST present a structured summary including: last active topic, completed workstreams since last session, running workstreams with their current status, pending approval requests awaiting user response.
 
 - **FR-012**: On session resume, the coordinator's LLM context window MUST be populated with: system prompt, last N dialogue turns (configurable, default 20), summaries of older context blocks, active workstream status summaries, and any pending approvals.
 
-- **FR-013**: A project MUST NOT have more than one active REPL session. Attempting to open a project with an existing active session MUST trigger a warning and a choice: terminate other session, open read-only, or cancel.
+- **FR-013**: A project MUST NOT have more than one active REPL session. The active session's process PID is recorded in the session row. On startup, the system MUST detect stale active sessions (PID no longer running or heartbeat exceeded `session.heartbeat_timeout_seconds`, default 300) and automatically reclaim them (mark as `paused` with `exit_reason = 'stale_reclaimed'`). If a genuinely live concurrent session is detected (PID alive + heartbeat current), the system MUST trigger a warning and a choice: terminate the other session, open read-only, or cancel.
 
 #### Context & Memory
 
@@ -190,7 +190,7 @@ A philosopher executes the complete philosophical workflowâ€”initial question â†
 
 ### Key Entities
 
-- **SessionState**: Represents a single REPL session. Contains session_id, project_id, status (active/paused/closed), timestamps, dialogue_history (list of DialogueTurns), context_blocks (list of ContextBlocks), current_focus (FocusContext), pending_approvals, active_workstream_handles. Persisted to SQLite on exit; loaded on resume.
+- **SessionState**: Represents a single REPL session. Contains session_id, project_id, pid (for stale-session detection), heartbeat_at, status (active/paused/closed), timestamps, dialogue_history (list of DialogueTurns), context_blocks (list of ContextBlocks), current_focus (FocusContext), approval_requests, active_workstream_handles. Persisted to SQLite; turns are persisted incrementally per FR-009. Stale sessions (crashed process) are auto-reclaimed on startup.
 
 - **DialogueTurn**: A single exchange in the REPL. Contains turn_id, speaker (user/coordinator/system), raw content text, parsed intent (for user turns), actions_taken list (what the coordinator did), context_block_id, timestamp. Immutable once created.
 
@@ -198,7 +198,7 @@ A philosopher executes the complete philosophical workflowâ€”initial question â†
 
 - **FocusContext**: The coordinator's current attention window. Contains active_topic string, last_workstream_id (nullable), last_hypothesis_id (nullable), pending_decisions list, recent_claim_ids list. Updated on every coordinator response.
 
-- **ApprovalRequest**: A pending decision requiring user input. Contains request_id, request_type (workstream_proposal, normative_judgment, incommensurability_resolution, review_escalation, external_search_consent, synthesis_conflict), description, options list, urgency (blocking/non_blocking), created_at. Persisted across sessions; re-presented on resume.
+- **ApprovalRequest**: A pending decision requiring user input. Contains request_id, request_type (workstream_proposal, normative_judgment, incommensurability_resolution, review_escalation, external_search_consent, synthesis_conflict, goal_refinement), description, options list, urgency (blocking/non_blocking), created_at. Stored in its own dedicated SQLite table. Persisted across sessions; re-presented on resume.
 
 - **UserIntent**: Parsed from natural language input. Contains intent_type (enum of supported intents), confidence_score, extracted_entities dict (workstream_id, concept_name, topic, etc.), raw_input reference. Generated by NLU classification; validated before action.
 
