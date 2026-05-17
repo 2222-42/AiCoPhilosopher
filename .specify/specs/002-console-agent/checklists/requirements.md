@@ -39,12 +39,16 @@
 
 ## 4. Constitution Compliance
 
-- [ ] Principle I (Core Independence): REPL MUST function without external orchestration layers
-- [ ] Principle I (Local-First Privacy): No session data transmitted externally without explicit consent
-- [ ] Principle II (Intellectual Honesty): All coordinator responses include confidence and epistemic status
-- [ ] Principle III (Code Quality): REPL code follows Clean Architecture layers (presentation/ → application/)
-- [ ] Principle IV (Testing): NLU intent classification and session persistence MUST have automated tests
-- [ ] Principle V (MVP-First): Natural language and session persistence are P1; slash commands are P2
+- [x] Principle I (Core Independence): REPL wraps existing Project Coordinator; no new orchestration layers. Rich + SQLite are local, open-source. ✅
+- [x] Principle I (Local-First Privacy): FR-026 mandates no external data transmission without explicit consent. `external_search_consent` ApprovalRequest type gates all external calls. ✅
+- [x] Principle II (Intellectual Honesty): FR-007 mandates Epistemic Status always visible. EpistemicSnapshot tracks claims/hypotheses. `/dead-ends` preserves failed explorations. ApprovalRequest with `blocking` urgency ensures human judgment gates. ✅
+- [x] Principle III (Code Quality): Data model uses Pydantic BaseModel with validation rules. REPL is presentation-layer adapter wrapping core domain — Clean Architecture now explicit in spec Assumptions. ✅
+- [x] Principle IV (Testing): SC-002 defines NLU accuracy test (≥90%, 100-utterance test set). SC-009 tests concurrent session detection. Session persistence testable via US2 scenarios. ✅
+- [x] Principle V (MVP-First): P1 = natural language + session persistence (core). P2 = slash commands + full inquiry cycle (enhancement). Web UI deferred to Phase 4; additional languages post-MVP. ✅
+- [x] Architecture Constraints: Python + LangGraph ✓, Pydantic ✓, Progressive disclosure (FR-007) ✓✓. RETRY LOGIC: not addressed for REPL-specific operations (stale reclaim, concurrent detection) — recommended for implementation phase. ⚠️
+- [x] Dev Workflow: Progressive disclosure (FR-007 + contracts) ✓✓. Logging (FR-017 auditability) ✓. External Agent Bridge inherited from wrapped coordinator. ✅
+
+**Constitution Review Result**: COMPLIANT — 2 minor recommendations for implementation phase (Clean Architecture reference, retry logic). No blocking violations.
 
 ## 5. Integration Points
 

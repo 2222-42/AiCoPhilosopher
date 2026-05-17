@@ -1,7 +1,7 @@
 # Feature Specification: Console Agent — Continuous Dialogue REPL
 
 **Feature Branch**: `002-console-agent`
-
+**Constitution**: `.specify/memory/constitution.md` v0.2.0
 **Created**: 2026-05-18
 
 **Status**: Draft
@@ -245,6 +245,8 @@ A philosopher executes the complete philosophical workflow—initial question �
 - Japanese and English are the two primary supported languages for natural language input. The NLU system must handle both. Additional languages are post-MVP.
 
 - The console REPL is the sole user-facing interface for MVP. Web UI (Gradio/Streamlit) is deferred to Phase 4 of the parent 001 spec.
+
+- The REPL code follows the project's Clean Architecture: a presentation layer (Rich terminal UI) wrapping the existing application/domain layers. No domain logic is implemented in the REPL layer itself.
 
 - Session persistence relies on SQLite (already in the tech stack). No additional database infrastructure is introduced.
 
