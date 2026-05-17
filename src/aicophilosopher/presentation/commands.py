@@ -43,8 +43,10 @@ def _create_project_structure(project_id: str, title: str, question: str | None 
     (base / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
     # living_document.md with YAML frontmatter
+    safe_title = title.replace('"', '\\"').replace("\n", " ")
+    safe_question = (question or title).replace('"', '\\"').replace("\n", " ")
     frontmatter = f"""---
-title: "{title}"
+title: "{safe_title}"
 project_id: "{project_id}"
 status: "draft"
 created: "{datetime.now(UTC).isoformat()}"
@@ -55,7 +57,7 @@ traditions_referenced: []
 
 ## Introduction
 
-{question or title}
+{safe_question}
 
 _This living document will be populated by AI Co-Philosopher agents as you run workstreams._
 """
@@ -116,8 +118,7 @@ def new_project(title: str, question: str | None = None) -> None:
 
 
 @cli.command()
-@click.argument("project_id", required=False)
-def list_projects(project_id: str | None = None) -> None:
+def list_projects() -> None:
     """List all projects with status summary."""
     _ensure_workspace()
     projects = sorted(_get_workspace().iterdir())
@@ -150,8 +151,7 @@ def open_project(project_id: str | None = None) -> None:
             return
     proj_dir = _project_dir(project_id)
     if not proj_dir.exists():
-        click.echo(f"Project '{project_id}' not found.")
-        return
+        raise click.ClickException(f"Project '{project_id}' not found.")
     _save_current_project(project_id)
     meta = json.loads((proj_dir / "metadata.json").read_text())
     click.echo(f"Opened project: {meta.get('title', project_id)}")
@@ -164,8 +164,7 @@ def archive_project(project_id: str) -> None:
     """Archive a completed or inactive project."""
     proj_dir = _project_dir(project_id)
     if not proj_dir.exists():
-        click.echo(f"Project '{project_id}' not found.")
-        return
+        raise click.ClickException(f"Project '{project_id}' not found.")
     click.confirm("This will make the project read-only. Continue?", abort=True)
     meta = json.loads((proj_dir / "metadata.json").read_text())
     meta["status"] = "archived"
@@ -213,6 +212,13 @@ def refine_goal() -> None:
             continue
         answers.append({"question": q, "answer": answer})
 
+    # Persist refined goal to project metadata
+    if answers:
+        proj = json.loads((_project_dir(proj_id) / "metadata.json").read_text())
+        proj["refined_answers"] = answers
+        proj["status"] = "clarifying"
+        (_project_dir(proj_id) / "metadata.json").write_text(json.dumps(proj, indent=2))
+
     click.echo()
     click.echo("Project Coordinator: Thank you. Your refined goal is ready.")
     click.echo()
@@ -224,7 +230,7 @@ def refine_goal() -> None:
 
 @cli.command()
 @click.argument("workstream_type", type=click.Choice([
-    "literature_search", "concept_analysis", "cross_traditional",
+    "literature_search", "concept_analysis", "cross_traditional_comparison",
     "argumentation", "critical_review", "synthesis",
 ]))
 @click.option("--instructions", "-i", help="Additional instructions")
@@ -295,7 +301,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None, trad
                 click.echo(f"  [{f.get('severity', '?')}] {f.get('name', '?')}")
             click.echo(f"Counter-arguments: {len(result['counter_arguments'])}")
 
-        elif workstream_type == "cross_traditional":
+        elif workstream_type == "cross_traditional_comparison":
             from aicophilosopher.application.agents.cross_traditional import (
                 CrossTraditionalComparisonAgent,
             )
@@ -434,7 +440,18 @@ def add_note(text: str, attach_to: str | None = None) -> None:
         click.echo("No active project.")
         return
     note_id = f"note-{uuid.uuid4().hex[:4]}"
+    # Persist to project margin_notes directory
+    notes_dir = _project_dir(proj_id) / "margin_notes"
+    notes_dir.mkdir(exist_ok=True)
+    note_data = {
+        "note_id": note_id,
+        "text": text,
+        "attached_to": attach_to,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+    (notes_dir / f"{note_id}.json").write_text(json.dumps(note_data, indent=2))
     click.echo(f"Note [{note_id}]: {text}")
+    click.echo(f"  Saved to: {notes_dir / f'{note_id}.json'}")
     if attach_to:
         click.echo(f"  Attached to: {attach_to}")
 

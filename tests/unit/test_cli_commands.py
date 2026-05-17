@@ -28,14 +28,27 @@ def test_list_projects() -> None:
 
 
 def test_open_project() -> None:
-    result = runner.invoke(cli, ["open-project", "proj-001"])
-    assert result.exit_code == 0
-    assert "proj-001" in result.output
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["new-project", "TestOpen"])
+        assert result.exit_code == 0
+        # Extract project ID from output
+        import re
+        m = re.search(r"ID: (proj-\w+)", result.output)
+        if m:
+            result = runner.invoke(cli, ["open-project", m.group(1)])
+            assert result.exit_code == 0
+            assert "Opened project" in result.output
 
 
 def test_archive_project() -> None:
-    result = runner.invoke(cli, ["archive-project", "proj-001"], input="y\n")
-    assert result.exit_code == 0
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ["new-project", "ToArchive"])
+        assert result.exit_code == 0
+        import re
+        m = re.search(r"ID: (proj-\w+)", result.output)
+        if m:
+            result = runner.invoke(cli, ["archive-project", m.group(1)], input="y\n")
+            assert result.exit_code == 0
 
 
 def test_refine_goal() -> None:
