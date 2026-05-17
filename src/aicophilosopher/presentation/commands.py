@@ -182,11 +182,44 @@ def refine_goal() -> None:
         return
     click.echo("Project Coordinator: Let's refine your research goal.")
     click.echo()
-    click.echo("[This is an interactive dialogue. In full MVP, the coordinator")
-    click.echo(" agent engages in Socratic questioning until the goal is refined.]")
+
+    # Socratic clarification dialogue (≤5 turns per constitution AC-001)
+    proj = json.loads((_project_dir(proj_id) / "metadata.json").read_text())
+    question = proj.get("original_question", proj.get("title", "your topic"))
+
+    click.echo(f"Your question: {question}")
     click.echo()
-    click.echo("For now, you can launch workstreams directly:")
+    click.echo("I'll ask a few clarifying questions to refine this inquiry.")
+    click.echo()
+
+    questions = [
+        ("Which philosophical traditions are most relevant? "
+         "(e.g., analytic, continental, philosophy_of_technology, "
+         "philosophy_of_mathematics)"),
+        ("What specific aspect of this question interests you most? "
+         "(e.g., ontological, epistemological, ethical, phenomenological)"),
+        ("Are there particular philosophers or texts you want to engage with?"),
+        ("What would a satisfactory answer look like — a clear argument, "
+         "a conceptual map, or a cross-traditional comparison?"),
+    ]
+
+    answers = []
+    for i, q in enumerate(questions[:4], 1):  # max 5 turns
+        click.echo(f"[Turn {i}/4]")
+        answer = click.prompt(f"  {q}", default="continue")
+        if answer.lower() in ("skip", "done", ""):
+            if answer.lower() == "done":
+                break
+            continue
+        answers.append({"question": q, "answer": answer})
+
+    click.echo()
+    click.echo("Project Coordinator: Thank you. Your refined goal is ready.")
+    click.echo()
+    click.echo("You can now launch workstreams:")
+    click.echo("  aicophilosopher start-workstream literature_search")
     click.echo("  aicophilosopher start-workstream argumentation")
+    click.echo("  aicophilosopher start-workstream concept_analysis")
 
 
 @cli.command()
@@ -195,7 +228,8 @@ def refine_goal() -> None:
     "argumentation", "critical_review", "synthesis",
 ]))
 @click.option("--instructions", "-i", help="Additional instructions")
-def start_workstream(workstream_type: str, instructions: str | None = None) -> None:
+@click.option("--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)")
+def start_workstream(workstream_type: str, instructions: str | None = None, traditions: str | None = None) -> None:
     """Launch a workstream using the appropriate AI agent."""
     proj_id = _get_current_project_id()
     if proj_id is None:
@@ -204,17 +238,27 @@ def start_workstream(workstream_type: str, instructions: str | None = None) -> N
 
     click.echo(f"Launching {workstream_type} workstream...")
 
+    # Parse traditions if provided
+    trad_list: list[str] | None = None
+    if traditions:
+        trad_list = [t.strip() for t in traditions.split(",")]
+
     # Dispatch to actual agent
     import asyncio
 
     async def _run() -> None:
+        kwargs: dict[str, object] = {}
+        if trad_list:
+            kwargs["traditions"] = trad_list
+
         if workstream_type == "argumentation":
             from aicophilosopher.application.agents.argumentation import (
                 ArgumentationAgent,
             )
             agent = ArgumentationAgent(agent_id=f"cli-{proj_id}")
             result = await agent.run(
-                instructions or "Analyze the key arguments for and against this position."
+                instructions or "Analyze the key arguments for and against this position.",
+                **kwargs,
             )
             click.echo()
             click.echo("=== Argumentation Results ===")
@@ -235,7 +279,8 @@ def start_workstream(workstream_type: str, instructions: str | None = None) -> N
             )
             arg_agent = ArgumentationAgent(agent_id=f"cli-arg-{proj_id}")
             arg_result = await arg_agent.run(
-                instructions or "Analyze the key arguments."
+                instructions or "Analyze the key arguments.",
+                **kwargs,
             )
             review_input = arg_result["arguments"] + arg_result["competing_positions"]
             result = await agent.run(review_input)
@@ -251,7 +296,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None) -> N
                 CrossTraditionalComparisonAgent,
             )
             agent = CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction")
+            result = await agent.run(instructions or "abstraction", **kwargs)
             click.echo()
             click.echo("=== Cross-Traditional Comparison ===")
             click.echo(f"Bridges found: {len(result['bridge_map'])}")
@@ -281,7 +326,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None) -> N
                 LiteratureSearchAgent,
             )
             agent = LiteratureSearchAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction")
+            result = await agent.run(instructions or "abstraction", **kwargs)
             click.echo()
             click.echo("=== Literature Search ===")
             click.echo(f"Results: {result.get('result_count', 0)}")
@@ -292,7 +337,7 @@ def start_workstream(workstream_type: str, instructions: str | None = None) -> N
                 ConceptAnalysisAgent,
             )
             agent = ConceptAnalysisAgent(agent_id=f"cli-{proj_id}")
-            result = await agent.run(instructions or "abstraction")
+            result = await agent.run(instructions or "abstraction", **kwargs)
             click.echo()
             click.echo("=== Concept Analysis ===")
             click.echo(f"Concept map: {result.get('concept_map', 'no data')}")

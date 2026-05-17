@@ -39,11 +39,16 @@ def test_archive_project() -> None:
 
 
 def test_refine_goal() -> None:
-    result = runner.invoke(cli, ["refine-goal"])
+    # Create a project first so refine-goal has context
+    runner.invoke(cli, ["new-project", "Test"])
+    result = runner.invoke(cli, ["refine-goal"], input="analytic\nepistemology\nPlato\nclear argument\n")
     assert result.exit_code == 0
+    assert "refine" in result.output.lower() or "Refine" in result.output
 
 
 def test_start_workstream() -> None:
+    # Create a project first so start-workstream has context
+    runner.invoke(cli, ["new-project", "Test"])
     result = runner.invoke(cli, ["start-workstream", "literature_search"])
     assert result.exit_code == 0
     assert "literature_search" in result.output
