@@ -59,7 +59,7 @@
 
 1. Should the NLU intent classifier be LLM-based (prompt with in-context examples) or a fine-tuned classifier? LLM-based is simpler for MVP but adds latency. Fine-tuned classifier requires training data but is faster.
 2. How many dialogue turns should be in the active LLM context window by default? 20 is specified but needs empirical validation.
-3. Should the REPL support scrolling through command history (like readline)? Yes—this is a standard expectation. Specify as FR-027.
+3. Should the REPL support scrolling through command history (like readline)? ✅ Resolved — FR-027 added to spec.md.
 4. Should the REPL support tab-completion of slash commands and project/workstream IDs?
 5. How are binary files (PDF upload paths, export output paths) handled in the REPL? Currently via `/upload <path>` and `/export <format>`.
 

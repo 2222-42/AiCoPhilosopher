@@ -134,7 +134,6 @@ class ContextBlock(BaseModel):
 class EpistemicSnapshot(BaseModel):
     active_claims: list[str] = Field(default_factory=list)   # Claim IDs
     hypotheses_discussed: list[str] = Field(default_factory=list)  # Hypothesis IDs
-    workstreams_active: list[str] = Field(default_factory=list)    # Workstream IDs
     key_conclusions: list[str] = Field(default_factory=list)       # Brief text summaries
 ```
 
@@ -305,7 +304,7 @@ CREATE INDEX idx_context_blocks_session ON context_blocks(session_id);
 
 2. **Dialogue history completeness**: Every `DialogueTurn` within a session MUST be persisted to SQLite before the coordinator's next response is rendered to the user.
 
-3. **Context block consistency**: A `DialogueTurn.context_id` MUST reference a `ContextBlock` within the same session, or be NULL.
+3. **Context block consistency**: A `DialogueTurn.context_id` MUST reference a `ContextBlock` within the same session, or be NULL. Conversely, if `turn.context_id == X`, then `X.turns` MUST contain that turn's ID. The `DialogueTurn.context_id` back-reference is authoritative; `ContextBlock.turns` is a derived index reconstructed from `dialogue_turns` WHERE `context_id = X`.
 
 4. **Focus freshness**: `FocusContext.updated_at` MUST be updated on every coordinator response, reflecting the state AFTER the response's actions are taken.
 
