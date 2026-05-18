@@ -201,7 +201,7 @@ All technical unknowns resolved. See `research.md` for detailed decisions, ratio
 
 See `.specify/specs/002-console-agent/data-model.md` for complete entity definitions, field specifications, relationships, validation rules, SQLite schema extensions, and key invariants.
 
-**Key entities** (6 new domain entities):
+**Key entities** (7 new domain entities):
 - `SessionState` (root aggregate for REPL session)
 - `DialogueTurn` (user/coordinator/system turn with intent/actions)
 - `ContextBlock` (thematic grouping of turns with epistemic snapshot)

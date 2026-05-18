@@ -11,22 +11,18 @@
 - Python 3.11 or higher
 - Existing 001-aicophilosopher development environment set up (see `../001-aicophilosopher/quickstart.md`)
 - Git
-- (Optional) Anthropic API key for NLU classification (falls back to rule-based otherwise)
-- (Optional) Google API key for Gemini Flash NLU (cheaper tier)
+- (Optional) LLM API key(s) for NLU classification (Anthropic, Google, or any backend supported by LLMPort; falls back to rule-based when offline)
 
 ## 2. Environment Setup
 
 ### 2.1 Install Console Agent Dependencies
 
 ```bash
-# From project root
+# prompt_toolkit is added to pyproject.toml as a project dependency.
+# Reinstall in editable mode to pick up the new dependency:
 cd aicophilosopher
-
-# Activate existing virtual environment
 source .venv/bin/activate  # Linux/macOS
-
-# Install new dependency
-pip install "prompt_toolkit>=3.0"
+pip install -e ".[dev]"
 ```
 
 ### 2.2 Verify Installation
@@ -263,8 +259,8 @@ User input → repl.py
             ├── confidence ≥ 0.85 → return UserIntent
             └── confidence < 0.85 → return UserIntent(needs_clarification=True)
     → coordinator.process_input(intent)
+    → session_manager.py → persist turn  # BEFORE render (FR-009)
     → rendering.py → Rich output
-    → session_manager.py → persist turn
 ```
 
 ### 6.3 Session Persistence Lifecycle
@@ -275,11 +271,11 @@ REPL START
     ├── --project <id>? → session_manager.load_or_create(project_id)
     └── --new? → create project + session
 
-REPL LOOP (each turn)
+REPL LOOP (each turn) — per FR-009, persists BEFORE rendering:
     ├── session_manager.persist_turn(user_turn)
-    ├── coordinator.process(intent)
-    ├── rendering.render(response)
-    └── session_manager.persist_turn(coordinator_turn)
+    ├── coordinator.process(intent) → response
+    ├── session_manager.persist_turn(coordinator_turn)  # BEFORE render
+    └── rendering.render(response)
 
 REPL EXIT (/exit, Ctrl+D, SIGTERM)
     └── session_manager.finalize(reason)  [single transaction]
@@ -298,7 +294,7 @@ REPL EXIT (/exit, Ctrl+D, SIGTERM)
 
 ## 8. Contributing
 
-1. Create feature branch from `feature/002-console-agent-plan`
+1. Create feature branch from `002-console-agent` (the spec's feature branch)
 2. Implement one task from `tasks.md` (TDD: test → impl → green)
 3. Run quality gates: `ruff check && mypy && pytest tests/ -q && python scripts/check_domain_purity.py`
 4. Commit with conventional commit: `feat(repl): description`

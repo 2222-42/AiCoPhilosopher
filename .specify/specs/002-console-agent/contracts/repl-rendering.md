@@ -126,7 +126,7 @@ All coordinator responses in the REPL follow a progressive disclosure format per
 
 - **Summary**: Plain text, max 5 lines. Use bold for key terms only.
 - **Epistemic Status**: Key-value pairs separated by ` | `. Always on one line.
-- **Active Workstreams**: One line per workstream. No wrapping within a workstream line.
+- **Active Workstreams**: One line per workstream (ideally). Abbreviate descriptions when necessary to keep each workstream on a single line; at narrow terminal widths lines may wrap.
 - **[Details]**: Full Markdown with headings, lists, code blocks. Rich renders as styled text.
 - **[Suggestions]**: Bulleted list. Each suggestion is a complete sentence with clear action.
 
@@ -214,13 +214,13 @@ def render_response(response: CoordinatorResponse, focus: FocusContext) -> None:
     if response.active_workstreams:
         _render_workstreams(console, response.active_workstreams)
 
-    # Togglable sections
-    if focus.show_details:
+    # Togglable sections (state stored in FocusContext.toggle_state)
+    if focus.toggle_state.show_details:
         _render_details(console, response.details)
     else:
         console.print("[Details]")  # Collapsed indicator
 
-    if focus.show_suggestions:
+    if focus.toggle_state.show_suggestions:
         _render_suggestions(console, response.suggestions)
     else:
         console.print("[Suggestions]")  # Collapsed indicator
@@ -228,10 +228,10 @@ def render_response(response: CoordinatorResponse, focus: FocusContext) -> None:
 
 ### 6.3 Toggle Commands
 
-- `/details` → Set `FocusContext.show_details = True`, re-render last response
-- `/hide-details` → Set `FocusContext.show_details = False`
-- `/suggestions` → Set `FocusContext.show_suggestions = True`, re-render last response
-- `/hide-suggestions` → Set `FocusContext.show_suggestions = False`
+- `/details` → Set `FocusContext.toggle_state.show_details = True`, re-render last response
+- `/hide-details` → Set `FocusContext.toggle_state.show_details = False`
+- `/suggestions` → Set `FocusContext.toggle_state.show_suggestions = True`, re-render last response
+- `/hide-suggestions` → Set `FocusContext.toggle_state.show_suggestions = False`
 
 Toggle state is applied to ALL subsequent responses until toggled again.
 

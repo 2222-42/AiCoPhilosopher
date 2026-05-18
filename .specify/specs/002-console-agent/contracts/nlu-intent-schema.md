@@ -213,6 +213,8 @@ Return ONLY valid JSON, no markdown, no code fences:
   "needs_clarification": <bool>
 }
 
+Note: `raw_input` is populated by the REPL before constructing the UserIntent model; it is NOT part of the LLM classifier output.
+
 ## Rules
 - Confidence MUST reflect how certain you are. Be honest: 0.95 for clear matches, 0.60 for guesses.
 - alternative_intents: top 1-3 alternatives only. Leave empty if no alternatives.

@@ -157,7 +157,7 @@ User input → NLU classification → Coordinator response
 
 ```
 BEGIN TRANSACTION
-  UPDATE sessions SET status='paused', exit_reason='user_exit', last_active_at=NOW()
+  UPDATE sessions SET status='paused', exit_reason='user_exit', last_active_at=CURRENT_TIMESTAMP
   COMMIT
 ```
 
