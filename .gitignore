@@ -226,3 +226,4 @@ chromadb_data/
 .aicophilosopher/
 projects/
 workspace/
+.current_project
