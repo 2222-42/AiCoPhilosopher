@@ -199,17 +199,17 @@
 
 ### 5.2 Command Response Rendering
 
-- [ ] T-021 [US3] Write unit tests for slash command response rendering
+- [x] T-021 [US3] Write unit tests for slash command response rendering
   - **Files**: `tests/unit/presentation/test_rendering.py` (modify: add slash command response tests)
   - **AC**: ≥10 additional tests: test `/status` response renders with Summary + Epistemic Status + Active Workstreams; test `/help` response lists all 28 commands grouped by 6 categories; test `/hypotheses` table output with status/tradition columns; test `/document` shows markdown with optional annotations; test error responses formatted distinctly (red color, usage hint); test toggle commands (`/details`, `/hide-details`) don't produce visible output, just update state; test export confirmation shows file path; test `/archive` confirmation prompt renders with options; `pytest tests/unit/presentation/test_rendering.py -v` passes (old + new tests)
   - **Depends on**: T-020 (slash command output format must be known)
 
-- [ ] T-022 [US3] Implement slash command response renderers in `src/aicophilosopher/presentation/rendering.py`
+- [x] T-022 [US3] Implement slash command response renderers in `src/aicophilosopher/presentation/rendering.py`
   - **Files**: `src/aicophilosopher/presentation/rendering.py` (modify: add `render_command_result()` function)
   - **AC**: `render_command_result(result: CommandResult, focus: FocusContext, console: Console)` renders command output in progressive disclosure format; command-specific formatters: status overview table, hypothesis list table, document sections with annotations, config display; error responses use `Style(color="red")` for error text + dim for usage hint; confirmation prompts (archive) use highlighted panel; all tests from T-021 pass; no regressions in US1 rendering tests
   - **Depends on**: T-021 (TDD), T-013 (existing rendering infrastructure)
 
-- [ ] T-023 [US3] Write integration test for slash commands
+- [x] T-023 [US3] Write integration test for slash commands
   - **Files**: `tests/integration/test_repl_slash_commands.py` (create)
   - **AC**: ≥10 tests: test `/help` → output contains all 6 category headers; test `/status` → output includes project name, workstream counts, epistemic counts; test `/pause ws-001` → workstream paused, confirmation shown; test `/steer ws-001 "focus on post-1980"` → steering dispatched; test `/export markdown` → file created at reported path; test `/add-note "text"` → note persisted and retrievable; test `/hypotheses --status active` → only active hypotheses listed; test `/dead-ends` → failed explorations listed; test unknown command `/xyz` → error with `/help` suggestion; test `/` embedded in natural language not treated as command; all tests use test_mode=True; `pytest tests/integration/test_repl_slash_commands.py -v` passes; existing tests pass
   - **Depends on**: T-020 (parser), T-022 (rendering), T-017 (session resume — some commands need loaded session)
