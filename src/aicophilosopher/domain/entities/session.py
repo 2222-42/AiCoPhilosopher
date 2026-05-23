@@ -12,68 +12,68 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# ── Enums ────────────────────────────────────────────────────────────────
+# ── Enums (UPPER_CASE per codebase convention) ──────────────────────────
 
 
 class SessionStatus(StrEnum):
-    active = "active"
-    paused = "paused"
-    closed = "closed"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CLOSED = "closed"
 
 
 class SpeakerType(StrEnum):
-    user = "user"
-    coordinator = "coordinator"
-    system = "system"
+    USER = "user"
+    COORDINATOR = "coordinator"
+    SYSTEM = "system"
 
 
 class IntentType(StrEnum):
-    start_inquiry = "start_inquiry"
-    clarify_question = "clarify_question"
-    propose_workstream = "propose_workstream"
-    steer_workstream = "steer_workstream"
-    request_status = "request_status"
-    request_detail = "request_detail"
-    request_export = "request_export"
-    approve_action = "approve_action"
-    reject_action = "reject_action"
-    ask_question = "ask_question"
-    inject_information = "inject_information"
-    request_help = "request_help"
-    pause_session = "pause_session"
-    resume_session = "resume_session"
-    archive_project = "archive_project"
-    compare_traditions = "compare_traditions"
+    START_INQUIRY = "start_inquiry"
+    CLARIFY_QUESTION = "clarify_question"
+    PROPOSE_WORKSTREAM = "propose_workstream"
+    STEER_WORKSTREAM = "steer_workstream"
+    REQUEST_STATUS = "request_status"
+    REQUEST_DETAIL = "request_detail"
+    REQUEST_EXPORT = "request_export"
+    APPROVE_ACTION = "approve_action"
+    REJECT_ACTION = "reject_action"
+    ASK_QUESTION = "ask_question"
+    INJECT_INFORMATION = "inject_information"
+    REQUEST_HELP = "request_help"
+    PAUSE_SESSION = "pause_session"
+    RESUME_SESSION = "resume_session"
+    ARCHIVE_PROJECT = "archive_project"
+    COMPARE_TRADITIONS = "compare_traditions"
 
 
 class ApprovalRequestType(StrEnum):
-    workstream_proposal = "workstream_proposal"
-    normative_judgment = "normative_judgment"
-    incommensurability_resolution = "incommensurability_resolution"
-    review_escalation = "review_escalation"
-    external_search_consent = "external_search_consent"
-    synthesis_conflict = "synthesis_conflict"
-    goal_refinement = "goal_refinement"
+    WORKSTREAM_PROPOSAL = "workstream_proposal"
+    NORMATIVE_JUDGMENT = "normative_judgment"
+    INCOMMENSURABILITY_RESOLUTION = "incommensurability_resolution"
+    REVIEW_ESCALATION = "review_escalation"
+    EXTERNAL_SEARCH_CONSENT = "external_search_consent"
+    SYNTHESIS_CONFLICT = "synthesis_conflict"
+    GOAL_REFINEMENT = "goal_refinement"
 
 
 class Urgency(StrEnum):
-    blocking = "blocking"
-    non_blocking = "non_blocking"
+    BLOCKING = "blocking"
+    NON_BLOCKING = "non_blocking"
 
 
 class ActionType(StrEnum):
-    created_project = "created_project"
-    refined_goal = "refined_goal"
-    launched_workstream = "launched_workstream"
-    paused_workstream = "paused_workstream"
-    resumed_workstream = "resumed_workstream"
-    steered_workstream = "steered_workstream"
-    ingested_pdf = "ingested_pdf"
-    synthesized_document = "synthesized_document"
-    exported_document = "exported_document"
-    added_note = "added_note"
-    escalated_to_user = "escalated_to_user"
-    archived_project = "archived_project"
+    CREATED_PROJECT = "created_project"
+    REFINED_GOAL = "refined_goal"
+    LAUNCHED_WORKSTREAM = "launched_workstream"
+    PAUSED_WORKSTREAM = "paused_workstream"
+    RESUMED_WORKSTREAM = "resumed_workstream"
+    STEERED_WORKSTREAM = "steered_workstream"
+    INGESTED_PDF = "ingested_pdf"
+    SYNTHESIZED_DOCUMENT = "synthesized_document"
+    EXPORTED_DOCUMENT = "exported_document"
+    ADDED_NOTE = "added_note"
+    ESCALATED_TO_USER = "escalated_to_user"
+    ARCHIVED_PROJECT = "archived_project"
 
 
 # ── Nested models (depended on by multiple entities) ─────────────────────
@@ -183,7 +183,11 @@ class DialogueTurn(BaseModel):
 
 
 class ContextBlock(BaseModel):
-    """Thematic grouping of dialogue turns with epistemic snapshot."""
+    """Thematic grouping of dialogue turns with epistemic snapshot.
+
+    Turns are NOT stored on the model. Use SessionState.get_turns_for_context()
+    to reconstruct the turn list from dialogue_history at runtime.
+    """
 
     model_config = ConfigDict(frozen=False)
 
@@ -194,14 +198,6 @@ class ContextBlock(BaseModel):
     epistemic_state: EpistemicSnapshot = Field(default_factory=EpistemicSnapshot)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     closed_at: datetime | None = None
-
-    @property
-    def turns(self) -> list[UUID]:
-        """Derived index — reconstructed from dialogue_turns WHERE context_id = self.context_id.
-
-        Not persisted; DialogueTurn.context_id is the authoritative back-reference.
-        """
-        raise NotImplementedError("Computed at runtime from dialogue_turns table")
 
 
 class FocusContext(BaseModel):
@@ -227,20 +223,12 @@ class ApprovalRequest(BaseModel):
     request_id: UUID = Field(default_factory=uuid4)
     request_type: ApprovalRequestType
     description: str = Field(..., min_length=10)
-    options: list[ApprovalOption] = Field(default_factory=list)
-    urgency: Urgency = Urgency.non_blocking
+    options: list[ApprovalOption] = Field(..., min_length=1, max_length=5)
+    urgency: Urgency = Urgency.NON_BLOCKING
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     resolved_at: datetime | None = None
     user_choice: int | None = None
     user_comment: str | None = None
-
-    @field_validator("options")
-    @classmethod
-    def _options_count(cls, v: list[ApprovalOption]) -> list[ApprovalOption]:
-        if not 1 <= len(v) <= 5:
-            msg = "ApprovalRequest.options must contain 1–5 entries"
-            raise ValueError(msg)
-        return v
 
 
 class SessionState(BaseModel):
@@ -250,7 +238,7 @@ class SessionState(BaseModel):
 
     session_id: UUID = Field(default_factory=uuid4)
     project_id: str
-    status: SessionStatus = SessionStatus.active
+    status: SessionStatus = SessionStatus.ACTIVE
     pid: int = Field(default_factory=os.getpid)
     heartbeat_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
@@ -262,3 +250,10 @@ class SessionState(BaseModel):
     active_workstreams: list[str] = Field(default_factory=list)
     exit_reason: str | None = None
     config_snapshot: dict[str, Any] = Field(default_factory=dict)
+
+    def get_turns_for_context(self, context_id: UUID) -> list[DialogueTurn]:
+        """Reconstruct turn list for a ContextBlock from dialogue_history.
+
+        This is the authoritative lookup; turns are NOT stored on ContextBlock.
+        """
+        return [t for t in self.dialogue_history if t.context_id == context_id]
