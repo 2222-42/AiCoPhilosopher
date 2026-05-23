@@ -115,12 +115,12 @@
 
 ### 3.3 Progressive Disclosure Rendering
 
-- [ ] T-012 [P] [US1] Write unit tests for progressive disclosure renderer
+- [x] T-012 [P] [US1] Write unit tests for progressive disclosure renderer
   - **Files**: `tests/unit/presentation/test_rendering.py` (create)
   - **AC**: ≥20 tests: test Summary section always rendered (≤5 lines); test Epistemic Status always rendered (confidence, tradition, review status); test Active Workstreams rendered when workstreams exist (omitted when none); test [Details] collapsed by default (label shown, content hidden); test [Suggestions] collapsed by default; test toggle: `/details` command → `show_details=True` → content visible; test toggle: `/hide-details` → `show_details=False`; test toggle state persisted in FocusContext; test approval requests surfaced in Summary with ⚠️ icon; test system messages rendered in distinct style; test empty sections show placeholder text; test terminal width <80 columns → panels stack vertically; test Rich Panel borders rendered correctly; test confidence color coding (green ≥0.8, yellow ≥0.5, red <0.5); test markdown in [Details] section rendered correctly; all tests verify output string contains expected Rich markup or plain text anchors; `pytest tests/unit/presentation/test_rendering.py -v` passes
   - **Depends on**: T-003 (FocusContext, ToggleState)
 
-- [ ] T-013 [US1] Implement progressive disclosure renderer in `src/aicophilosopher/presentation/rendering.py`
+- [x] T-013 [US1] Implement progressive disclosure renderer in `src/aicophilosopher/presentation/rendering.py`
   - **Files**: `src/aicophilosopher/presentation/rendering.py` (create)
   - **AC**: `render_response(response: CoordinatorResponse, focus: FocusContext, console: Console) -> None` renders 5-section progressive disclosure per `contracts/repl-rendering.md`; `CoordinatorResponse` is a new Pydantic model (or dataclass) with fields: `summary`, `epistemic_status`, `active_workstreams`, `details`, `suggestions`, `is_approval_request`, `approval_options`; Rich `Panel` used for each section; confidence color coding: `Style(color="green")` for ≥0.8, yellow for ≥0.5, red for <0.5; toggle state read from `FocusContext.toggle_state`; `/details` and `/suggestions` commands toggled via `FocusContext.toggle_state` mutations; Summary truncated at 5 lines with `[...]` indicator when longer; system messages use `[System] HH:MM — message` format; all tests from T-012 pass; `ruff check` passes; `mypy` passes
   - **Depends on**: T-012 (TDD), T-003 (FocusContext)
@@ -230,31 +230,31 @@
 
 ### 6.1 Coordinator Integration
 
-- [ ] T-024 [US4] Write unit tests for REPL-to-Coordinator integration
+- [x] T-024 [US4] Write unit tests for REPL-to-Coordinator integration
   - **Files**: `tests/unit/presentation/test_coordinator_integration.py` (create)
   - **AC**: ≥15 tests: test `start_inquiry` intent → `await coordinator.run(user_input=..., command="start")` called; test `clarify_question` intent → `await coordinator.run(user_input=..., command="refine_goal")` called; test `propose_workstream` intent → `await coordinator.run(command="propose_workstream", workstream_type=...)` called; test `approve_action` with workstream proposal → `await coordinator.run(command="approve_goal")` called; test `steer_workstream` intent → `await coordinator.run(command="steer", workstream_id=..., instruction=...)` called; test `request_status` intent → `await coordinator.run(command="status")` called; test `request_export` intent → export handled via StoragePort; test `inject_information` (PDF upload) → PDF ingestion via existing pipeline; test `compare_traditions` intent → workstream launched via `command="propose_workstream"` with appropriate type; test `dialogue_state` field in coordinator response dict used for routing (e.g., `"awaiting_question"`, `"clarifying"`, `"goal_proposed"`); test coordinator response `dict[str, Any]` transforms to `CoordinatorResponse` for rendering; test workstream status updates queued when received mid-input; test bidirectional help: coordinator raises approval request → surfaced as ⚠️ in Summary; test user's approval response routes back to coordinator; test existing message protocol used (no new message types introduced); all tests mock coordinator (return pre-scripted `dict[str, Any]` responses); `pytest tests/unit/presentation/test_coordinator_integration.py -v` passes
   - **Depends on**: T-009 (NLU — intents must be defined), T-011 (REPL loop — integration point)
 
-- [ ] T-025 [US4] Implement REPL-Coordinator adapter in `src/aicophilosopher/presentation/repl.py`
+- [x] T-025 [US4] Implement REPL-Coordinator adapter in `src/aicophilosopher/presentation/repl.py`
   - **Files**: `src/aicophilosopher/presentation/repl.py` (modify: add `_route_to_coordinator()` function)
   - **AC**: `_route_to_coordinator(intent: UserIntent, coordinator: ProjectCoordinatorAgent) -> CoordinatorResponse` function; maps all 16 intent types to `await coordinator.run(...)` calls using the existing command API (`command="start"`, `"refine_goal"`, `"approve_goal"`, `"propose_workstream"`, `"steer"`, `"status"`); reads `dialogue_state` from coordinator's `dict[str, Any]` response for routing decisions; converts coordinator output to `CoordinatorResponse` for rendering; `approval_request` extraction: when `dialogue_state == "goal_proposed"` or similar, wrap in `CoordinatorResponse(is_approval_request=True, approval_options=[...])`; workstream status changes from async updates queued and surfaced per FR-024; uses existing JSON message protocol from 001 contracts (FR-023); no new message types introduced; all tests from T-024 pass; no regressions in US1-US3 tests
   - **Depends on**: T-024 (TDD)
 
 ### 6.2 Async Workstream Surfacing
 
-- [ ] T-026 [P] [US4] Write unit tests for workstream status surfacing
+- [x] T-026 [P] [US4] Write unit tests for workstream status surfacing
   - **Files**: `tests/unit/presentation/test_workstream_surfacing.py` (create)
   - **AC**: ≥12 tests: test background thread polls workstream status every 2s; test status change (running→completed) queued and surfaced after current turn; test progress update (30%→60%) updates Rich Live bar only; test approval request surfaced immediately with ⚠️; test stalled workstream surfaced with warning icon; test updates queued during user input (not interrupting mid-typing); test multiple concurrent status changes all queued in order; test thread cleanly stopped on session exit; test polling uses StoragePort (not direct DB access); test error in polling thread doesn't crash REPL (error logged, polling continues); test workstream completion during session absence detected on resume; test LangGraph checkpointing integrated (workstreams continue independent of REPL process); `pytest tests/unit/presentation/test_workstream_surfacing.py -v` passes
   - **Depends on**: T-003 (SessionState.active_workstreams), T-011 (REPL loop — polling thread lifecycle)
 
-- [ ] T-027 [US4] Implement workstream status surfacing in `src/aicophilosopher/presentation/repl.py`
+- [x] T-027 [US4] Implement workstream status surfacing in `src/aicophilosopher/presentation/repl.py`
   - **Files**: `src/aicophilosopher/presentation/repl.py` (modify: add `WorkstreamPoller` class)
   - **AC**: `WorkstreamPoller` class: `start(session_id, storage_port, update_queue)`, `stop()`, `_poll()`; runs in `threading.Thread` with 2s interval; queries workstream status via `StoragePort`; compares with last known states; detects transitions: running→completed, running→failed, running→stalled; queues `StatusChange` named tuples to update queue; `Rich Live` display updated with current workstream bar; approval requests detected and surfaced immediately; thread daemon=True (dies with main process); `stop()` sets event flag and joins; integration with REPL loop: `_flush_updates()` called before each prompt display; all tests from T-026 pass
   - **Depends on**: T-026 (TDD), T-025 (coordinator integration)
 
 ### 6.3 Full Cycle Integration Test
 
-- [ ] T-028 [US4] Write integration test for full inquiry cycle
+- [x] T-028 [US4] Write integration test for full inquiry cycle
   - **Files**: `tests/integration/test_full_inquiry_cycle.py` (create)
   - **AC**: ≥8 tests: test full cycle — start inquiry "explore free will" → 3-turn Socratic clarification → goals approved → workstreams proposed → literature search launched → concept analysis launched → argumentation launched → critical review triggered → synthesis triggered → tentative answer presented; test pivot mid-cycle — "Actually, examine from phenomenological angle" → context shift, new workstream; test deepen — "Drill into Frankfurt 1969" → focused workstream; test info injection — upload mock PDF → RAG ingestion triggered; test dialectical history — "Show me how we arrived at this claim" → lineage presented; test 100-turn stress test — session handles 100 turns without degradation (response time ≤30s for 100th turn, comparable to 10th); test living document updated after synthesis with margin annotations; test all epistemic statuses tracked through cycle; all tests use test_mode=True, mock coordinator with pre-scripted responses; `pytest tests/integration/test_full_inquiry_cycle.py -v` passes; all existing tests pass (no regressions)
   - **Depends on**: T-025 (coordinator integration), T-027 (workstream surfacing), T-020 (slash commands — `/search`, `/argue`, etc.)
@@ -269,17 +269,17 @@
 
 **Purpose**: CLI entry point integration, quickstart validation, edge case hardening, and final quality gates.
 
-- [ ] T-029 [Polish] Wire `aicophilosopher` CLI entry point to launch REPL mode
+- [x] T-029 [Polish] Wire `aicophilosopher` CLI entry point to launch REPL mode
   - **Files**: `src/aicophilosopher/presentation/cli.py` (modify: add `repl` entry point)
   - **AC**: Running `aicophilosopher` (no subcommand) launches REPL mode; `aicophilosopher --project <id>` opens specific project; `aicophilosopher --new "<question>"` creates project and enters REPL; `aicophilosopher --test-mode` launches with mock coordinator; `aicophilosopher --help` shows REPL options alongside existing subcommand help; existing CLI subcommands (`new-project`, `start-workstream`, `refine-goal`, etc.) still work unchanged; `aicophilosopher --version` shows version; `pip install -e ".[dev]"` makes the console script available in PATH (existing project pattern, no Poetry); `ruff check` passes; `mypy` passes
   - **Depends on**: T-011 (REPL loop), T-017 (startup flow)
 
-- [ ] T-030 [P] [Polish] Validate quickstart.md instructions end-to-end
+- [x] T-030 [P] [Polish] Validate quickstart.md instructions end-to-end
   - **Files**: `.specify/specs/002-console-agent/quickstart.md` (reference only — validate, don't modify unless corrections needed)
   - **AC**: All `pip install` commands succeed; `python -c "from prompt_toolkit import PromptSession"` works; `python -m pytest tests/ -q` passes full test suite; `ruff check src/aicophilosopher/presentation/ tests/unit/presentation/` passes; `mypy src/aicophilosopher/presentation/ src/aicophilosopher/domain/entities/session.py` passes; `python scripts/check_domain_purity.py` passes (session.py only imports stdlib + pydantic); `make check` or equivalent runs all gates; manual REPL launch in test mode works: `aicophilosopher --test-mode` starts and accepts input; sqlite3 inspection queries from quickstart §5.4 work correctly; any discrepancies between quickstart and reality are fixed in quickstart.md
   - **Depends on**: T-029 (CLI entry point), all prior tasks
 
-- [ ] T-031 [Polish] Edge case hardening and NLU accuracy validation
+- [x] T-031 [Polish] Edge case hardening and NLU accuracy validation
   - **Files**: `src/aicophilosopher/presentation/nlu.py` (modify: edge case handling), `tests/unit/presentation/test_nlu.py` (modify: add edge case tests)
   - **AC**: Edge cases from spec §Edge Cases all covered by tests: NLU misclassification below confidence → clarifying question (not wrong action); empty input → treated as inquiry start ("What would you like to explore?"); `/` in natural language ("What does /search do?") → NOT routed to slash handler; SIGKILL crash recovery → at most 1 turn lost, stale session reclaimed; concurrent session conflict → warning + choice interface; 1000-turn session → no performance degradation (latency ≤30s for 1000th turn); non-philosophical input ("What's the weather?") → polite redirection to philosophical topics; workstream completion during session absence → surfaced on resume; steering completed workstream → explained, new workstream offered; SC-002 NLU accuracy test: ≥90% on 100-utterance test set (test fixture created as `tests/fixtures/nlu_accuracy_test_set.json`); `pytest tests/unit/presentation/test_nlu.py -v` passes (old + new edge case tests); all integration tests pass
   - **Depends on**: T-028 (full cycle), T-018 (session persistence), T-023 (slash commands)
