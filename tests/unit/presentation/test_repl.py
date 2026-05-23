@@ -126,6 +126,7 @@ async def test_slash_input_routed_to_command_handler(
     from aicophilosopher.presentation.repl import _process_input
 
     with patch("aicophilosopher.presentation.repl._handle_slash") as mock_slash:
+        mock_slash.return_value = {"message": "Goodbye!", "action": "exit"}
         await _process_input(
             user_input="/exit",
             session=mock_session,
