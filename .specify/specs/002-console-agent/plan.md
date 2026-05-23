@@ -87,7 +87,15 @@ The Console Agent transforms AiCoPhilosopher from a CLI-command-driven tool into
 | **IV. Testing** | Automated tests; deterministic; mocks for LLM. | ✅ PASS | NLU accuracy test (SC-002). Session persistence testable (US2 scenarios). Concurrent session detection test (SC-009). Mock LLM for deterministic NLU tests. |
 | **V. MVP-First** | P1 features only in MVP scope. | ✅ PASS | P1 = natural language + session persistence. P2 = slash commands + full inquiry cycle. Tab-completion deferred. Web UI deferred to 001 Phase 4. |
 
-**Re-check after Phase 1**: Pending design completion.
+**Re-check after Phase 1** (2026-05-18): All 5 principles re-verified against completed design artifacts (data-model.md, 3 contracts, quickstart.md). No regressions. **PASS** ✅
+
+| Principle | Phase 1 Design Artifacts Verified | Status |
+|-----------|----------------------------------|--------|
+| **I. Core Independence & Local-First Privacy** | data-model.md §2.1: `external_search_consent` ApprovalRequestType gates all external calls. quickstart.md §6 (NLU fallback). | ✅ PASS |
+| **II. Intellectual Honesty** | contracts/repl-rendering.md §2.2: Epistemic Status always visible. data-model.md §2.5: EpistemicSnapshot tracks claims/hypotheses. | ✅ PASS |
+| **III. Code Quality** | data-model.md: All entities are Pydantic BaseModel with validation rules. quickstart.md §6.1: Clean Architecture layer boundaries documented. | ✅ PASS |
+| **IV. Testing** | quickstart.md §5.1: Unit + integration test commands documented. contracts/nlu-intent-schema.md §3: Deterministic validation rules for NLU output. | ✅ PASS |
+| **V. MVP-First** | contracts/repl-commands.md: 28 slash commands (all P2 as US3 — power-user shortcuts). quickstart.md: REPL launch documented. | ✅ PASS |
 
 ## Project Structure
 
@@ -233,4 +241,4 @@ Not created by `/speckit.plan`. The plan ends here. The next step is `/speckit.t
 
 ---
 
-**Plan Version**: 1.0.0 | **Last Updated**: 2026-05-18 | **Status**: Phase 0 & Phase 1 In Progress
+**Plan Version**: 1.0.0 | **Last Updated**: 2026-05-18 | **Status**: Phase 0 & Phase 1 Complete ✅
