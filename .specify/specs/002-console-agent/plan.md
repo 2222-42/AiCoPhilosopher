@@ -95,7 +95,7 @@ The Console Agent transforms AiCoPhilosopher from a CLI-command-driven tool into
 | **II. Intellectual Honesty** | contracts/repl-rendering.md §2.2: Epistemic Status always visible. data-model.md §2.5: EpistemicSnapshot tracks claims/hypotheses. | ✅ PASS |
 | **III. Code Quality** | data-model.md: All entities are Pydantic BaseModel with validation rules. quickstart.md §6.1: Clean Architecture layer boundaries documented. | ✅ PASS |
 | **IV. Testing** | quickstart.md §5.1: Unit + integration test commands documented. contracts/nlu-intent-schema.md §3: Deterministic validation rules for NLU output. | ✅ PASS |
-| **V. MVP-First** | contracts/repl-commands.md: 28 commands (P1: session/inquiry/steering; P2: view/export/config). quickstart.md: REPL launch documented. | ✅ PASS |
+| **V. MVP-First** | contracts/repl-commands.md: 28 slash commands (all P2 as US3 — power-user shortcuts). quickstart.md: REPL launch documented. | ✅ PASS |
 
 ## Project Structure
 
