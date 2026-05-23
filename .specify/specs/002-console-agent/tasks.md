@@ -22,12 +22,12 @@
 
 **Purpose**: Add the single new production dependency (prompt_toolkit) and create the NLU system prompt. No code changes yet.
 
-- [ ] T-001 [P] [Foundation] Add `prompt_toolkit>=3.0` to `pyproject.toml` dependencies and reinstall editable package
+- [x] T-001 [P] [Foundation] Add `prompt_toolkit>=3.0` to `pyproject.toml` dependencies and reinstall editable package
   - **Files**: `pyproject.toml` (modify: add `"prompt_toolkit>=3.0"` to `[project] dependencies`)
   - **AC**: `pip install -e ".[dev]"` succeeds; `python -c "from prompt_toolkit import PromptSession; print('OK')"` outputs `OK`; `python -c "from prompt_toolkit.history import FileHistory; print('OK')"` outputs `OK`; existing test suite (`pytest tests/ -q`) passes with no regressions
   - **Depends on**: (none — can start immediately)
 
-- [ ] T-002 [P] [Foundation] Create NLU intent classification system prompt at `prompts/nlu/intent_classifier.md`
+- [x] T-002 [P] [Foundation] Create NLU intent classification system prompt at `prompts/nlu/intent_classifier.md`
   - **Files**: `prompts/nlu/intent_classifier.md` (create)
   - **AC**: File exists with: 16 intent types listed with descriptions + 3 examples each; JSON output format spec shown; confidence threshold rule (<0.85 → needs_clarification) documented; Japanese examples included alongside English; context template with `{project_title}`, `{workstream_list}`, `{active_topic}`, `{pending_count}` placeholders; matches `contracts/nlu-intent-schema.md` §5 structure exactly
   - **Depends on**: (none — can start in parallel with T-001)
@@ -42,20 +42,20 @@
 
 ### 2.1 Domain Entities
 
-- [ ] T-003 [Foundation] Implement all 7 Console Agent domain entities as Pydantic v2 models in `src/aicophilosopher/domain/entities/session.py`
+- [x] T-003 [Foundation] Implement all 7 Console Agent domain entities as Pydantic v2 models in `src/aicophilosopher/domain/entities/session.py`
   - **Files**: `src/aicophilosopher/domain/entities/session.py` (create)
   - **Entities**: `SessionState`, `DialogueTurn`, `UserIntent`, `ContextBlock`, `FocusContext`, `ApprovalRequest`, `ActionTaken` + all nested enums/models: `SessionStatus`, `SpeakerType`, `IntentType`, `AlternativeIntent`, `EpistemicSnapshot`, `PendingDecision`, `ToggleState`, `ApprovalRequestType`, `ApprovalOption`, `Urgency`, `ActionType`
   - **AC**: All entities importable: `from aicophilosopher.domain.entities.session import SessionState`; all entities validate correctly with sample data per `data-model.md` §2; `confidence` field bounds (0.0–1.0) enforced by Pydantic validator; `SessionStatus` enum values match (`active`, `paused`, `closed`); `IntentType` has all 16 values; `ApprovalRequestType` has all 7 values; `SpeakerType` has 3 values; `domain/entities/session.py` imports ONLY stdlib + pydantic (verified by `python scripts/check_domain_purity.py`); `ruff check` and `mypy` pass on the file
   - **Depends on**: T-001 (prompt_toolkit in deps — not used by session.py directly, but project must be installable)
 
-- [ ] T-004 [P] [Foundation] Write unit tests for all session domain entities
+- [x] T-004 [P] [Foundation] Write unit tests for all session domain entities
   - **Files**: `tests/unit/domain/test_session.py` (create)
   - **AC**: ≥30 tests covering: validation rules for each entity (required fields, bounds, enum membership); `SessionState` status transitions (active→paused→closed rejections); `DialogueTurn` speaker-type consistency (user turns must have intent, coordinator turns must have actions); `confidence` bound enforcement (reject <0.0, >1.0); `ApprovalRequest` resolution rules (resolved_at requires user_choice); `ContextBlock` computed `turns` property raises `NotImplementedError` (derived, not persisted); `FocusContext` default factory creates valid instance; immutability: copying entities via `.model_copy()` works correctly; all test fixtures use deterministic UUIDs (no `uuid4()` in test assertions); `pytest tests/unit/domain/test_session.py -v` passes; domain purity check still passes after adding test file
   - **Depends on**: T-003 (needs the entity classes to test)
 
 ### 2.2 SQLite Schema Extensions
 
-- [ ] T-005 [Foundation] Extend SQLite adapter with session persistence schema in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`
+- [x] T-005 [Foundation] Extend SQLite adapter with session persistence schema in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`
   - **Files**: `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py` (modify: add `_ensure_session_tables()` method + 4 CREATE TABLE statements + 7 INDEX statements from `data-model.md` §3)
   - **Tables**: `sessions`, `approval_requests`, `dialogue_turns`, `context_blocks`
   - **AC**: All 4 tables created on adapter init; `sessions` table has `project_id` FK → `projects(project_id) ON DELETE CASCADE`; `UNIQUE INDEX idx_sessions_one_active ON sessions(project_id) WHERE status = 'active'` enforces one-active-per-project rule; `dialogue_turns` has `session_id` FK → `sessions(session_id) ON DELETE CASCADE`; `dialogue_turns` has composite index on `(session_id, timestamp)`; `approval_requests` has filtered index for pending requests (`WHERE resolved_at IS NULL`); `context_blocks` has `session_id` FK; all tables survive re-initialization (`CREATE TABLE IF NOT EXISTS`); existing 001 tables not affected (no ALTER, no DROP); `pytest tests/ --ignore=tests/unit/presentation --ignore=tests/integration -q` (existing tests) passes

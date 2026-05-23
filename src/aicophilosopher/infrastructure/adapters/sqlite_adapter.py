@@ -114,6 +114,78 @@ CREATE TABLE IF NOT EXISTS notes (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )"""
 
+# ── 002-console-agent session tables ─────────────────────────────────────
+
+CREATE_SESSIONS = """\
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'paused', 'closed')),
+    pid INTEGER,
+    heartbeat_at TIMESTAMP,
+    focus_json TEXT DEFAULT '{}',
+    active_workstreams_json TEXT DEFAULT '[]',
+    exit_reason TEXT,
+    config_snapshot_json TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)"""
+
+CREATE_APPROVAL_REQUESTS = """\
+CREATE TABLE IF NOT EXISTS approval_requests (
+    request_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    request_type TEXT NOT NULL CHECK (request_type IN (
+        'workstream_proposal', 'normative_judgment', 'incommensurability_resolution',
+        'review_escalation', 'external_search_consent', 'synthesis_conflict', 'goal_refinement'
+    )),
+    description TEXT NOT NULL,
+    options_json TEXT NOT NULL DEFAULT '[]',
+    urgency TEXT DEFAULT 'non_blocking' CHECK (urgency IN ('blocking', 'non_blocking')),
+    resolved_at TIMESTAMP,
+    user_choice INTEGER,
+    user_comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)"""
+
+CREATE_DIALOGUE_TURNS = """\
+CREATE TABLE IF NOT EXISTS dialogue_turns (
+    turn_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    speaker TEXT NOT NULL CHECK (speaker IN ('user', 'coordinator', 'system')),
+    content TEXT NOT NULL,
+    intent_json TEXT,
+    actions_json TEXT,
+    context_id TEXT,
+    approved_by_user BOOLEAN,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+)"""
+
+CREATE_CONTEXT_BLOCKS = """\
+CREATE TABLE IF NOT EXISTS context_blocks (
+    context_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES sessions(session_id) ON DELETE CASCADE,
+    label TEXT NOT NULL,
+    summary TEXT DEFAULT '',
+    parent_context TEXT,
+    epistemic_snapshot_json TEXT DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    closed_at TIMESTAMP
+)"""
+
+# ── 002-console-agent session indexes ────────────────────────────────────
+
+SESSION_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_sessions_project ON sessions(project_id)",
+    "CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_one_active ON sessions(project_id) WHERE status = 'active'",
+    "CREATE INDEX IF NOT EXISTS idx_approval_requests_session ON approval_requests(session_id)",
+    "CREATE INDEX IF NOT EXISTS idx_approval_requests_pending ON approval_requests(session_id) WHERE resolved_at IS NULL",
+    "CREATE INDEX IF NOT EXISTS idx_dialogue_turns_session_ts ON dialogue_turns(session_id, timestamp)",
+    "CREATE INDEX IF NOT EXISTS idx_dialogue_turns_context ON dialogue_turns(context_id)",
+    "CREATE INDEX IF NOT EXISTS idx_context_blocks_session ON context_blocks(session_id)",
+]
+
 INDEXES = [
     "CREATE INDEX IF NOT EXISTS idx_workstreams_project ON workstreams(project_id)",
     "CREATE INDEX IF NOT EXISTS idx_workstreams_status ON workstreams(status)",
@@ -129,7 +201,9 @@ INDEXES = [
 ]
 
 SQL_SCHEMA = [CREATE_PROJECTS, CREATE_WORKSTREAMS, CREATE_HYPOTHESES, CREATE_UNCERTAINTY,
-              CREATE_MESSAGES, CREATE_REVIEW_ROUNDS, CREATE_ARTIFACTS, CREATE_NOTES] + INDEXES
+              CREATE_MESSAGES, CREATE_REVIEW_ROUNDS, CREATE_ARTIFACTS, CREATE_NOTES,
+              CREATE_SESSIONS, CREATE_APPROVAL_REQUESTS, CREATE_DIALOGUE_TURNS,
+              CREATE_CONTEXT_BLOCKS] + INDEXES + SESSION_INDEXES
 
 
 class SQLiteAdapter:
