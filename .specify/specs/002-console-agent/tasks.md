@@ -127,7 +127,7 @@
 
 ### 3.4 US1 Integration
 
-- [ ] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
+- [x] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
   - **Files**: `tests/integration/test_repl_us1_inquiry.py` (create)
   - **AC**: ≥5 tests: test full flow — launch REPL → type "I want to explore free will" → NLU classifies as `start_inquiry` → mock coordinator returns Socratic response → progressive disclosure rendered; test clarification dialogue — user answers coordinator's question → NLU classifies as `clarify_question` → coordinator refines; test empty input → no crash, prompt re-shown; test 5-turn conversation → all turns persisted in dialogue history; test `/exit` → session finalized, status=paused; all tests use test_mode=True (no real LLM), mock coordinator answers; `pytest tests/integration/test_repl_us1_inquiry.py -v` passes; existing test suite passes (no regressions)
   - **Depends on**: T-011 (REPL loop), T-013 (rendering)
