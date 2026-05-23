@@ -119,21 +119,37 @@ async def _startup_flow(
     from aicophilosopher.presentation.session_manager import SessionManager
 
     sm = SessionManager()
+
+    # Reclaim stale sessions before listing
+    reclaimed = await sm.reclaim_stale_sessions()
+    if reclaimed > 0:
+        print(f"[System] Reclaimed {reclaimed} stale session(s).")
+
     if project_id:
         session = await sm.load_session(project_id)
         if session:
+            # Concurrent session check
+            if session.status == SessionStatus.ACTIVE:
+                live = await sm.is_active_session_live(session.pid)
+                if live:
+                    print("Warning: Another active session exists for this project.")
+                    print("Opening in read-only mode is not yet supported.")
+                    return None
             session.status = SessionStatus.ACTIVE
             return session
         return await sm.create_session(project_id)
 
     projects = await sm.list_projects()
     if not projects:
-        return None  # No projects yet — caller prompts user
+        return None
 
-    # In non-interactive mode, pick first paused project
+    # Auto-resume first paused project (non-interactive mode)
     for p in projects:
         if p.get("session_status") == "paused":
-            return await sm.load_session(p["project_id"])
+            session = await sm.load_session(p["project_id"])
+            if session:
+                session.status = SessionStatus.ACTIVE
+                return session
 
     return None
 

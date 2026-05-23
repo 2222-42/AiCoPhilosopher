@@ -161,12 +161,12 @@
 
 ### 4.2 Session Resume Flow
 
-- [ ] T-017 [US2] Implement project selection and session resume UI in REPL startup
+- [x] T-017 [US2] Implement project selection and session resume UI in REPL startup
   - **Files**: `src/aicophilosopher/presentation/repl.py` (modify: add `_startup_flow()` function), `src/aicophilosopher/presentation/cli.py` (modify: wire `--project`, `--new`, `--test-mode` flags)
   - **AC**: On `aicophilosopher` (no args): list projects with numbers (1-N), prompt user to select; numeric input selects project; UUID input treated as project ID; new question input → create new project + session; `--project <id>` flag: skip list, open directly; `--new "<question>"` flag: create project + begin clarification; `--test-mode` flag: skip LLM, use mock coordinator; stale session reclaim runs on startup (before project list); concurrent session detection: if selected project has live session → warn + offer terminate/read-only/cancel; session resume: load SessionState → coordinator presents structured summary (last topic, completed since exit, running workstreams, pending approvals); session resume: coordinator's LLM context populated with last N turns + context block summaries + pending approvals per FR-012; `pytest tests/integration/test_repl_us1_inquiry.py -v` still passes (no regressions to US1)
   - **Depends on**: T-016 (session manager), T-011 (REPL loop)
 
-- [ ] T-018 [US2] Write integration test for session persistence and resume
+- [x] T-018 [US2] Write integration test for session persistence and resume
   - **Files**: `tests/integration/test_session_persistence.py` (create)
   - **AC**: ≥8 tests: test full persist-resume cycle — create project, 5 turns of dialogue, `/exit`, load session, verify all 10 dialogue turns present; test workstream survival — launch workstream, `/exit`, resume, workstream still `running`; test pending approval survival — coordinator raises approval request, `/exit`, resume, approval re-presented; test context blocks survive restart — 3 context blocks created, `/exit`, resume, all 3 loaded with correct turn associations; test stale reclaim on crash — insert stale active session row (old PID), run reclaim, verify marked `stale_reclaimed`; test concurrent session detection — insert live active session, attempt resume, verify warning; test resume summary presentation — after resume, coordinator output includes last topic and workstream counts; test heartbeat updated on each turn; all tests use in-memory SQLite, test_mode=True; `pytest tests/integration/test_session_persistence.py -v` passes; existing tests pass (no regressions)
   - **Depends on**: T-017 (resume UI), T-016 (session manager)
