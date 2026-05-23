@@ -15,11 +15,13 @@ Examples:
 - EN: "I'm approaching this from phenomenology" → tradition: "phenomenology"
 - JA: "存在論の観点から" → angle: "ontological"
 
-### propose_workstream — Accept or reject proposed workstreams
+### propose_workstream — Accept or reject proposed workstreams (only when coordinator has explicitly proposed workstreams and no pending ApprovalRequest exists)
 Examples:
-- EN: "Yes, go ahead" → acceptance: true
+- EN: "Yes, go ahead" (after coordinator proposal, no pending approval) → acceptance: true
 - EN: "Not yet, I want to refine first" → acceptance: false
 - JA: "はい、始めてください" → acceptance: true
+
+**Disambiguation**: If the current context has {pending_count} > 0 pending approval requests, prefer `approve_action` or `reject_action` over `propose_workstream`. `propose_workstream` is used only when the coordinator has proposed workstreams conversationally (dialogue_state == "goal_proposed") but no structured ApprovalRequest is active.
 
 ### steer_workstream — Redirect or refine an active workstream
 Examples:
@@ -95,9 +97,9 @@ Examples:
 
 ### compare_traditions — Request cross-traditional comparison
 Examples:
-- EN: "How would a phenomenologist approach this?" → tradition_b: "phenomenology"
-- EN: "Compare the analytic and pragmatist views on truth" → tradition_a: "analytic", tradition_b: "pragmatist"
-- JA: "現象学の観点からはどう見える？" → tradition_b: "phenomenology"
+- EN: "How would a phenomenologist approach this?" → topic: use {active_topic}, tradition_b: "phenomenology" (infer tradition_a from context; if unclear, set needs_clarification=true)
+- EN: "Compare the analytic and pragmatist views on truth" → topic: "truth", tradition_a: "analytic", tradition_b: "pragmatist"
+- JA: "現象学の観点からはどう見える？" → topic: use {active_topic}, tradition_b: "phenomenology" (infer tradition_a from context)
 
 ## Context
 The user is in a REPL session. The current context is:
@@ -122,7 +124,7 @@ Note: `raw_input` is populated by the REPL before constructing the UserIntent mo
 
 ## Rules
 - Confidence MUST reflect how certain you are. Be honest: 0.95 for clear matches, 0.60 for guesses.
-- alternative_intents: top 1-3 alternatives only. Leave empty if no alternatives.
+- alternative_intents: top 1-3 alternatives only, sorted highest→lowest confidence. Leave empty if no alternatives.
 - extracted_entities: only extract what the user explicitly stated. Don't invent entities.
 - needs_clarification: true if confidence < 0.85 OR if multiple intents are equally plausible (variance < 0.1 among top 3).
 - Japanese input: classify with the same confidence standards. If unsure about a Japanese expression, lower confidence and set needs_clarification=true.
