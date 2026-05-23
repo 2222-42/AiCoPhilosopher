@@ -21,8 +21,8 @@
 ## 2. Contract Completeness
 
 - [x] REPL Slash Commands contract (`contracts/repl-commands.md`)
-- [ ] REPL Rendering contract (progressive disclosure output format)
-- [ ] NLU Intent Schema (formal specification of intent types and entity schemas)
+- [x] REPL Rendering contract (`contracts/repl-rendering.md` — 5-section progressive disclosure format)
+- [x] NLU Intent Schema (`contracts/nlu-intent-schema.md` — 16 intent types, entity schemas, classification prompt, fallback)
 
 ## 3. Data Model Completeness
 
