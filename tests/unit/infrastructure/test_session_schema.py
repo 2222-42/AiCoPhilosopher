@@ -183,18 +183,18 @@ async def test_dialogue_turns_returned_in_timestamp_order(adapter: SQLiteAdapter
     )
     await _execute(
         adapter,
-        "INSERT INTO dialogue_turns (turn_id, session_id, speaker, content) VALUES (?, ?, ?, ?)",
+        "INSERT INTO dialogue_turns (turn_id, session_id, speaker, content, timestamp) VALUES (?, ?, ?, ?, datetime('now', '-1 seconds'))",
         ("t1", "s1", "user", "first"),
     )
     await _execute(
         adapter,
-        "INSERT INTO dialogue_turns (turn_id, session_id, speaker, content) VALUES (?, ?, ?, ?)",
+        "INSERT INTO dialogue_turns (turn_id, session_id, speaker, content, timestamp) VALUES (?, ?, ?, ?, datetime('now'))",
         ("t2", "s1", "coordinator", "second"),
     )
     conn = await adapter._connect()
     try:
         cursor = await conn.execute(
-            "SELECT turn_id FROM dialogue_turns WHERE session_id = ? ORDER BY timestamp ASC",
+            "SELECT turn_id FROM dialogue_turns WHERE session_id = ? ORDER BY timestamp ASC, turn_id ASC",
             ("s1",),
         )
         rows = await cursor.fetchall()
@@ -324,13 +324,34 @@ async def test_dialogue_turn_speaker_check_constraint(adapter: SQLiteAdapter) ->
 
 @pytest.mark.asyncio
 async def test_filtered_index_used_for_pending_approvals(adapter: SQLiteAdapter) -> None:
+    await _execute(
+        adapter,
+        "INSERT INTO projects (project_id, title, original_question) VALUES (?, ?, ?)",
+        ("p1", "Test", "q"),
+    )
+    await _execute(
+        adapter,
+        "INSERT INTO sessions (session_id, project_id, status) VALUES (?, ?, ?)",
+        ("s1", "p1", "active"),
+    )
+    await _execute(
+        adapter,
+        "INSERT INTO approval_requests (request_id, session_id, request_type, description, options_json) VALUES (?, ?, ?, ?, ?)",
+        ("r1", "s1", "workstream_proposal", "Pending request", "[]"),
+    )
+    await _execute(
+        adapter,
+        "INSERT INTO approval_requests (request_id, session_id, request_type, description, options_json, resolved_at) VALUES (?, ?, ?, ?, ?, datetime('now'))",
+        ("r2", "s1", "goal_refinement", "Resolved request", "[]"),
+    )
     conn = await adapter._connect()
     try:
         cursor = await conn.execute(
-            "EXPLAIN QUERY PLAN SELECT * FROM approval_requests WHERE resolved_at IS NULL"
+            "EXPLAIN QUERY PLAN SELECT * FROM approval_requests WHERE session_id = ? AND resolved_at IS NULL",
+            ("s1",),
         )
         rows = await cursor.fetchall()
         plan = "\n".join(str(dict(r)) for r in rows)
-        assert "idx_approval_requests_pending" in plan or "USING INDEX" in plan
+        assert "idx_approval_requests_pending" in plan
     finally:
         await conn.close()
