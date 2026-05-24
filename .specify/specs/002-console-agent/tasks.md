@@ -68,7 +68,7 @@
 
 ### 2.3 StoragePort Extension
 
-- [ ] T-007 [Foundation] Add session persistence method signatures to StoragePort protocol
+- [x] T-007 [Foundation] Add session persistence method signatures to StoragePort protocol
   - **Files**: `src/aicophilosopher/ports/storage_port.py` (modify: add async method signatures following existing Protocol pattern)
   - **Methods to add** (all `async def`, returning `...` body per existing Protocol conventions): `save_session(session: dict[str, object]) -> None`, `load_session(project_id: str) -> dict[str, object] | None`, `list_projects_with_sessions() -> list[dict[str, object]]`, `reclaim_stale_sessions() -> int`, `save_dialogue_turn(turn: dict[str, object], session_id: str) -> None`, `save_approval_request(request: dict[str, object], session_id: str) -> None`, `load_pending_approvals(session_id: str) -> list[dict[str, object]]`, `update_session_heartbeat(session_id: str) -> None`, `finalize_session(session_id: str, reason: str) -> None`
   - **AC**: All 9 signatures follow existing `typing.Protocol` pattern (`async def ...` with `...` body); each has docstring describing behavior per `data-model.md` invariants; `mypy --strict src/aicophilosopher/ports/storage_port.py` passes and catches any adapter that misses a method; IDs use `str` type consistent with existing port signatures (`project_id`, `workstream_id` are `str` in the codebase, not `UUID`); existing adapter tests still pass (StoragePort is a Protocol, not ABC — missing methods are caught by mypy, not runtime TypeError); no implementation — signatures only
