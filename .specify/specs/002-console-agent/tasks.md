@@ -55,7 +55,7 @@
 
 ### 2.2 SQLite Schema Extensions
 
-- [ ] T-005 [Foundation] Extend SQLite adapter with session persistence schema in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`
+- [x] T-005 [Foundation] Extend SQLite adapter with session persistence schema in `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py`
   - **Files**: `src/aicophilosopher/infrastructure/adapters/sqlite_adapter.py` (modify: add `_ensure_session_tables()` method + 4 CREATE TABLE statements + 7 INDEX statements from `data-model.md` §3)
   - **Tables**: `sessions`, `approval_requests`, `dialogue_turns`, `context_blocks`
   - **AC**: All 4 tables created on adapter init; `sessions` table has `project_id` FK → `projects(project_id) ON DELETE CASCADE`; `UNIQUE INDEX idx_sessions_one_active ON sessions(project_id) WHERE status = 'active'` enforces one-active-per-project rule; `dialogue_turns` has `session_id` FK → `sessions(session_id) ON DELETE CASCADE`; `dialogue_turns` has composite index on `(session_id, timestamp)`; `approval_requests` has filtered index for pending requests (`WHERE resolved_at IS NULL`); `context_blocks` has `session_id` FK; all tables survive re-initialization (`CREATE TABLE IF NOT EXISTS`); existing 001 tables not affected (no ALTER, no DROP); `pytest tests/ --ignore=tests/unit/presentation --ignore=tests/integration -q` (existing tests) passes
