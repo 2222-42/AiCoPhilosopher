@@ -29,15 +29,17 @@ class StoragePort(Protocol):
     # ── 002-console-agent session persistence (T-007) ──────────────────
 
     async def save_session(self, session: dict[str, object]) -> None:
-        """Persist session state (upsert). Session is a dict matching
-        the sessions table schema (session_id, project_id, status, pid,
-        heartbeat_at, focus_json, active_workstreams_json, exit_reason,
-        config_snapshot_json)."""
+        """Persist session state (upsert). The dict must contain:
+        session_id, project_id, status, pid, heartbeat_at, focus_json,
+        active_workstreams_json, exit_reason, config_snapshot_json.
+        created_at and last_active_at are managed by the storage backend
+        and may be omitted from the input dict."""
         ...
 
     async def load_session(self, project_id: str) -> dict[str, object] | None:
-        """Load the most recent session for a project (any status).
-        Returns None if no sessions exist for the project."""
+        """Load the most recent non-closed session for a project,
+        ordered by last_active_at descending. Returns None if no
+        eligible sessions exist."""
         ...
 
     async def list_projects_with_sessions(self) -> list[dict[str, object]]:
@@ -46,10 +48,10 @@ class StoragePort(Protocol):
         ...
 
     async def reclaim_stale_sessions(self) -> int:
-        """Find sessions with status='active' whose PID is no longer
-        running or heartbeat has expired. Mark them as status='paused'
-        with exit_reason='stale_reclaimed'. Returns count of reclaimed
-        sessions."""
+        """Mark sessions as stale where status='active' and the
+        heartbeat timestamp exceeds heartbeat_timeout_seconds.
+        The caller is responsible for checking process liveness (PID)
+        before invoking this method. Returns count of reclaimed sessions."""
         ...
 
     async def save_dialogue_turn(self, turn: dict[str, object], session_id: str) -> None:
@@ -68,7 +70,8 @@ class StoragePort(Protocol):
         ...
 
     async def update_session_heartbeat(self, session_id: str) -> None:
-        """Update heartbeat_at to CURRENT_TIMESTAMP for session_id."""
+        """Set heartbeat_at to the current wall-clock time for session_id.
+        Time source and precision are backend-specific."""
         ...
 
     async def finalize_session(self, session_id: str, reason: str) -> None:
