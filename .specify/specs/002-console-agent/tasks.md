@@ -90,12 +90,12 @@
 
 ### 3.1 NLU Intent Classifier
 
-- [ ] T-008 [US1] Write unit tests for NLU intent classifier
+- [x] T-008 [US1] Write unit tests for NLU intent classifier
   - **Files**: `tests/unit/presentation/test_nlu.py` (create), `tests/fixtures/mock_nlu_responses/` (create directory with `sample_classifications.json`)
   - **AC**: ≥25 tests: test all 16 intent types classified correctly with sample inputs (both English and Japanese); test confidence threshold behavior (<0.85 → `needs_clarification=True`); test entity extraction for each intent type (`start_inquiry` → `topic`, `tradition`; `steer_workstream` → `workstream_id`, `instruction`); test alternative intents populated (top 3 by confidence); test JSON parsing of LLM response (valid JSON, malformed JSON, missing fields); test rule-based fallback when LLM unavailable (offline mode patterns trigger correct intents); test empty input returns `needs_clarification=True`; test `/` prefixed input is NOT passed to NLU (handled by slash command router — test raises or otherwise confirms NLU is bypassed); test Japanese input ("自由意志について調べたい" → `start_inquiry` with topic "自由意志"); all tests use mock LLMPort (no network); `pytest tests/unit/presentation/test_nlu.py -v` passes
   - **Depends on**: T-003 (needs UserIntent, IntentType entities), T-002 (needs prompt template)
 
-- [ ] T-009 [US1] Implement NLU intent classifier in `src/aicophilosopher/presentation/nlu.py`
+- [x] T-009 [US1] Implement NLU intent classifier in `src/aicophilosopher/presentation/nlu.py`
   - **Files**: `src/aicophilosopher/presentation/nlu.py` (create)
   - **AC**: `classify_intent(user_input: str, context: FocusContext, llm_port: LLMPort) -> UserIntent` function works; calls LLMPort with system prompt from `prompts/nlu/intent_classifier.md` + user input + context; parses JSON response into `UserIntent` model (Pydantic validation catches malformed responses); enforces confidence threshold from config (`nlu.confidence_threshold`, default 0.85); returns `needs_clarification=True` when below threshold; includes `raw_input` in returned `UserIntent`; rule-based fallback function `fallback_classify(user_input: str) -> UserIntent` uses regex patterns from `contracts/nlu-intent-schema.md` §6; fallback returns `confidence=0.80` (always below threshold → will trigger clarification); all tests from T-008 pass; `ruff check` passes; `mypy` passes; file imports ONLY from `domain/`, `ports/`, and stdlib (no direct infrastructure imports)
   - **Depends on**: T-008 (TDD: tests before implementation)
