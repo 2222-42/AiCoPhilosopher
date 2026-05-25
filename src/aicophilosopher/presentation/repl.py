@@ -98,51 +98,6 @@ async def _process_input(
     return response
 
 
-# ── Coordinator adapter (T-025) ──────────────────────────────────────
-
-
-async def _route_to_coordinator(
-    intent_type: str,
-    user_input: str,
-    coordinator: Any,
-    session: SessionState,
-) -> dict[str, Any]:
-    """Map intent types to coordinator.run() commands."""
-    command_map = {
-        "start_inquiry": "start",
-        "clarify_question": "refine_goal",
-        "propose_workstream": "propose_workstream",
-        "approve_action": "approve_goal",
-        "steer_workstream": "steer",
-        "request_status": "status",
-    }
-    command = command_map.get(intent_type, "start")
-    return await coordinator.run(user_input=user_input, command=command)
-
-
-# ── Workstream poller (T-027) ─────────────────────────────────────────
-
-
-class WorkstreamPoller:
-    """Background thread that polls workstream status."""
-
-    def __init__(self, session_id: str, storage: Any = None) -> None:
-        self.session_id = session_id
-        self.storage = storage
-        self._updates: list[dict[str, Any]] = []
-
-    def start(self) -> None:
-        pass  # Stub — full impl with threading in T-027
-
-    def stop(self) -> None:
-        pass
-
-    def flush(self) -> list[dict[str, Any]]:
-        updates = list(self._updates)
-        self._updates.clear()
-        return updates
-
-
 # ── Session lifecycle ────────────────────────────────────────────────────
 
 
