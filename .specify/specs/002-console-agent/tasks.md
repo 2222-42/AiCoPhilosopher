@@ -102,12 +102,12 @@
 
 ### 3.2 REPL Main Loop
 
-- [x] T-010 [US1] Write unit tests for REPL main loop
+- [ ] T-010 [US1] Write unit tests for REPL main loop
   - **Files**: `tests/unit/presentation/test_repl.py` (create)
   - **AC**: ≥20 tests: test REPL session starts and shows welcome message; test natural language input routed to NLU (mock NLU returns `start_inquiry`); test `/` prefixed input routed to inline essential command handler (`/exit`, `/help`, `/details`, `/hide-details`, `/suggestions`, `/hide-suggestions` — these 6 commands are handled inline for US1); test unknown `/` commands (not yet implemented) produce "unknown command" message; test empty input ignored (no NLU call, no error); test Ctrl+D (EOF) triggers graceful exit; test `KeyboardInterrupt` (Ctrl+C) triggers graceful exit with session save; test REPL loop exits cleanly on `/exit` input; test input history tracks previous commands (prompt_toolkit FileHistory); test progressive disclosure rendering called after each coordinator response; test workstream status update queue flushed between turns; test session heartbeat updated on each turn; all tests mock LLMPort (no network) and use mock coordinator; `pytest tests/unit/presentation/test_repl.py -v` passes
   - **Depends on**: T-003 (SessionState, DialogueTurn), T-009 (NLU classifier interface must be known)
 
-- [x] T-011 [US1] Implement REPL main loop in `src/aicophilosopher/presentation/repl.py`
+- [ ] T-011 [US1] Implement REPL main loop in `src/aicophilosopher/presentation/repl.py`
   - **Files**: `src/aicophilosopher/presentation/repl.py` (create)
   - **AC**: `run_repl(project_id: str | None = None, test_mode: bool = False) -> None` function with: prompt_toolkit `PromptSession` with `FileHistory`; input routing: `/` prefix → inline essential command handler (handles `/exit`, `/help`, `/details`, `/hide-details`, `/suggestions`, `/hide-suggestions` — 6 commands sufficient for US1; unknown `/` commands produce friendly "not yet implemented" message noting full registry comes in US3); non-`/` input → `nlu.classify_intent()` → `await coordinator.run(user_input=..., command=...)` via the existing `ProjectCoordinatorAgent` async API; Ctrl+D handler → graceful exit; Ctrl+C handler → graceful exit; progressive disclosure rendering via `rendering.render_response()`; command history (up/down arrows, Ctrl+R search) works; session heartbeat sent before every prompt display; workstream status queue flushed after each response render; test_mode flag: when True, uses mock coordinator and skips LLM calls; exit flow: `await session_manager.finalize_session()`, save command history, print goodbye; `ruff check` passes; `mypy` passes; imports only from `presentation/`, `application/`, `domain/`, `ports/` (no direct infrastructure imports)
   - **Depends on**: T-010 (TDD), T-009 (NLU classifier)
@@ -127,7 +127,7 @@
 
 ### 3.4 US1 Integration
 
-- [x] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
+- [ ] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
   - **Files**: `tests/integration/test_repl_us1_inquiry.py` (create)
   - **AC**: ≥5 tests: test full flow — launch REPL → type "I want to explore free will" → NLU classifies as `start_inquiry` → mock coordinator returns Socratic response → progressive disclosure rendered; test clarification dialogue — user answers coordinator's question → NLU classifies as `clarify_question` → coordinator refines; test empty input → no crash, prompt re-shown; test 5-turn conversation → all turns persisted in dialogue history; test `/exit` → session finalized, status=paused; all tests use test_mode=True (no real LLM), mock coordinator answers; `pytest tests/integration/test_repl_us1_inquiry.py -v` passes; existing test suite passes (no regressions)
   - **Depends on**: T-011 (REPL loop), T-013 (rendering)
@@ -148,12 +148,12 @@
 
 ### 4.1 Session Manager
 
-- [x] T-015 [US2] Write unit tests for session manager persistence
+- [ ] T-015 [US2] Write unit tests for session manager persistence
   - **Files**: `tests/unit/presentation/test_session_manager.py` (create)
   - **AC**: ≥25 tests: test `create_session(project_id)` creates active session with correct PID; test `persist_turn(turn, session_id)` writes DialogueTurn to DB; test persisting user turn (speaker=user, intent present) and coordinator turn (speaker=coordinator, actions present); test `finalize_session(session_id, reason)` → status=paused, exit_reason set, single transaction; test `load_session(project_id)` returns full SessionState with dialogue_history, context_blocks, focus_context; test resume: load session, status transitions paused→active, heartbeat updated; test `list_projects()` returns projects with last_active timestamps and session status (only active/paused, not closed); test `list_projects()` ordering: most recently active first; test `reclaim_stale_sessions()`: PID not running → mark paused with `exit_reason='stale_reclaimed'`; test `reclaim_stale_sessions()`: PID still running + heartbeat current → NOT reclaimed; test concurrent session prevention: `is_active_session_live(project_id)` returns True when PID alive + heartbeat ≤300s; test concurrent session warning triggers when starting new session on project with live session; test `update_heartbeat(session_id)` updates `heartbeat_at` timestamp; test crash recovery: simulate SIGKILL (no finalize) → next startup reclaims stale session, at most 1 turn lost; test `load_pending_approvals(session_id)` returns unresolved approval requests; test `save_approval_request(request, session_id)` upserts correctly; test context block persistence: `save_context_block(block, session_id)` and `load_context_blocks(session_id)` round-trips; all tests use in-memory SQLite; `pytest tests/unit/presentation/test_session_manager.py -v` passes
   - **Depends on**: T-005 (SQLite schema), T-003 (SessionState, etc.)
 
-- [x] T-016 [US2] Implement session manager in `src/aicophilosopher/presentation/session_manager.py`
+- [ ] T-016 [US2] Implement session manager in `src/aicophilosopher/presentation/session_manager.py`
   - **Files**: `src/aicophilosopher/presentation/session_manager.py` (create)
   - **AC**: `SessionManager` class with methods: `create_session()`, `persist_turn()`, `finalize_session()`, `load_session()`, `list_projects()`, `reclaim_stale_sessions()`, `update_heartbeat()`, `save_approval_request()`, `load_pending_approvals()`, `save_context_block()`, `load_context_blocks()`; `create_session()` inserts row in `sessions` table with `status='active'`, current PID, `heartbeat_at=now()`; `persist_turn()` inserts into `dialogue_turns` table BEFORE render (FR-009); `finalize_session()` wraps status update and exit_reason in single SQL transaction; `load_session()` reconstructs full `SessionState` from 4 tables + loads associated turns, context blocks, approvals; `list_projects()` joins `projects` and `sessions` tables, returns [dict] with keys: project_id, title, last_active_at, session_status, workstream_count; `reclaim_stale_sessions()` queries `sessions WHERE status='active'`, checks `os.kill(pid, 0)` or heartbeat timeout, `UPDATE` stale ones to paused; uses `StoragePort` for all DB access (no direct `aiosqlite` calls); all tests from T-015 pass; `ruff check` passes; `mypy` passes
   - **Depends on**: T-015 (TDD), T-007 (StoragePort signatures), T-005 (SQLite adapter)
@@ -161,12 +161,12 @@
 
 ### 4.2 Session Resume Flow
 
-- [x] T-017 [US2] Implement project selection and session resume UI in REPL startup
+- [ ] T-017 [US2] Implement project selection and session resume UI in REPL startup
   - **Files**: `src/aicophilosopher/presentation/repl.py` (modify: add `_startup_flow()` function), `src/aicophilosopher/presentation/cli.py` (modify: wire `--project`, `--new`, `--test-mode` flags)
   - **AC**: On `aicophilosopher` (no args): list projects with numbers (1-N), prompt user to select; numeric input selects project; UUID input treated as project ID; new question input → create new project + session; `--project <id>` flag: skip list, open directly; `--new "<question>"` flag: create project + begin clarification; `--test-mode` flag: skip LLM, use mock coordinator; stale session reclaim runs on startup (before project list); concurrent session detection: if selected project has live session → warn + offer terminate/read-only/cancel; session resume: load SessionState → coordinator presents structured summary (last topic, completed since exit, running workstreams, pending approvals); session resume: coordinator's LLM context populated with last N turns + context block summaries + pending approvals per FR-012; `pytest tests/integration/test_repl_us1_inquiry.py -v` still passes (no regressions to US1)
   - **Depends on**: T-016 (session manager), T-011 (REPL loop)
 
-- [x] T-018 [US2] Write integration test for session persistence and resume
+- [ ] T-018 [US2] Write integration test for session persistence and resume
   - **Files**: `tests/integration/test_session_persistence.py` (create)
   - **AC**: ≥8 tests: test full persist-resume cycle — create project, 5 turns of dialogue, `/exit`, load session, verify all 10 dialogue turns present; test workstream survival — launch workstream, `/exit`, resume, workstream still `running`; test pending approval survival — coordinator raises approval request, `/exit`, resume, approval re-presented; test context blocks survive restart — 3 context blocks created, `/exit`, resume, all 3 loaded with correct turn associations; test stale reclaim on crash — insert stale active session row (old PID), run reclaim, verify marked `stale_reclaimed`; test concurrent session detection — insert live active session, attempt resume, verify warning; test resume summary presentation — after resume, coordinator output includes last topic and workstream counts; test heartbeat updated on each turn; all tests use in-memory SQLite, test_mode=True; `pytest tests/integration/test_session_persistence.py -v` passes; existing tests pass (no regressions)
   - **Depends on**: T-017 (resume UI), T-016 (session manager)
