@@ -102,12 +102,12 @@
 
 ### 3.2 REPL Main Loop
 
-- [x] T-010 [US1] Write unit tests for REPL main loop
+- [ ] T-010 [US1] Write unit tests for REPL main loop
   - **Files**: `tests/unit/presentation/test_repl.py` (create)
   - **AC**: ≥20 tests: test REPL session starts and shows welcome message; test natural language input routed to NLU (mock NLU returns `start_inquiry`); test `/` prefixed input routed to inline essential command handler (`/exit`, `/help`, `/details`, `/hide-details`, `/suggestions`, `/hide-suggestions` — these 6 commands are handled inline for US1); test unknown `/` commands (not yet implemented) produce "unknown command" message; test empty input ignored (no NLU call, no error); test Ctrl+D (EOF) triggers graceful exit; test `KeyboardInterrupt` (Ctrl+C) triggers graceful exit with session save; test REPL loop exits cleanly on `/exit` input; test input history tracks previous commands (prompt_toolkit FileHistory); test progressive disclosure rendering called after each coordinator response; test workstream status update queue flushed between turns; test session heartbeat updated on each turn; all tests mock LLMPort (no network) and use mock coordinator; `pytest tests/unit/presentation/test_repl.py -v` passes
   - **Depends on**: T-003 (SessionState, DialogueTurn), T-009 (NLU classifier interface must be known)
 
-- [x] T-011 [US1] Implement REPL main loop in `src/aicophilosopher/presentation/repl.py`
+- [ ] T-011 [US1] Implement REPL main loop in `src/aicophilosopher/presentation/repl.py`
   - **Files**: `src/aicophilosopher/presentation/repl.py` (create)
   - **AC**: `run_repl(project_id: str | None = None, test_mode: bool = False) -> None` function with: prompt_toolkit `PromptSession` with `FileHistory`; input routing: `/` prefix → inline essential command handler (handles `/exit`, `/help`, `/details`, `/hide-details`, `/suggestions`, `/hide-suggestions` — 6 commands sufficient for US1; unknown `/` commands produce friendly "not yet implemented" message noting full registry comes in US3); non-`/` input → `nlu.classify_intent()` → `await coordinator.run(user_input=..., command=...)` via the existing `ProjectCoordinatorAgent` async API; Ctrl+D handler → graceful exit; Ctrl+C handler → graceful exit; progressive disclosure rendering via `rendering.render_response()`; command history (up/down arrows, Ctrl+R search) works; session heartbeat sent before every prompt display; workstream status queue flushed after each response render; test_mode flag: when True, uses mock coordinator and skips LLM calls; exit flow: `await session_manager.finalize_session()`, save command history, print goodbye; `ruff check` passes; `mypy` passes; imports only from `presentation/`, `application/`, `domain/`, `ports/` (no direct infrastructure imports)
   - **Depends on**: T-010 (TDD), T-009 (NLU classifier)
@@ -127,7 +127,7 @@
 
 ### 3.4 US1 Integration
 
-- [x] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
+- [ ] T-014 [US1] Write integration test for US1: natural language inquiry end-to-end
   - **Files**: `tests/integration/test_repl_us1_inquiry.py` (create)
   - **AC**: ≥5 tests: test full flow — launch REPL → type "I want to explore free will" → NLU classifies as `start_inquiry` → mock coordinator returns Socratic response → progressive disclosure rendered; test clarification dialogue — user answers coordinator's question → NLU classifies as `clarify_question` → coordinator refines; test empty input → no crash, prompt re-shown; test 5-turn conversation → all turns persisted in dialogue history; test `/exit` → session finalized, status=paused; all tests use test_mode=True (no real LLM), mock coordinator answers; `pytest tests/integration/test_repl_us1_inquiry.py -v` passes; existing test suite passes (no regressions)
   - **Depends on**: T-011 (REPL loop), T-013 (rendering)
