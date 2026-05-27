@@ -1,4 +1,4 @@
-"""Integration tests for session persistence and resume (T-018)."""
+"""Unit tests for session persistence and resume (T-018)."""
 
 from unittest.mock import AsyncMock, MagicMock
 
@@ -20,11 +20,6 @@ def mock_storage() -> MagicMock:
     return storage
 
 
-@pytest.fixture
-def test_session() -> SessionState:
-    return SessionState(project_id="proj-001")
-
-
 @pytest.mark.asyncio
 async def test_create_and_finalize_session(mock_storage: MagicMock) -> None:
     from aicophilosopher.presentation.session_manager import SessionManager
@@ -33,7 +28,7 @@ async def test_create_and_finalize_session(mock_storage: MagicMock) -> None:
     session = await sm.create_session("proj-001")
     assert session.status == SessionStatus.ACTIVE
     await sm.finalize_session(str(session.session_id), "user_exit")
-    mock_storage.finalize_session.assert_called_once()
+    mock_storage.finalize_session.assert_called_once_with(str(session.session_id), "user_exit")
 
 
 @pytest.mark.asyncio
