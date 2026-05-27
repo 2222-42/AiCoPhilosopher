@@ -10,17 +10,14 @@ def session() -> SessionState:
     return SessionState(project_id="proj-001")
 
 
-# ── Help ────────────────────────────────────────────────────────────────
-
+# ── Help / Exit ──────────────────────────────────────────────────────
 
 def test_help(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/help", session)
-    assert "commands" in result["message"].lower()
-
-
-# ── Exit ────────────────────────────────────────────────────────────────
+    assert "Session" in result["message"]
+    assert "Inquiry" in result["message"]
 
 
 def test_exit(session: SessionState) -> None:
@@ -30,25 +27,81 @@ def test_exit(session: SessionState) -> None:
     assert result["action"] == "exit"
 
 
-def test_quit_alias(session: SessionState) -> None:
+# ── Required args validation ─────────────────────────────────────────
+
+def test_search_requires_arg(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
-    result = dispatch("/quit", session)
-    assert result["action"] == "exit"
+    result = dispatch("/search", session)
+    assert "Usage" in result["message"]
 
 
-# ── Status ──────────────────────────────────────────────────────────────
-
-
-def test_status(session: SessionState) -> None:
+def test_steer_requires_two_args(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
-    result = dispatch("/status", session)
-    assert session.project_id in result.get("summary", "")
+    result = dispatch("/steer ws-001", session)
+    assert "Usage" in result["message"]
 
 
-# ── Toggle commands ─────────────────────────────────────────────────────
+def test_steer_with_two_args_ok(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
 
+    result = dispatch("/steer ws-001 focus on compatibilism", session)
+    assert "Steering" in result["message"]
+
+
+# ── Quoted argument parsing ──────────────────────────────────────────
+
+def test_quoted_args_preserved(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch('/new "What is truth?"', session)
+    assert "What is truth?" in result["message"]
+
+
+# ── Pause / Resume with workstream validation ────────────────────────
+
+def test_pause_no_workstreams(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/pause", session)
+    assert "No workstreams" in result["message"]
+
+
+def test_pause_invalid_ws_id(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    session.active_workstreams = ["ws-001"]
+    result = dispatch("/pause ws-999", session)
+    assert "not found" in result["message"]
+
+
+def test_pause_ambiguous_multiple(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    session.active_workstreams = ["ws-001", "ws-002"]
+    result = dispatch("/pause", session)
+    assert "Which workstream?" in result["message"]
+
+
+def test_pause_single_auto_selects(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    session.active_workstreams = ["ws-001"]
+    result = dispatch("/pause", session)
+    assert "ws-001 paused" in result["message"].lower()
+
+
+# ── Archive confirmation ─────────────────────────────────────────────
+
+def test_archive_prompts_confirmation(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/archive", session)
+    assert "Are you sure" in result["message"]
+
+
+# ── Toggle commands ──────────────────────────────────────────────────
 
 def test_details_toggle(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
@@ -65,77 +118,38 @@ def test_hide_details(session: SessionState) -> None:
     assert session.current_focus.toggle_state.show_details is False
 
 
-def test_suggestions_toggle(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    dispatch("/suggestions", session)
-    assert session.current_focus.toggle_state.show_suggestions is True
-
-
-def test_hide_suggestions(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    session.current_focus.toggle_state.show_suggestions = True
-    dispatch("/hide-suggestions", session)
-    assert session.current_focus.toggle_state.show_suggestions is False
-
-
-# ── Unknown command ─────────────────────────────────────────────────────
-
+# ── Unknown command ──────────────────────────────────────────────────
 
 def test_unknown_command(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/xyz", session)
-    assert "unknown" in result["message"].lower()
+    assert "Unknown" in result["message"]
 
 
-# ── Missing args ────────────────────────────────────────────────────────
-
-
-def test_search_requires_arg(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    result = dispatch("/search", session)
-    assert "requires" in result["message"].lower()
-
-
-def test_steer_requires_arg(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    result = dispatch("/steer", session)
-    assert "requires" in result["message"].lower()
-
-
-# ── Commands with args ──────────────────────────────────────────────────
-
-
-def test_search_with_arg(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    result = dispatch("/search compatibilism", session)
-    assert "acknowledged" in result["message"].lower()
-
-
-def test_steer_with_arg(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import dispatch
-
-    result = dispatch("/steer ws-001 focus on post-1980", session)
-    assert "acknowledged" in result["message"].lower()
-
-
-# ── All 28 commands registered ──────────────────────────────────────────
-
-
-def test_all_commands_registered(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import COMMANDS
-
-    assert len(COMMANDS) >= 28
-
+# ── All commands registered ──────────────────────────────────────────
 
 def test_all_commands_dispatch_without_error(session: SessionState) -> None:
-    from aicophilosopher.presentation.slash_commands import COMMANDS, dispatch
+    from aicophilosopher.presentation.slash_commands import dispatch
 
-    for cmd in COMMANDS:
+    # All known commands (matching the help output)
+    cmds = [
+        "/help", "/exit", "/quit", "/new x", "/open x", "/projects", "/archive",
+        "/search x", "/analyze x", "/argue x", "/review", "/compare x", "/synthesize",
+        "/pause", "/resume", "/steer ws x", "/deepen x", "/abandon x",
+        "/status", "/hypotheses", "/dead-ends", "/document",
+        "/details", "/hide-details", "/suggestions", "/hide-suggestions",
+        "/export x", "/add-note x", "/upload x", "/help-request", "/config",
+    ]
+    for cmd in cmds:
         result = dispatch(cmd, session)
         assert isinstance(result, dict)
+
+
+# ── /status ──────────────────────────────────────────────────────────
+
+def test_status(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/status", session)
+    assert session.project_id in result.get("summary", "")

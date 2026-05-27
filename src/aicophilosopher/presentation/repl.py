@@ -69,6 +69,14 @@ async def _process_input(
 
     if stripped.startswith("/"):
         slash_result = _handle_slash(stripped, session)
+        # Delegate to full command registry if available
+        if slash_result.get("message", "").startswith("Unknown command"):
+            try:
+                from aicophilosopher.presentation.slash_commands import dispatch
+
+                slash_result = dispatch(stripped, session)
+            except ImportError:
+                pass
         if slash_result.get("action") == "exit":
             await _finalize(session, "user_exit")
             return slash_result
