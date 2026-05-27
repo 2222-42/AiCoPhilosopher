@@ -90,11 +90,29 @@ class SessionManager:
 
     @staticmethod
     def _from_dict(data: dict[str, Any]) -> SessionState:
-        """Reconstruct SessionState from storage dict."""
+        """Reconstruct SessionState from storage dict, parsing JSON columns."""
+        import json
+        from datetime import UTC, datetime
+        from uuid import UUID
+
+        def _parse_ts(val: Any) -> datetime | None:
+            if val is None:
+                return None
+            try:
+                return datetime.fromisoformat(str(val))
+            except (ValueError, TypeError):
+                return None
+
+        sid = data.get("session_id")
         return SessionState(
-            session_id=data.get("session_id", ""),
+            session_id=UUID(str(sid)) if sid else UUID("00000000-0000-0000-0000-000000000000"),
             project_id=data.get("project_id", ""),
             status=SessionStatus(data.get("status", "active")),
             pid=int(data.get("pid", 0)),
+            heartbeat_at=_parse_ts(data.get("heartbeat_at")) or datetime.now(UTC),
+            created_at=_parse_ts(data.get("created_at")) or datetime.now(UTC),
+            last_active_at=_parse_ts(data.get("last_active_at")) or datetime.now(UTC),
             exit_reason=data.get("exit_reason"),
+            active_workstreams=json.loads(str(data.get("active_workstreams_json", "[]"))),
+            config_snapshot=json.loads(str(data.get("config_snapshot_json", "{}"))),
         )
