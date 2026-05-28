@@ -12,6 +12,7 @@ def session() -> SessionState:
 
 # ── Help / Exit ──────────────────────────────────────────────────────
 
+
 def test_help(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
@@ -28,6 +29,7 @@ def test_exit(session: SessionState) -> None:
 
 
 # ── Required args validation ─────────────────────────────────────────
+
 
 def test_search_requires_arg(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
@@ -52,6 +54,7 @@ def test_steer_with_two_args_ok(session: SessionState) -> None:
 
 # ── Quoted argument parsing ──────────────────────────────────────────
 
+
 def test_quoted_args_preserved(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
@@ -60,6 +63,7 @@ def test_quoted_args_preserved(session: SessionState) -> None:
 
 
 # ── Pause / Resume with workstream validation ────────────────────────
+
 
 def test_pause_no_workstreams(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
@@ -94,6 +98,7 @@ def test_pause_single_auto_selects(session: SessionState) -> None:
 
 # ── Archive confirmation ─────────────────────────────────────────────
 
+
 def test_archive_prompts_confirmation(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
@@ -102,6 +107,7 @@ def test_archive_prompts_confirmation(session: SessionState) -> None:
 
 
 # ── Toggle commands ──────────────────────────────────────────────────
+
 
 def test_details_toggle(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
@@ -120,6 +126,7 @@ def test_hide_details(session: SessionState) -> None:
 
 # ── Unknown command ──────────────────────────────────────────────────
 
+
 def test_unknown_command(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
@@ -129,17 +136,42 @@ def test_unknown_command(session: SessionState) -> None:
 
 # ── All commands registered ──────────────────────────────────────────
 
+
 def test_all_commands_dispatch_without_error(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
-    # All known commands (matching the help output)
     cmds = [
-        "/help", "/exit", "/quit", "/new x", "/open x", "/projects", "/archive",
-        "/search x", "/analyze x", "/argue x", "/review", "/compare x", "/synthesize",
-        "/pause", "/resume", "/steer ws x", "/deepen x", "/abandon x",
-        "/status", "/hypotheses", "/dead-ends", "/document",
-        "/details", "/hide-details", "/suggestions", "/hide-suggestions",
-        "/export x", "/add-note x", "/upload x", "/help-request", "/config",
+        "/help",
+        "/exit",
+        "/quit",
+        "/new x",
+        "/open x",
+        "/projects",
+        "/archive",
+        "/search x",
+        "/analyze x",
+        "/argue x",
+        "/review",
+        "/compare x",
+        "/synthesize",
+        "/pause",
+        "/resume",
+        "/steer ws x",
+        "/deepen x",
+        "/abandon x",
+        "/status",
+        "/hypotheses",
+        "/dead-ends",
+        "/document",
+        "/details",
+        "/hide-details",
+        "/suggestions",
+        "/hide-suggestions",
+        "/export x",
+        "/add-note x",
+        "/upload x",
+        "/help-request",
+        "/config",
     ]
     for cmd in cmds:
         result = dispatch(cmd, session)
@@ -148,8 +180,49 @@ def test_all_commands_dispatch_without_error(session: SessionState) -> None:
 
 # ── /status ──────────────────────────────────────────────────────────
 
+
 def test_status(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/status", session)
     assert session.project_id in result.get("summary", "")
+
+
+# ── T-021: Response rendering format checks ──────────────────────────
+
+
+def test_status_response_has_summary(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/status", session)
+    assert "summary" in result
+
+
+def test_help_response_has_categories(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/help", session)
+    assert "Session" in result["message"]
+    assert "Steering" in result["message"]
+
+
+def test_error_response_starts_with_usage(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/search", session)
+    assert result["message"].startswith("Usage")
+
+
+def test_toggle_commands_return_message(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/details", session)
+    assert "message" in result
+    assert "Details" in result["message"]
+
+
+def test_archive_response_is_approval(session: SessionState) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/archive", session)
+    assert result.get("is_approval_request") is True
