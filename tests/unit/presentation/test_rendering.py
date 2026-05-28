@@ -147,3 +147,43 @@ def test_empty_suggestions_shows_placeholder(console: Console, focus: FocusConte
     focus.toggle_state.show_suggestions = True
     output = _render_capture(console, {}, focus)
     assert "No suggestions" in output
+
+
+# ── T-021: Slash command response rendering ──────────────────────────
+
+
+def test_status_command_renders_summary(console: Console, focus: FocusContext) -> None:
+    from aicophilosopher.domain.entities.session import SessionState
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    session = SessionState(project_id="proj-001")
+    result = dispatch("/status", session)
+    output = _render_capture(console, result, focus)
+    assert "proj-001" in output
+
+
+def test_help_command_renders_message(console: Console, focus: FocusContext) -> None:
+    from aicophilosopher.domain.entities.session import SessionState
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/help", SessionState(project_id="p1"))
+    output = _render_capture(console, result, focus)
+    assert "commands" in output.lower()
+
+
+def test_error_command_renders_usage(console: Console, focus: FocusContext) -> None:
+    from aicophilosopher.domain.entities.session import SessionState
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/search", SessionState(project_id="p1"))
+    output = _render_capture(console, result, focus)
+    assert "Usage" in output
+
+
+def test_archive_command_renders_approval(console: Console, focus: FocusContext) -> None:
+    from aicophilosopher.domain.entities.session import SessionState
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch("/archive", SessionState(project_id="p1"))
+    output = _render_capture(console, result, focus)
+    assert "Approval" in output
