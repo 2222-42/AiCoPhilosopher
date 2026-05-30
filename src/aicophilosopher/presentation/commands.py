@@ -92,9 +92,41 @@ def _save_current_project(project_id: str) -> None:
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
-@click.group()
-def cli() -> None:
-    """AI Co-Philosopher — An agentic workbench for philosophical research."""
+@click.group(invoke_without_command=True)
+@click.option("--project", "-p", help="Project ID to open directly in REPL")
+@click.option("--new", "-n", "new_question", help="Create a new project with this question")
+@click.option("--test-mode", is_flag=True, help="Launch REPL with mock coordinator (no LLM)")
+@click.pass_context
+def cli(ctx: click.Context, project: str | None, new_question: str | None, test_mode: bool) -> None:  # noqa: C901
+    """AI Co-Philosopher — An agentic workbench for philosophical research.
+
+    Run without subcommands to enter an interactive REPL session.
+    """
+    # If a subcommand was given, let Click handle it normally.
+    if ctx.invoked_subcommand is not None:
+        return
+
+    # No subcommand → launch REPL mode.
+    import asyncio
+
+    from aicophilosopher.presentation.repl import run_repl
+
+    if new_question:
+        project_id = _create_project_from_question(new_question)
+        click.echo(f"Created project {project_id} — entering REPL...")
+        project = project_id
+
+    asyncio.run(run_repl(project_id=project, test_mode=test_mode))
+
+
+def _create_project_from_question(question: str) -> str:
+    """Quick project creation from a question string for --new."""
+    _ensure_workspace()
+    project_id = f"proj-{uuid.uuid4().hex[:8]}"
+    # Use first 60 chars of question as title
+    title = question[:60] + ("..." if len(question) > 60 else "")
+    _create_project_structure(project_id, title, question)
+    return project_id
 
 
 @cli.command()

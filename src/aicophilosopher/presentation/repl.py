@@ -55,6 +55,34 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
 
 # ── Input processing ─────────────────────────────────────────────────────
 
+# Map NLU intent types to coordinator.run(…) command vocabulary.
+# The coordinator only recognises a small set of commands (see
+# ProjectCoordinatorAgent.run); other intents fall through to the
+# default _start_dialogue branch.
+INTENT_TO_COMMAND: dict[str, str] = {
+    "start_inquiry": "start",
+    "clarify_question": "refine_goal",
+    "propose_workstream": "propose_workstream",
+    "steer_workstream": "steer",
+    "request_status": "status",
+    "request_detail": "start",       # fall through to dialogue
+    "request_export": "start",       # export handled via StoragePort later
+    "approve_action": "approve_goal",
+    "reject_action": "start",        # rejection routes to dialogue
+    "ask_question": "start",
+    "inject_information": "start",   # PDF ingestion via separate pipeline
+    "request_help": "start",
+    "pause_session": "start",
+    "resume_session": "start",
+    "archive_project": "start",
+    "compare_traditions": "propose_workstream",
+}
+
+
+def _translate_intent(intent_type: str) -> str:
+    """Translate an NLU intent value into a coordinator command name."""
+    return INTENT_TO_COMMAND.get(intent_type, "start")
+
 
 async def _process_input(
     user_input: str,
@@ -89,9 +117,10 @@ async def _process_input(
         response = await coordinator.run(user_input=stripped)
     else:
         intent = await classify_intent(stripped, session.current_focus, llm_port)
+        command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
         response = await coordinator.run(
             user_input=stripped,
-            command=intent.intent_type.value if intent else "start",
+            command=command,
         )
 
     render_response(response, session.current_focus)
@@ -161,6 +190,116 @@ async def _startup_flow(  # noqa: C901
     return None
 
 
+# ── Workstream status poller ─────────────────────────────────────────────
+
+
+class WorkstreamPoller:
+    """Background thread that polls workstream status and queues changes.
+
+    Accepts a callable ``poll_fn`` that returns ``list[dict]`` where each
+    dict has at least ``workstream_id`` and ``status`` keys.  This keeps
+    the poller decoupled from the StoragePort contract; the REPL loop
+    provides a closure that calls the appropriate backend adapter.
+
+    Detects status transitions (running → completed / failed / stalled)
+    and pushes dict records
+    (``{\"workstream_id\", \"old_status\", \"new_status\"}``) into the
+    shared ``update_queue`` for the REPL loop to surface after the
+    current turn completes.
+    """
+
+    def __init__(
+        self,
+        poll_fn,
+        update_queue: object,  # Queue[dict]
+        interval_seconds: float = 2.0,
+    ) -> None:
+        import threading
+        from queue import Queue
+
+        self._poll_fn = poll_fn
+        self._queue: Queue[dict] = update_queue  # type: ignore[no-redef]
+        self._interval = interval_seconds
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._last_known: dict[str, str] | None = None
+
+    def start(self) -> None:
+        import threading
+
+        if self._thread is not None:
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        if self._thread is None:
+            return
+        self._stop_event.set()
+        self._thread.join(timeout=5.0)
+        self._thread = None
+        self._last_known = None
+
+    def is_running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _run_loop(self) -> None:
+        """Loop: poll, sleep, repeat until stopped."""
+
+        while not self._stop_event.is_set():
+            try:
+                self._poll_sync()
+            except Exception:
+                # Log + swallow; the poller must not crash the REPL.
+                pass
+            self._stop_event.wait(self._interval)
+
+    def _poll_sync(self) -> None:
+        """Single poll cycle: call poll_fn, detect transitions, push to queue.
+
+        ``poll_fn()`` MUST be synchronous and return ``list[dict]``.
+        """
+        import logging
+
+        _logger = logging.getLogger(__name__)
+
+        try:
+            workstreams = self._poll_fn()
+        except Exception:
+            _logger.debug("WorkstreamPoller: poll_fn raised, retrying next cycle", exc_info=True)
+            return
+
+        if not isinstance(workstreams, list):
+            return
+
+        current: dict[str, str] = {}
+        for ws in workstreams:
+            wid = ws.get("workstream_id", "")
+            status = ws.get("status", "unknown")
+            if wid:
+                current[wid] = status
+
+        # First poll: initialise baseline without queuing any changes.
+        if self._last_known is None:
+            self._last_known = current
+            return
+
+        # Detect transitions
+        all_ids = set(self._last_known) | set(current)
+        for wid in sorted(all_ids):  # deterministic ordering
+            old = self._last_known.get(wid)
+            new = current.get(wid)
+            if old != new:
+                self._queue.put({
+                    "workstream_id": wid,
+                    "old_status": old or "(none)",
+                    "new_status": new or "(removed)",
+                })
+
+        self._last_known = current
+
+
 # ── Main REPL entry point ────────────────────────────────────────────────
 
 
@@ -195,11 +334,16 @@ async def run_repl(
             llm_port = MagicMock()
         return  # tests drive via _process_input directly
 
-    if llm_port is None or coordinator is None:
-        raise RuntimeError(
-            "llm_port and coordinator are required in production mode. "
-            "Use --test-mode for testing without real backends."
+    # ── Production mode ──────────────────────────────────────────────
+    # Until full backend wiring is complete (T-030/T-031), provide
+    # graceful degradation when the coordinator or LLM port is missing.
+    if coordinator is None or llm_port is None:
+        print(
+            "REPL backend not fully configured.\n"
+            "Launch with --test-mode for a mock session, or provide\n"
+            "a coordinator and LLM port via the Hermes Agent integration."
         )
+        return
 
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
