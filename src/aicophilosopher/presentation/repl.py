@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
 from aicophilosopher.presentation.nlu import classify_intent
@@ -210,7 +210,7 @@ class WorkstreamPoller:
 
     def __init__(
         self,
-        poll_fn,
+        poll_fn: Callable[[], list[dict[str, object]]],
         update_queue: object,  # Queue[dict]
         interval_seconds: float = 2.0,
     ) -> None:
@@ -218,7 +218,7 @@ class WorkstreamPoller:
         from queue import Queue
 
         self._poll_fn = poll_fn
-        self._queue: Queue[dict] = update_queue  # type: ignore[no-redef]
+        self._queue: Queue[dict[str, object]] = update_queue  # type: ignore[assignment]
         self._interval = interval_seconds
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -275,8 +275,8 @@ class WorkstreamPoller:
 
         current: dict[str, str] = {}
         for ws in workstreams:
-            wid = ws.get("workstream_id", "")
-            status = ws.get("status", "unknown")
+            wid = str(ws.get("workstream_id", ""))
+            status = str(ws.get("status", "unknown"))
             if wid:
                 current[wid] = status
 
