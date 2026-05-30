@@ -161,6 +161,112 @@ async def _startup_flow(  # noqa: C901
     return None
 
 
+# ── Workstream status poller ─────────────────────────────────────────────
+
+
+class WorkstreamPoller:
+    """Background thread that polls workstream status and queues changes.
+
+    Polls via StoragePort every ``interval_seconds``.  Detects status
+    transitions (running → completed / failed / stalled) and pushes dict
+    records (``{"workstream_id", "old_status", "new_status"}``) into the
+    shared ``update_queue`` for the REPL loop to surface after the current
+    turn completes.
+    """
+
+    def __init__(
+        self,
+        session_id: str,
+        storage_port: object,
+        update_queue: object,  # Queue[dict]
+        interval_seconds: float = 2.0,
+    ) -> None:
+        import threading
+        from queue import Queue
+
+        self._session_id = session_id
+        self._storage = storage_port
+        self._queue: Queue[dict] = update_queue
+        self._interval = interval_seconds
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._last_known: dict[str, str] | None = None
+
+    def start(self) -> None:
+        import threading
+
+        if self._thread is not None:
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True)
+        self._thread.start()
+
+    def stop(self) -> None:
+        if self._thread is None:
+            return
+        self._stop_event.set()
+        self._thread.join(timeout=5.0)
+        self._thread = None
+        self._last_known = None
+
+    def is_running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def _run_loop(self) -> None:
+        """Loop: poll, sleep, repeat until stopped."""
+
+        while not self._stop_event.is_set():
+            try:
+                self._poll_sync()
+            except Exception:
+                # Log + swallow; the poller must not crash the REPL.
+                pass
+            self._stop_event.wait(self._interval)
+
+    def _poll_sync(self) -> None:
+        """Single poll cycle: fetch workstreams, detect transitions, push to queue."""
+        import asyncio
+        import inspect
+
+        try:
+            ws_callable = self._storage.list_workstreams
+            result = ws_callable(self._session_id)
+            # Handle both sync and async storage backends gracefully.
+            if inspect.iscoroutine(result):
+                workstreams = asyncio.run(result)
+            else:
+                workstreams = result
+        except Exception:
+            # Swallow transient errors; next poll will retry.
+            return
+
+        current: dict[str, str] = {}
+        for ws in workstreams or []:
+            wid = ws.get("workstream_id", "")
+            status = ws.get("status", "unknown")
+            if wid:
+                current[wid] = status
+
+        # First poll: initialise baseline without queuing any changes.
+        if self._last_known is None:
+            self._last_known = current
+            return
+
+        # Detect transitions
+        all_ids = set(self._last_known) | set(current)
+        for wid in sorted(all_ids):  # deterministic ordering
+            old = self._last_known.get(wid)
+            new = current.get(wid)
+            if old != new:
+                self._queue.put({
+                    "workstream_id": wid,
+                    "old_status": old or "(none)",
+                    "new_status": new or "(removed)",
+                })
+
+        self._last_known = current
+
+
 # ── Main REPL entry point ────────────────────────────────────────────────
 
 
