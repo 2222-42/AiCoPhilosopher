@@ -5,27 +5,16 @@ queue ordering, thread lifecycle, and error resilience.
 """
 
 import time
+from collections.abc import Callable
 from queue import Queue
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
-import pytest
-
-# ── Fixtures ─────────────────────────────────────────────────────────────
+# ── Helpers ──────────────────────────────────────────────────────────────
 
 
-@pytest.fixture
-def mock_storage() -> MagicMock:
-    """StoragePort mock that returns workstream status lists."""
-    storage = MagicMock()
-    storage.list_workstreams = AsyncMock(return_value=[])
-    storage.get_workstream = AsyncMock(return_value=None)
-    return storage
-
-
-@pytest.fixture
-def status_queue() -> "Queue[dict]":
-    """Thread-safe queue for surfacing status changes to the REPL loop."""
-    return Queue()
+def _poll_fn_returning(workstreams: list[dict]) -> Callable[[], list[dict]]:
+    """Return a callable that returns the given list (for poll_fn)."""
+    return lambda: workstreams
 
 
 # ── Poller lifecycle ────────────────────────────────────────────────────
@@ -35,13 +24,9 @@ def test_poller_starts_and_stops() -> None:
     """WorkstreamPoller can be started and stopped cleanly."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
-    storage.list_workstreams = AsyncMock(return_value=[])
     queue: Queue[dict] = Queue()
-
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning([]),
         update_queue=queue,
         interval_seconds=0.05,
     )
@@ -62,8 +47,7 @@ def test_poller_thread_is_daemon() -> None:
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=MagicMock(),
+        poll_fn=_poll_fn_returning([]),
         update_queue=Queue(),
     )
     poller.start()
@@ -79,11 +63,9 @@ def test_stop_when_not_running_is_noop() -> None:
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=MagicMock(),
+        poll_fn=_poll_fn_returning([]),
         update_queue=Queue(),
     )
-    # Never started — should not raise
     poller.stop()
     assert not poller.is_running()
 
@@ -92,19 +74,16 @@ def test_stop_when_not_running_is_noop() -> None:
 
 
 def test_running_to_completed_detected() -> None:
-    """Transition running→completed is queued as a status change."""
+    """Transition running->completed is queued as a status change."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     workstreams = [
         {"workstream_id": "ws-001", "status": "running", "progress": 0.5},
     ]
-    storage.list_workstreams = AsyncMock(return_value=workstreams)
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue,
         interval_seconds=0.02,
     )
@@ -125,19 +104,16 @@ def test_running_to_completed_detected() -> None:
 
 
 def test_running_to_failed_detected() -> None:
-    """Transition running→failed is queued."""
+    """Transition running->failed is queued."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     workstreams = [
         {"workstream_id": "ws-002", "status": "running", "progress": 0.3},
     ]
-    storage.list_workstreams = AsyncMock(return_value=workstreams)
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue,
         interval_seconds=0.02,
     )
@@ -152,19 +128,16 @@ def test_running_to_failed_detected() -> None:
 
 
 def test_running_to_stalled_detected() -> None:
-    """Transition running→stalled is queued with warning."""
+    """Transition running->stalled is queued with warning."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     workstreams = [
         {"workstream_id": "ws-003", "status": "running", "progress": 0.7},
     ]
-    storage.list_workstreams = AsyncMock(return_value=workstreams)
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue,
         interval_seconds=0.02,
     )
@@ -182,22 +155,19 @@ def test_no_change_not_queued() -> None:
     """When statuses haven't changed, nothing is added to the queue."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     workstreams = [
         {"workstream_id": "ws-001", "status": "running", "progress": 0.5},
     ]
-    storage.list_workstreams = AsyncMock(return_value=workstreams)
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue,
         interval_seconds=0.02,
     )
 
     poller._poll_sync()  # first poll initializes state
-    poller._poll_sync()  # second poll with same state → no change
+    poller._poll_sync()  # second poll with same state -> no change
     assert queue.empty()
 
 
@@ -205,25 +175,21 @@ def test_new_workstream_detected() -> None:
     """A newly appearing workstream is queued."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     queue: Queue[dict] = Queue()
+    workstreams: list[dict] = []
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=lambda: workstreams,
         update_queue=queue,
         interval_seconds=0.02,
     )
 
     # First poll: nothing
-    storage.list_workstreams.return_value = []
     poller._poll_sync()
     assert queue.empty()
 
     # Second poll: new WS appears
-    storage.list_workstreams.return_value = [
-        {"workstream_id": "ws-new", "status": "running", "progress": 0.0},
-    ]
+    workstreams.append({"workstream_id": "ws-new", "status": "running", "progress": 0.0})
     poller._poll_sync()
 
     change = queue.get()
@@ -240,20 +206,16 @@ def test_multiple_changes_queued_in_order() -> None:
 
     ws_a = {"workstream_id": "ws-a", "status": "running", "progress": 0.3}
     ws_b = {"workstream_id": "ws-b", "status": "running", "progress": 0.5}
+    workstreams = [ws_a, ws_b]
 
-    # Use AsyncMock with side_effect so we return the *current* list ref
-    storage = MagicMock()
-    storage.list_workstreams = AsyncMock(side_effect=lambda sid: [ws_a, ws_b])
     queue: Queue[dict] = Queue()
-
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=lambda: workstreams,
         update_queue=queue,
         interval_seconds=0.02,
     )
 
-    # Baseline — poll sees both as running
+    # Baseline - poll sees both as running
     poller._poll_sync()
 
     # Both change simultaneously
@@ -264,7 +226,6 @@ def test_multiple_changes_queued_in_order() -> None:
     assert queue.qsize() == 2
     first = queue.get()
     second = queue.get()
-    # Order should match detection order (ws-a before ws-b in the list)
     assert first["workstream_id"] == "ws-a"
     assert second["workstream_id"] == "ws-b"
 
@@ -276,13 +237,10 @@ def test_poll_error_does_not_crash_poller() -> None:
     """An exception during polling does not kill the thread or crash the REPL."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
-    storage.list_workstreams = AsyncMock(side_effect=RuntimeError("DB down"))
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=MagicMock(side_effect=RuntimeError("DB down")),
         update_queue=queue,
         interval_seconds=0.02,
     )
@@ -291,41 +249,43 @@ def test_poll_error_does_not_crash_poller() -> None:
     poller._poll_sync()
     assert queue.empty()  # No change queued on error
 
-    # Poller should still be alive (not crashed)
-    assert poller.is_running() or not poller.is_running()  # just checking it exists
+    # Poller still usable after error
+    assert not poller.is_running()  # never started, so not running
 
 
 def test_poller_continues_after_error() -> None:
     """After an error on one poll, subsequent successful polls still work."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     queue: Queue[dict] = Queue()
+    workstreams = [
+        {"workstream_id": "ws-001", "status": "running", "progress": 0.3},
+    ]
+
+    call_count = [0]
+
+    def flaky_poll():
+        call_count[0] += 1
+        if call_count[0] == 2:
+            raise RuntimeError("temp error")
+        return workstreams
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=flaky_poll,
         update_queue=queue,
         interval_seconds=0.02,
     )
 
     # Baseline
-    storage.list_workstreams.return_value = [
-        {"workstream_id": "ws-001", "status": "running", "progress": 0.3},
-    ]
     poller._poll_sync()
+    assert queue.empty()
 
-    # Error poll
-    storage.list_workstreams.return_value = Exception("temp error")
-    try:
-        poller._poll_sync()
-    except Exception:
-        pass  # Error handled internally
+    # Error poll - should not raise, queue still empty
+    poller._poll_sync()
+    assert queue.empty()
 
     # Recovery poll with a status change
-    storage.list_workstreams.return_value = [
-        {"workstream_id": "ws-001", "status": "completed", "progress": 1.0},
-    ]
+    workstreams[0]["status"] = "completed"
     poller._poll_sync()
 
     assert not queue.empty()
@@ -340,16 +300,13 @@ def test_stale_state_cleared_on_stop() -> None:
     """After stop(), last_known_state is cleared so a new poller sees fresh state."""
     from aicophilosopher.presentation.repl import WorkstreamPoller
 
-    storage = MagicMock()
     workstreams = [
         {"workstream_id": "ws-001", "status": "completed", "progress": 1.0},
     ]
-    storage.list_workstreams = AsyncMock(return_value=workstreams)
     queue: Queue[dict] = Queue()
 
     poller = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue,
         interval_seconds=0.02,
     )
@@ -359,12 +316,11 @@ def test_stale_state_cleared_on_stop() -> None:
     # New poller on resume should NOT see old state
     queue2: Queue[dict] = Queue()
     poller2 = WorkstreamPoller(
-        session_id="s-001",
-        storage_port=storage,
+        poll_fn=_poll_fn_returning(workstreams),
         update_queue=queue2,
         interval_seconds=0.02,
     )
-    # Same state — since last_known is empty, first poll just initializes
+    # Same state - since last_known is empty, first poll just initializes
     poller2._poll_sync()
     assert queue2.empty()  # No transition detected (initialization only)
     poller2.stop()

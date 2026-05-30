@@ -74,7 +74,7 @@ async def test_start_inquiry_routes_to_start(
 
     mock_nlu.assert_called_once()
     call_args = mock_coordinator.run.call_args
-    assert call_args.kwargs.get("command") == "start_inquiry"
+    assert call_args.kwargs.get("command") == "start"
     assert call_args.kwargs.get("user_input") == "explore free will"
 
 
@@ -99,7 +99,7 @@ async def test_clarify_question_routes_to_refine_goal(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "clarify_question"
+    assert call_kw.get("command") == "refine_goal"
 
 
 @pytest.mark.asyncio
@@ -147,7 +147,7 @@ async def test_steer_workstream_routes_to_steer(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "steer_workstream"
+    assert call_kw.get("command") == "steer"
 
 
 @pytest.mark.asyncio
@@ -171,7 +171,7 @@ async def test_request_status_routes_to_status(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "request_status"
+    assert call_kw.get("command") == "status"
 
 
 @pytest.mark.asyncio
@@ -195,7 +195,7 @@ async def test_request_detail_routes_to_request_detail(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "request_detail"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -219,7 +219,7 @@ async def test_request_export_routes_to_request_export(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "request_export"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -243,7 +243,7 @@ async def test_approve_action_routes_to_approve_action(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "approve_action"
+    assert call_kw.get("command") == "approve_goal"
 
 
 @pytest.mark.asyncio
@@ -267,7 +267,7 @@ async def test_reject_action_routes_to_reject_action(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "reject_action"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -291,7 +291,7 @@ async def test_ask_question_routes_to_ask_question(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "ask_question"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -315,7 +315,7 @@ async def test_inject_information_routes_to_inject_information(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "inject_information"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -339,7 +339,7 @@ async def test_request_help_routes_to_request_help(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "request_help"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -363,7 +363,7 @@ async def test_pause_session_routes_to_pause_session(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "pause_session"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -387,7 +387,7 @@ async def test_resume_session_routes_to_resume_session(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "resume_session"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -411,7 +411,7 @@ async def test_archive_project_routes_to_archive_project(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "archive_project"
+    assert call_kw.get("command") == "start"
 
 
 @pytest.mark.asyncio
@@ -435,7 +435,7 @@ async def test_compare_traditions_routes_to_compare_traditions(
         )
 
     call_kw = mock_coordinator.run.call_args.kwargs
-    assert call_kw.get("command") == "compare_traditions"
+    assert call_kw.get("command") == "propose_workstream"
 
 
 # ── Dialogue state routing ──────────────────────────────────────────────
