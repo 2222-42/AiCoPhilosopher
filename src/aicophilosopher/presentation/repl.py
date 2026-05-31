@@ -77,6 +77,36 @@ def _translate_intent(intent_type: str) -> str:
     return INTENT_TO_COMMAND.get(intent_type, "start")
 
 
+# ── Fast-path keyword detection ────────────────────────────────────────
+
+# Only trigger workstream launch when the input starts with or
+# primarily consists of these launch patterns.
+_WORKSTREAM_LAUNCH_PATTERNS: list[tuple[str, str]] = [
+    (r"\bstart\b.*\b(literature|search)\b", "literature_search"),
+    (r"\bsearch\b.*\b(for|papers?|literature)\b", "literature_search"),
+    (r"\bliterature\b.*\b(search|review)\b", "literature_search"),
+    (r"\bdo\b.*\b(literature|search)\b", "literature_search"),
+    (r"\banaly(sis|ze)\b.*\b(concept|this|that|idea)\b", "concept_analysis"),
+    (r"\bconcept\b.*\banalysis\b", "concept_analysis"),
+    (r"\b(argue|argument|construct).*\b", "argumentation"),
+    (r"\bcompar(e|ison|ing)\b.*\b(tradition|cross)\b", "cross_traditional_comparison"),
+    (r"\bcross.traditional\b", "cross_traditional_comparison"),
+    (r"\breview\b.*\b(argument|workstream|finding)\b", "critical_review"),
+    (r"\bsynthes(is|ize)\b", "synthesis"),
+]
+
+import re as _re
+
+
+def _detect_workstream_launch(text: str) -> str | None:
+    """If text matches a workstream launch pattern, return the type. Else None."""
+    lower = text.lower()
+    for pattern, ws_type in _WORKSTREAM_LAUNCH_PATTERNS:
+        if _re.search(pattern, lower):
+            return ws_type
+    return None
+
+
 async def _process_input(
     user_input: str,
     session: SessionState,
@@ -126,14 +156,25 @@ async def _process_input(
         # Skip LLM in test_mode — use mock coordinator directly
         response = await coordinator.run(user_input=stripped)
     else:
-        # Fast-path: explicit approve/reject keywords bypass NLU entirely
+        # Fast-path: explicit keywords bypass NLU entirely
         lower = stripped.lower().strip().rstrip(".!?")
+
+        # Approve / reject
         if lower in ("yes", "y", "go ahead", "sure", "approved", "approve",
                       "はい", "いい", "いいよ", "ok", "okay", "proceed"):
             response = await coordinator.run(user_input=stripped, command="approve_goal")
         elif lower in ("no", "n", "stop", "don't", "not yet", "cancel",
                         "いいえ", "やめ", "だめ"):
             response = await coordinator.run(user_input=stripped, command="start")
+
+        # Workstream launch — detect type from keywords
+        elif (ws_type := _detect_workstream_launch(lower)) is not None:
+            response = await coordinator.run(
+                user_input=stripped,
+                command="propose_workstream",
+                workstream_type=ws_type,
+            )
+
         else:
             intent = await classify_intent(stripped, session.current_focus, llm_port)
             command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
