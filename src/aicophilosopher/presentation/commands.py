@@ -177,6 +177,15 @@ def _wire_backends(  # noqa: C901
         filesystem=fs_adapter,
     )
 
+    # ── Create OpenCode Go bridge (if enabled) ──────────────────────
+    if config.opencode_enabled:
+        from aicophilosopher.infrastructure.adapters.external_bridge_adapter import (
+            create_opencode_bridge,
+        )
+        bridge = create_opencode_bridge(enabled=True)
+        coordinator.external_bridge = bridge  # type: ignore[attr-defined]
+        click.echo(f"[System] OpenCode Go bridge enabled")
+
     return llm_port, coordinator
 
 

@@ -29,6 +29,8 @@ class ProjectCoordinatorAgent(BaseAgent):
         self._turn_count = 0
         self._goal_proposed: str | None = None
         self._goal_approved = False
+        self.external_bridge: Any = None
+        self.active_workstreams: dict[str, dict[str, Any]] = {}
 
     async def run(self, user_input: str = "", **kwargs: object) -> dict[str, Any]:  # type: ignore[override]
         command = str(kwargs.get("command", "")).lower()
@@ -104,9 +106,47 @@ class ProjectCoordinatorAgent(BaseAgent):
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
             return {"error": "Cannot start workstream: no approved goals. Use `approve_goal` first."}
+
+        # If external bridge is available, delegate the workstream
+        bridge_result = None
+        if self.external_bridge is not None:
+            try:
+                bridge_result = await self.external_bridge.request(
+                    endpoint="delegate_task",
+                    payload={
+                        "prompt": (
+                            f"You are a philosophical research agent executing a workstream.\n"
+                            f"Goal: {self._goal_proposed}\n"
+                            f"Workstream type: {workstream_type}\n"
+                            f"Execute this workstream and return your findings."
+                        ),
+                    },
+                    consent_scope="workstream_delegation",
+                )
+            except Exception:
+                bridge_result = None
+
+        ws_id = f"ws-{workstream_type}-{len(self.active_workstreams) + 1}"
+        self.active_workstreams[ws_id] = {
+            "workstream_id": ws_id,
+            "type": workstream_type,
+            "status": "running",
+            "goal": self._goal_proposed,
+            "bridge_result": bridge_result,
+        }
+
+        msg = f"Workstream '{workstream_type}' launched as {ws_id}."
+        if bridge_result and bridge_result.get("status") == "success":
+            output_preview = str(bridge_result.get("data", {}).get("output", ""))[:200]
+            msg += f"\n\nOpenCode Go response:\n{output_preview}"
+
         return {
-            "message": f"Workstream of type '{workstream_type}' proposed for goal: **{self._goal_proposed}**\n\nDo you want to proceed with this workstream?",
+            "message": msg,
             "workstream_type": workstream_type,
+            "workstream_id": ws_id,
+            "active_workstreams": [
+                f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
+            ],
             "proposal": {
                 "type": workstream_type,
                 "goal": {"description": self._goal_proposed, "approved": True},
