@@ -61,9 +61,9 @@ def _safe_float(value: object, default: float = 0.0) -> float:
 def fallback_classify(user_input: str) -> UserIntent:
     """Rule-based intent classification when LLM is unavailable.
 
-    Per NLU contract: returns confidence=0.80, needs_clarification=True,
-    and surfaces the matched intent via alternative_intents[0] so the
-    system can present a disambiguation prompt.
+    Returns the matched intent as the primary type when a pattern matches,
+    with confidence=0.80.  When no pattern matches, returns START_INQUIRY
+    as a generic fallback.
     """
     lower = user_input.lower()
     matched: IntentType | None = None
@@ -76,7 +76,9 @@ def fallback_classify(user_input: str) -> UserIntent:
             break
 
     alternatives: list[AlternativeIntent] = []
+    primary = IntentType.START_INQUIRY
     if matched is not None:
+        primary = matched
         alternatives = [
             AlternativeIntent(
                 intent_type=matched, confidence=0.80, rationale="Pattern-matched fallback"
@@ -84,7 +86,7 @@ def fallback_classify(user_input: str) -> UserIntent:
         ]
 
     return UserIntent(
-        intent_type=IntentType.START_INQUIRY,
+        intent_type=primary,
         confidence=0.80,
         raw_input=user_input,
         alternative_intents=alternatives,

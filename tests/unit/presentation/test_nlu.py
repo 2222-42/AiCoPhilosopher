@@ -325,7 +325,8 @@ async def test_non_numeric_confidence_handled(mock_llm: MagicMock, focus: FocusC
 def test_fallback_uses_alternative_intents() -> None:
     from aicophilosopher.presentation.nlu import fallback_classify
     r = fallback_classify("yes go ahead")
-    assert r.intent_type == IntentType.START_INQUIRY  # generic fallback
+    # Matched intent becomes primary
+    assert r.intent_type == IntentType.APPROVE_ACTION
     assert len(r.alternative_intents) == 1
     assert r.alternative_intents[0].intent_type == IntentType.APPROVE_ACTION
     assert r.confidence == 0.80
