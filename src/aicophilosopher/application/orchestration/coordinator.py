@@ -187,3 +187,35 @@ class ProjectCoordinatorAgent(BaseAgent):
         elif self._turn_count == 0:
             return "awaiting_question"
         return "clarifying"
+
+    # ── State persistence ────────────────────────────────────────────
+
+    def get_state(self) -> dict[str, Any]:
+        """Return a JSON-serialisable snapshot of coordinator state."""
+        return {
+            "turn_count": self._turn_count,
+            "goal_proposed": self._goal_proposed,
+            "goal_approved": self._goal_approved,
+            "dialogue_history": self.dialogue_history,
+            "active_workstreams": {
+                wid: {"type": ws["type"], "status": ws["status"], "goal": ws.get("goal")}
+                for wid, ws in self.active_workstreams.items()
+            },
+        }
+
+    def restore_state(self, state: dict[str, Any]) -> None:
+        """Restore coordinator state from a previously saved snapshot."""
+        if not state:
+            return
+        self._turn_count = int(state.get("turn_count", 0))
+        self._goal_proposed = state.get("goal_proposed") or None
+        self._goal_approved = bool(state.get("goal_approved", False))
+        self.dialogue_history = state.get("dialogue_history") or []
+        saved_ws = state.get("active_workstreams") or {}
+        for wid, ws in saved_ws.items():
+            self.active_workstreams[wid] = {
+                "workstream_id": wid,
+                "type": ws.get("type", ""),
+                "status": ws.get("status", "running"),
+                "goal": ws.get("goal", ""),
+            }

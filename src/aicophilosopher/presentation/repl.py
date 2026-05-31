@@ -303,6 +303,17 @@ class WorkstreamPoller:
 # ── Main REPL entry point ────────────────────────────────────────────────
 
 
+def _save_coordinator_state(session: SessionState, coordinator: Any) -> None:
+    """Persist coordinator state into the session snapshot for resume."""
+    try:
+        state = coordinator.get_state()
+    except (AttributeError, TypeError):
+        return
+    if session.config_snapshot is None:
+        session.config_snapshot = {}
+    session.config_snapshot["coordinator_state"] = state
+
+
 async def run_repl(
     project_id: str | None = None,
     test_mode: bool = False,
@@ -335,8 +346,6 @@ async def run_repl(
         return  # tests drive via _process_input directly
 
     # ── Production mode ──────────────────────────────────────────────
-    # Until full backend wiring is complete (T-030/T-031), provide
-    # graceful degradation when the coordinator or LLM port is missing.
     if coordinator is None or llm_port is None:
         print(
             "REPL backend not fully configured.\n"
@@ -344,6 +353,26 @@ async def run_repl(
             "a coordinator and LLM port via the Hermes Agent integration."
         )
         return
+
+    # ── Restore coordinator state from previous session ──────────────
+    saved_state = session.config_snapshot.get("coordinator_state") if session.config_snapshot else None
+    if saved_state:
+        try:
+            coordinator.restore_state(saved_state)
+            state = coordinator.get_dialogue_state()
+            turn = saved_state.get("turn_count", 0)
+            goal = saved_state.get("goal_proposed", "")
+            goal_ok = saved_state.get("goal_approved", False)
+
+            if turn > 0:
+                print(f"\n[Session resumed — turn {turn}, state: {state}]")
+                if goal_ok:
+                    print(f"Approved goal: {goal}")
+                elif goal:
+                    print(f"Proposed goal: {goal}")
+                print()
+        except Exception:
+            pass  # best-effort restore
 
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
@@ -357,6 +386,7 @@ async def run_repl(
         try:
             user_input = await prompt_session.prompt_async("> ")
         except (EOFError, KeyboardInterrupt):
+            _save_coordinator_state(session, coordinator)
             await _finalize(session, "user_interrupt")
             print("\nSession saved. Goodbye!")
             break
@@ -365,5 +395,7 @@ async def run_repl(
             user_input, session, coordinator, llm_port, test_mode=False
         )
         if result and result.get("action") == "exit":
+            _save_coordinator_state(session, coordinator)
+            await _finalize(session, "user_exit")
             print(result.get("message", "Goodbye!"))
             break
