@@ -17,6 +17,15 @@ FALLBACK_PATTERNS: dict[IntentType, list[str]] = {
         r"\bexplore\b", r"\binvestigate\b", r"\bunderstand\b",
         r"\bwhat is\b", r"とは", r"調べ",
     ],
+    IntentType.PROPOSE_WORKSTREAM: [
+        r"\bsearch\b", r"\bstart\b.*\b(workstream|search|analy|review|compar|synthes)",
+        r"\blaunch\b", r"\bdo\b.*\b(literature|concept|argu|review|search)",
+        r"\brun\b.*\b(workstream|analysis|search)",
+        r"\bliterature\b", r"\b概念分析\b", r"\b文献\b", r"\b調査\b",
+        r"\bargument\b", r"\banaly(sis|ze)\b.*\b(concept|this|that)\b",
+        r"\bcompar",
+        r"\breview\b.*\b(argument|workstream|this)",
+    ],
     IntentType.STEER_WORKSTREAM: [
         r"\bfocus on\b", r"\binstead\b", r"\bactually\b", r"\bchange\b", r"\bredirect\b",
     ],

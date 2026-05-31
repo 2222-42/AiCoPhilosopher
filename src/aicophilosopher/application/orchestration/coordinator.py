@@ -98,7 +98,16 @@ class ProjectCoordinatorAgent(BaseAgent):
             return {"error": "No goal has been proposed yet."}
         self._goal_approved = True
         return {
-            "message": f"Goal approved! You can now launch workstreams using the `start workstream` command.\n\nApproved goal: **{self._goal_proposed}**",
+            "message": (
+                f"Goal approved! 🎉\n\n"
+                f"Approved goal: **{self._goal_proposed}**\n\n"
+                f"Now launch a workstream. Try typing:\n"
+                f"  • \"start literature search\"\n"
+                f"  • \"analyze this concept\"\n"
+                f"  • \"compare traditions\"\n"
+                f"  • \"construct an argument\"\n"
+                f"Or use slash commands: /search, /analyze, /argue, /compare, /status"
+            ),
             "dialogue_state": "goal_approved",
             "approved_goal": self._goal_proposed,
         }
