@@ -141,15 +141,37 @@ async def _process_input(
 
 
 async def _finalize(session: SessionState, reason: str) -> None:
-    """Mark session as paused and attempt persistence."""
+    """Mark session as paused and persist state before finalizing."""
     session.status = SessionStatus.PAUSED
     session.exit_reason = reason
     try:
         from aicophilosopher.presentation.session_manager import SessionManager
 
-        await SessionManager().finalize_session(str(session.session_id), reason)
+        sm = SessionManager()
+        # Persist full session state (including config_snapshot) BEFORE finalizing
+        if sm._storage:
+            await sm._storage.save_session(_session_to_dict(session))
+        await sm.finalize_session(str(session.session_id), reason)
     except (ImportError, AttributeError):
-        pass  # SessionManager not yet wired (T-016)
+        pass  # SessionManager not yet wired
+
+
+def _session_to_dict(session: SessionState) -> dict[str, object]:
+    """Convert SessionState to storage dict including config_snapshot."""
+    import json
+    d: dict[str, object] = {
+        "session_id": str(session.session_id),
+        "project_id": session.project_id,
+        "status": session.status.value,
+        "pid": session.pid,
+        "heartbeat_at": session.heartbeat_at.isoformat(),
+        "created_at": session.created_at.isoformat(),
+        "last_active_at": session.last_active_at.isoformat(),
+        "exit_reason": session.exit_reason,
+        "active_workstreams_json": json.dumps(session.active_workstreams),
+        "config_snapshot_json": json.dumps(session.config_snapshot or {}),
+    }
+    return d
 
 
 async def _startup_flow(  # noqa: C901
