@@ -277,15 +277,18 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
             enabled=enabled,
             consent_required=consent_required,
         )
-        self._opencode_bin = opencode_bin or self._find_opencode()
+        self._opencode_bin = opencode_bin  # None = lazy-discover on first use
         self._default_model = (
             default_model
             or os.environ.get("OPENCODE_MODEL")
             or "opencode/deepseek-v4-flash-free"
         )
-        # Pre-grant consent for workstream delegation (internal scope)
-        self.grant_consent("workstream_delegation")
-        self.grant_consent("philosophical_analysis")
+
+    def _get_opencode_bin(self) -> str:
+        """Resolve the opencode binary (lazy — only when actually used)."""
+        if self._opencode_bin is None:
+            self._opencode_bin = self._find_opencode()
+        return self._opencode_bin
 
     # ------------------------------------------------------------------
     # Send (real implementation)
@@ -313,7 +316,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
         workdir = str(payload.get("workdir") or os.getcwd())
 
         cmd: list[str] = [
-            self._opencode_bin,
+            self._get_opencode_bin(),
             "run",
             "--format", "json",
             "--model", model,

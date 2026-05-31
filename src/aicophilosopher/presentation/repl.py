@@ -96,7 +96,15 @@ async def _process_input(
                 render_response(status_response, session.current_focus)
                 return status_response
             except Exception:
-                pass  # fall through to inline handler
+                # Fallback: show minimal session-based status
+                render_response({
+                    "summary": (
+                        f"Project: {session.project_id}\n"
+                        f"Status: {session.status.value}\n"
+                        f"Active workstreams: {len(session.active_workstreams)}"
+                    ),
+                }, session.current_focus)
+                return {"summary": f"Project: {session.project_id} — {session.status.value}"}
 
         slash_result = _handle_slash(stripped, session)
         # Delegate to full command registry if available
@@ -336,7 +344,7 @@ async def run_repl(
             coordinator = MagicMock()
             coordinator.run = AsyncMock(
                 return_value={
-                    "message": "Welcome!",
+                    "message": "Welcome to test mode! Try typing a philosophical question.",
                     "dialogue_state": "awaiting_question",
                     "turn": 0,
                 }
@@ -345,7 +353,8 @@ async def run_repl(
             from unittest.mock import MagicMock
 
             llm_port = MagicMock()
-        return  # tests drive via _process_input directly
+        # Run interactive REPL loop with mock backends (no LLM needed)
+        # (fall through to shared loop below)
 
     # ── Production mode ──────────────────────────────────────────────
     if coordinator is None or llm_port is None:

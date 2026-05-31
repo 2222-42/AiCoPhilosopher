@@ -30,7 +30,7 @@ def render_response(  # noqa: C901
 
     if error:
         console.print(Panel(error, title="Error", border_style="red"))
-    elif isinstance(summary, str) and summary.strip():
+    if isinstance(summary, str) and summary.strip() and summary != error:
         lines = summary.strip().split("\n")
         if len(lines) > 5:
             summary = "\n".join(lines[:5]) + "\n[...]"

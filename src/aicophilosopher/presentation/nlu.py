@@ -17,23 +17,35 @@ FALLBACK_PATTERNS: dict[IntentType, list[str]] = {
         r"\bexplore\b", r"\binvestigate\b", r"\bunderstand\b",
         r"\bwhat is\b", r"とは", r"調べ",
     ],
+    IntentType.CLARIFY_QUESTION: [
+        r"\bi mean\b", r"\bmore (specifically|interested|about)\b",
+        r"\brephrase\b", r"\bnot exactly\b", r"\bi was thinking\b",
+        r"\bnarrow\b.*\b(down|this|to)\b", r"\bmore specific\b",
+        r"\breally.*\b(want|mean|asking)\b",
+        r"\blet me\b.*\b(clarify|rephrase|reframe)\b",
+    ],
     IntentType.PROPOSE_WORKSTREAM: [
         r"\bsearch\b", r"\bstart\b.*\b(workstream|search|analy|review|compar|synthes)",
         r"\blaunch\b", r"\bdo\b.*\b(literature|concept|argu|review|search)",
         r"\brun\b.*\b(workstream|analysis|search)",
         r"\bliterature\b", r"\b概念分析\b", r"\b文献\b", r"\b調査\b",
         r"\bargument\b", r"\banaly(sis|ze)\b.*\b(concept|this|that)\b",
-        r"\bcompar",
-        r"\breview\b.*\b(argument|workstream|this)",
+        r"\bcompar", r"\breview\b.*\b(argument|workstream|this)",
     ],
     IntentType.STEER_WORKSTREAM: [
-        r"\bfocus on\b", r"\binstead\b", r"\bactually\b", r"\bchange\b", r"\bredirect\b",
+        r"\bfocus on\b", r"\bredirect\b", r"\bchange direction\b",
+        r"\binstead of\b.*\blet'?s\b", r"\bswitch to\b",
     ],
     IntentType.REQUEST_STATUS: [
         r"\bhow.*going\b", r"\bstatus\b", r"\bprogress\b", r"\bupdate\b",
     ],
     IntentType.REQUEST_EXPORT: [
         r"\bexport\b", r"\bsave as\b", r"\bdownload\b",
+    ],
+    IntentType.ASK_QUESTION: [
+        r"\bwhat (would|does|do|is|are)\b", r"\bhow (do|does|would|can)\b",
+        r"\bcan you\b.*\b(explain|clarify|tell|elaborate)\b",
+        r"\bwhat'?s the\b", r"\bis there\b",
     ],
     IntentType.APPROVE_ACTION: [
         r"\byes\b", r"\bgo ahead\b", r"\bsure\b", r"\bapproved\b", r"はい", r"いい",

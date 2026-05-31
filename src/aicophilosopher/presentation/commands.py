@@ -143,7 +143,12 @@ def _wire_backends(  # noqa: C901
         config = Config()
     except Exception:
         click.echo("[System] Could not load config. Using defaults.")
-        config = Config()
+        # Create a defaults-only instance that won't re-read env
+        config = Config(
+            llm_backend="ollama",  # type: ignore[call-arg]
+            llm_model="",
+            llm_api_key="",
+        )
 
     # Allow CLI --backend flag to override env/AICOPH_LLM_BACKEND
     if backend_override:
