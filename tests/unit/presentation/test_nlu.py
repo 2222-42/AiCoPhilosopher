@@ -486,7 +486,7 @@ async def test_nlu_accuracy_on_fixture(mock_llm: MagicMock) -> None:
         Path(__file__).parent.parent.parent
         / "fixtures" / "nlu_accuracy_test_set.json"
     )
-    utterances = json.loads(fixture_path.read_text())
+    utterances = json.loads(fixture_path.read_text(encoding="utf-8"))
 
     assert len(utterances) == 100, f"Expected 100 utterances, got {len(utterances)}"
 
@@ -525,4 +525,7 @@ async def test_context_placeholders_filled(mock_llm: MagicMock) -> None:
     # The prompt sent to LLM should contain context values
     prompt_sent = mock_llm.generate.call_args.args[0]
     assert "free will" in prompt_sent
-    assert "0" in prompt_sent  # pending_count=0
+    # {pending_count} should be substituted with actual count (0)
+    assert "pending_decisions: 0" in prompt_sent or "pending_count: 0" in prompt_sent or \
+        "Pending decisions: 0" in prompt_sent, \
+        f"pending_count=0 not found in prompt. Prompt was: {prompt_sent[:500]}"

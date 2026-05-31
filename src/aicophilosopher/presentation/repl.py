@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from queue import Queue
 from typing import Any, Callable
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
@@ -212,14 +213,14 @@ class WorkstreamPoller:
     def __init__(
         self,
         poll_fn: Callable[[], list[dict[str, object]]],
-        update_queue: object,  # Queue[dict]
+        update_queue: "Queue[dict[str, object]]",
         interval_seconds: float = 2.0,
     ) -> None:
         import threading
         from queue import Queue
 
         self._poll_fn = poll_fn
-        self._queue: Queue[dict[str, object]] = update_queue  # type: ignore[assignment]
+        self._queue: Queue[dict[str, object]] = update_queue
         self._interval = interval_seconds
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
