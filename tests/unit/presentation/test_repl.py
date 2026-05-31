@@ -109,13 +109,6 @@ def test_slash_help() -> None:
     assert "commands" in result["message"].lower()
 
 
-def test_slash_status() -> None:
-    from aicophilosopher.presentation.repl import _handle_slash
-
-    result = _handle_slash("/status", SessionState(project_id="p1"))
-    assert "p1" in result.get("summary", "")
-
-
 def test_slash_details(mock_session: SessionState) -> None:
     from aicophilosopher.presentation.repl import _handle_slash
 

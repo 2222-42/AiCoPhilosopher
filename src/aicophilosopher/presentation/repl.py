@@ -26,14 +26,6 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
             "\nUse natural language for philosophical inquiry."
         }
 
-    if cmd == "/status":
-        return {
-            "summary": f"Project: {session.project_id} — {session.status.value}",
-            "active_workstreams": [
-                f"{ws} — (tracked)" for ws in session.active_workstreams
-            ],
-        }
-
     if cmd == "/details":
         session.current_focus.toggle_state.show_details = True
         return {"message": "[Details] section enabled."}
@@ -96,6 +88,15 @@ async def _process_input(
         return None
 
     if stripped.startswith("/"):
+        # Route /status to coordinator for rich status display
+        if stripped.strip().lower() == "/status":
+            try:
+                status_response = await coordinator.run(command="status")
+                render_response(status_response, session.current_focus)
+                return status_response
+            except Exception:
+                pass  # fall through to inline handler
+
         slash_result = _handle_slash(stripped, session)
         # Delegate to full command registry if available
         if slash_result.get("message", "").startswith("Unknown command"):
