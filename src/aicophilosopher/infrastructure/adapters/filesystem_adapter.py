@@ -121,3 +121,54 @@ class FileSystemAdapter:
     async def ensure_project_dirs(self, project_id: str) -> str:
         p = await asyncio.to_thread(self._ensure_project_dirs, project_id)
         return str(p)
+
+    # ── Session persistence (002-console-agent) ───────────────────────
+
+    def _sessions_dir(self) -> Path:
+        p = self.base_path / "sessions"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    async def save_session(self, session: dict[str, object]) -> None:
+        sid = str(session.get("session_id", "unknown"))
+        path = self._sessions_dir() / f"{sid}.json"
+        await asyncio.to_thread(
+            path.write_text,
+            json.dumps(session, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    async def load_session(self, project_id: str) -> dict[str, object] | None:
+        # Find the most recent session file for this project
+        sessions_dir = self._sessions_dir()
+        if not sessions_dir.exists():
+            return None
+        best: tuple[float, Path] | None = None
+        for f in sessions_dir.glob("*.json"):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                if data.get("project_id") == project_id:
+                    mtime = f.stat().st_mtime
+                    if best is None or mtime > best[0]:
+                        best = (mtime, f)
+            except (json.JSONDecodeError, OSError):
+                continue
+        if best is None:
+            return None
+        return json.loads(best[1].read_text(encoding="utf-8"))
+
+    async def finalize_session(self, session_id: str, reason: str) -> None:
+        path = self._sessions_dir() / f"{session_id}.json"
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["status"] = "paused"
+            data["exit_reason"] = reason
+            await asyncio.to_thread(
+                path.write_text,
+                json.dumps(data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except (json.JSONDecodeError, OSError):
+            pass

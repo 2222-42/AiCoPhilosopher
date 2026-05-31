@@ -6,6 +6,7 @@ import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -117,22 +118,22 @@ def cli(ctx: click.Context, project: str | None, new_question: str | None, test_
         click.echo(f"Created project {project_id} — entering REPL...")
         project = project_id
 
-    llm_port, coordinator = _wire_backends(project, test_mode=test_mode, backend_override=backend)
-    asyncio.run(run_repl(project_id=project, test_mode=test_mode, llm_port=llm_port, coordinator=coordinator))
+    llm_port, coordinator, storage = _wire_backends(project, test_mode=test_mode, backend_override=backend)
+    asyncio.run(run_repl(project_id=project, test_mode=test_mode, llm_port=llm_port, coordinator=coordinator, storage=storage))
 
 
 def _wire_backends(  # noqa: C901
     project_id: str | None = None,
     test_mode: bool = False,
     backend_override: str | None = None,
-) -> tuple[object | None, object | None]:
+) -> tuple[Any, Any, Any]:
     """Create LLM backend and Coordinator for the REPL.
 
     Returns (llm_port, coordinator).  Both may be None if the backend
     is not configured — the REPL handles this with a helpful message.
     """
     if test_mode:
-        return None, None
+        return None, None, None
 
     from aicophilosopher.domain.services.config import Config
     from aicophilosopher.container import Container
@@ -169,7 +170,7 @@ def _wire_backends(  # noqa: C901
         click.echo("  For Gemini:   export AICOPH_LLM_API_KEY=...")
         click.echo("  For Ollama:   install ollama and pull a model")
         click.echo("  Or use --test-mode for a mock session.")
-        return None, None
+        return None, None, None
 
     # ── Create Coordinator ──────────────────────────────────────────
     fs_adapter = FileSystemAdapter(base_path=config.workspace_dir)
@@ -191,7 +192,7 @@ def _wire_backends(  # noqa: C901
         coordinator.external_bridge = bridge  # type: ignore[attr-defined]
         click.echo(f"[System] OpenCode Go bridge enabled")
 
-    return llm_port, coordinator
+    return llm_port, coordinator, fs_adapter
 
 
 def _create_project_from_question(question: str) -> str:

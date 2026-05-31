@@ -49,6 +49,9 @@ class ProjectCoordinatorAgent(BaseAgent):
             return await self._handle_steer(ws_id, instruction)
         elif command == "status":
             return await self._get_status_summary()
+        elif command == "logs":
+            ws_id = str(kwargs.get("workstream_id", ""))
+            return self._get_workstream_logs(ws_id)
         return self._start_dialogue(user_input)
 
     def _start_dialogue(self, user_input: str | None) -> dict[str, Any]:
@@ -199,6 +202,40 @@ class ProjectCoordinatorAgent(BaseAgent):
             "refuted_hypotheses": 0,
             "under_review": 0,
             "stalled": 0,
+        }
+
+    def _get_workstream_logs(self, workstream_id: str) -> dict[str, Any]:
+        """Return output/logs for a specific workstream."""
+        if not workstream_id:
+            # List all workstreams
+            if not self.active_workstreams:
+                return {"summary": "No workstreams running.", "active_workstreams": []}
+            lines = []
+            for wid, ws in self.active_workstreams.items():
+                br = ws.get("bridge_result")
+                preview = ""
+                if br and br.get("status") == "success":
+                    output = br.get("data", {}).get("output", "")
+                    preview = output[:80] + ("..." if len(output) > 80 else "")
+                lines.append(f"{wid} — {ws['status']} | {preview}")
+            return {
+                "summary": "Active workstreams:\n" + "\n".join(lines),
+                "active_workstreams": [
+                    f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
+                ],
+            }
+
+        ws = self.active_workstreams.get(workstream_id)
+        if ws is None:
+            return {"error": f"Workstream '{workstream_id}' not found. Active: {list(self.active_workstreams)}"}
+        br = ws.get("bridge_result")
+        output = ""
+        if br and br.get("status") == "success":
+            output = br.get("data", {}).get("output", "")
+        return {
+            "summary": f"Workstream: {workstream_id}\nType: {ws['type']}\nStatus: {ws['status']}",
+            "details": output or "(no output yet — workstream may still be running)",
+            "epistemic_status": f"Status: {ws['status']}",
         }
 
     def _synthesize_goal(self) -> str:

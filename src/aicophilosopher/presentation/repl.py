@@ -136,6 +136,18 @@ async def _process_input(
                 }, session.current_focus)
                 return {"summary": f"Project: {session.project_id} — {session.status.value}"}
 
+        # /logs [workstream_id] — view workstream output
+        if stripped.strip().lower().startswith("/logs"):
+            parts = stripped.strip().split(maxsplit=1)
+            ws_id = parts[1] if len(parts) > 1 else ""
+            try:
+                log_response = await coordinator.run(command="logs", workstream_id=ws_id)
+                render_response(log_response, session.current_focus)
+                return log_response
+            except Exception:
+                render_response({"error": "Could not fetch workstream logs."}, session.current_focus)
+                return {"error": "Could not fetch workstream logs."}
+
         slash_result = _handle_slash(stripped, session)
         # Delegate to full command registry if available
         if slash_result.get("message", "").startswith("Unknown command"):
@@ -190,14 +202,14 @@ async def _process_input(
 # ── Session lifecycle ────────────────────────────────────────────────────
 
 
-async def _finalize(session: SessionState, reason: str) -> None:
+async def _finalize(session: SessionState, reason: str, storage: Any = None) -> None:
     """Mark session as paused and persist state before finalizing."""
     session.status = SessionStatus.PAUSED
     session.exit_reason = reason
     try:
         from aicophilosopher.presentation.session_manager import SessionManager
 
-        sm = SessionManager()
+        sm = SessionManager(storage=storage)
         # Persist full session state (including config_snapshot) BEFORE finalizing
         if sm._storage:
             await sm._storage.save_session(_session_to_dict(session))
@@ -227,6 +239,7 @@ def _session_to_dict(session: SessionState) -> dict[str, object]:
 async def _startup_flow(  # noqa: C901
     project_id: str | None = None,
     test_mode: bool = False,
+    storage: Any = None,
 ) -> SessionState | None:
     if test_mode:
         return SessionState(project_id=project_id or "test-proj")
@@ -236,7 +249,7 @@ async def _startup_flow(  # noqa: C901
     except ImportError:
         return None
 
-    sm = SessionManager()
+    sm = SessionManager(storage=storage)
 
     # Reclaim stale sessions
     try:
@@ -401,8 +414,9 @@ async def run_repl(
     test_mode: bool = False,
     llm_port: Any = None,
     coordinator: Any = None,
+    storage: Any = None,
 ) -> None:
-    session = await _startup_flow(project_id=project_id, test_mode=test_mode)
+    session = await _startup_flow(project_id=project_id, test_mode=test_mode, storage=storage)
     if session is None:
         if test_mode:
             return
@@ -470,7 +484,7 @@ async def run_repl(
             user_input = await prompt_session.prompt_async("> ")
         except (EOFError, KeyboardInterrupt):
             _save_coordinator_state(session, coordinator)
-            await _finalize(session, "user_interrupt")
+            await _finalize(session, "user_interrupt", storage)
             print("\nSession saved. Goodbye!")
             break
 
@@ -479,6 +493,6 @@ async def run_repl(
         )
         if result and result.get("action") == "exit":
             _save_coordinator_state(session, coordinator)
-            await _finalize(session, "user_exit")
+            await _finalize(session, "user_exit", storage)
             print(result.get("message", "Goodbye!"))
             break
