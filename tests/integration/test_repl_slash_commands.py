@@ -45,11 +45,17 @@ async def test_status_via_repl(
 ) -> None:
     from aicophilosopher.presentation.repl import _process_input
 
+    # /status now routes to coordinator.run(command="status")
+    mock_coordinator.run.return_value = {
+        "summary": f"Project: {session.project_id}",
+        "epistemic_status": "clarifying (turn 2/5)",
+    }
     with patch("aicophilosopher.presentation.repl.render_response"):
         result = await _process_input(
             "/status", session, mock_coordinator, mock_llm, test_mode=True
         )
     assert session.project_id in result.get("summary", "")
+    mock_coordinator.run.assert_called_with(command="status")
 
 
 @pytest.mark.asyncio

@@ -96,8 +96,9 @@ def _save_current_project(project_id: str) -> None:
 @click.option("--project", "-p", help="Project ID to open directly in REPL")
 @click.option("--new", "-n", "new_question", help="Create a new project with this question")
 @click.option("--test-mode", is_flag=True, help="Launch REPL with mock coordinator (no LLM)")
+@click.option("--backend", "-b", help="LLM backend: ollama, claude, gemini (overrides AICOPH_LLM_BACKEND)")
 @click.pass_context
-def cli(ctx: click.Context, project: str | None, new_question: str | None, test_mode: bool) -> None:  # noqa: C901
+def cli(ctx: click.Context, project: str | None, new_question: str | None, test_mode: bool, backend: str | None) -> None:  # noqa: C901
     """AI Co-Philosopher — An agentic workbench for philosophical research.
 
     Run without subcommands to enter an interactive REPL session.
@@ -116,7 +117,81 @@ def cli(ctx: click.Context, project: str | None, new_question: str | None, test_
         click.echo(f"Created project {project_id} — entering REPL...")
         project = project_id
 
-    asyncio.run(run_repl(project_id=project, test_mode=test_mode))
+    llm_port, coordinator = _wire_backends(project, test_mode=test_mode, backend_override=backend)
+    asyncio.run(run_repl(project_id=project, test_mode=test_mode, llm_port=llm_port, coordinator=coordinator))
+
+
+def _wire_backends(  # noqa: C901
+    project_id: str | None = None,
+    test_mode: bool = False,
+    backend_override: str | None = None,
+) -> tuple[object | None, object | None]:
+    """Create LLM backend and Coordinator for the REPL.
+
+    Returns (llm_port, coordinator).  Both may be None if the backend
+    is not configured — the REPL handles this with a helpful message.
+    """
+    if test_mode:
+        return None, None
+
+    from aicophilosopher.domain.services.config import Config
+    from aicophilosopher.container import Container
+    from aicophilosopher.infrastructure.adapters.filesystem_adapter import FileSystemAdapter
+
+    # ── Load configuration ──────────────────────────────────────────
+    try:
+        config = Config()
+    except Exception:
+        click.echo("[System] Could not load config. Using defaults.")
+        # Create a defaults-only instance that won't re-read env
+        config = Config(
+            llm_backend="ollama",  # type: ignore[call-arg]
+            llm_model="",
+            llm_api_key="",
+        )
+
+    # Allow CLI --backend flag to override env/AICOPH_LLM_BACKEND
+    if backend_override:
+        try:
+            config.llm_backend = backend_override  # type: ignore[assignment]
+        except Exception:
+            pass
+
+    # ── Create LLM backend ──────────────────────────────────────────
+    try:
+        llm_port = Container.create_llm_backend(config)
+        llm_label = getattr(llm_port, "model", config.llm_backend) or config.llm_backend
+        click.echo(f"[System] LLM backend: {llm_label}")
+    except Exception as exc:
+        click.echo(f"[System] Could not create LLM backend ({exc}).")
+        click.echo("  Set AICOPH_LLM_BACKEND=ollama (or claude/gemini) or use --backend <name>")
+        click.echo("  For Claude:   export AICOPH_LLM_API_KEY=sk-ant-...")
+        click.echo("  For Gemini:   export AICOPH_LLM_API_KEY=...")
+        click.echo("  For Ollama:   install ollama and pull a model")
+        click.echo("  Or use --test-mode for a mock session.")
+        return None, None
+
+    # ── Create Coordinator ──────────────────────────────────────────
+    fs_adapter = FileSystemAdapter(base_path=config.workspace_dir)
+    resolved_pid = project_id or "default"
+
+    from aicophilosopher.application.orchestration.coordinator import ProjectCoordinatorAgent
+    coordinator = ProjectCoordinatorAgent(
+        project_id=resolved_pid,
+        llm_backend=llm_port,
+        filesystem=fs_adapter,
+    )
+
+    # ── Create OpenCode Go bridge (if enabled) ──────────────────────
+    if config.opencode_enabled:
+        from aicophilosopher.infrastructure.adapters.external_bridge_adapter import (
+            create_opencode_bridge,
+        )
+        bridge = create_opencode_bridge(enabled=True)
+        coordinator.external_bridge = bridge  # type: ignore[attr-defined]
+        click.echo(f"[System] OpenCode Go bridge enabled")
+
+    return llm_port, coordinator
 
 
 def _create_project_from_question(question: str) -> str:

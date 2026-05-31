@@ -26,7 +26,11 @@ def render_response(  # noqa: C901
         console = Console()
 
     summary = response.get("summary") or response.get("message", "")
-    if isinstance(summary, str):
+    error = response.get("error", "")
+
+    if error:
+        console.print(Panel(error, title="Error", border_style="red"))
+    if isinstance(summary, str) and summary.strip() and summary != error:
         lines = summary.strip().split("\n")
         if len(lines) > 5:
             summary = "\n".join(lines[:5]) + "\n[...]"

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
+from queue import Queue
+from typing import Any, Callable
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
 from aicophilosopher.presentation.nlu import classify_intent
@@ -24,14 +25,6 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
             "  /details, /hide-details\n"
             "  /suggestions, /hide-suggestions\n"
             "\nUse natural language for philosophical inquiry."
-        }
-
-    if cmd == "/status":
-        return {
-            "summary": f"Project: {session.project_id} — {session.status.value}",
-            "active_workstreams": [
-                f"{ws} — (tracked)" for ws in session.active_workstreams
-            ],
         }
 
     if cmd == "/details":
@@ -96,6 +89,23 @@ async def _process_input(
         return None
 
     if stripped.startswith("/"):
+        # Route /status to coordinator for rich status display
+        if stripped.strip().lower() == "/status":
+            try:
+                status_response = await coordinator.run(command="status")
+                render_response(status_response, session.current_focus)
+                return status_response
+            except Exception:
+                # Fallback: show minimal session-based status
+                render_response({
+                    "summary": (
+                        f"Project: {session.project_id}\n"
+                        f"Status: {session.status.value}\n"
+                        f"Active workstreams: {len(session.active_workstreams)}"
+                    ),
+                }, session.current_focus)
+                return {"summary": f"Project: {session.project_id} — {session.status.value}"}
+
         slash_result = _handle_slash(stripped, session)
         # Delegate to full command registry if available
         if slash_result.get("message", "").startswith("Unknown command"):
@@ -210,15 +220,15 @@ class WorkstreamPoller:
 
     def __init__(
         self,
-        poll_fn,
-        update_queue: object,  # Queue[dict]
+        poll_fn: Callable[[], list[dict[str, object]]],
+        update_queue: "Queue[dict[str, object]]",
         interval_seconds: float = 2.0,
     ) -> None:
         import threading
         from queue import Queue
 
         self._poll_fn = poll_fn
-        self._queue: Queue[dict] = update_queue  # type: ignore[no-redef]
+        self._queue: Queue[dict[str, object]] = update_queue
         self._interval = interval_seconds
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
@@ -275,8 +285,8 @@ class WorkstreamPoller:
 
         current: dict[str, str] = {}
         for ws in workstreams:
-            wid = ws.get("workstream_id", "")
-            status = ws.get("status", "unknown")
+            wid = str(ws.get("workstream_id", ""))
+            status = str(ws.get("status", "unknown"))
             if wid:
                 current[wid] = status
 
@@ -303,6 +313,17 @@ class WorkstreamPoller:
 # ── Main REPL entry point ────────────────────────────────────────────────
 
 
+def _save_coordinator_state(session: SessionState, coordinator: Any) -> None:
+    """Persist coordinator state into the session snapshot for resume."""
+    try:
+        state = coordinator.get_state()
+    except (AttributeError, TypeError):
+        return
+    if session.config_snapshot is None:
+        session.config_snapshot = {}
+    session.config_snapshot["coordinator_state"] = state
+
+
 async def run_repl(
     project_id: str | None = None,
     test_mode: bool = False,
@@ -323,7 +344,7 @@ async def run_repl(
             coordinator = MagicMock()
             coordinator.run = AsyncMock(
                 return_value={
-                    "message": "Welcome!",
+                    "message": "Welcome to test mode! Try typing a philosophical question.",
                     "dialogue_state": "awaiting_question",
                     "turn": 0,
                 }
@@ -332,11 +353,10 @@ async def run_repl(
             from unittest.mock import MagicMock
 
             llm_port = MagicMock()
-        return  # tests drive via _process_input directly
+        # Run interactive REPL loop with mock backends (no LLM needed)
+        # (fall through to shared loop below)
 
     # ── Production mode ──────────────────────────────────────────────
-    # Until full backend wiring is complete (T-030/T-031), provide
-    # graceful degradation when the coordinator or LLM port is missing.
     if coordinator is None or llm_port is None:
         print(
             "REPL backend not fully configured.\n"
@@ -344,6 +364,26 @@ async def run_repl(
             "a coordinator and LLM port via the Hermes Agent integration."
         )
         return
+
+    # ── Restore coordinator state from previous session ──────────────
+    saved_state = session.config_snapshot.get("coordinator_state") if session.config_snapshot else None
+    if saved_state:
+        try:
+            coordinator.restore_state(saved_state)
+            state = coordinator.get_dialogue_state()
+            turn = saved_state.get("turn_count", 0)
+            goal = saved_state.get("goal_proposed", "")
+            goal_ok = saved_state.get("goal_approved", False)
+
+            if turn > 0:
+                print(f"\n[Session resumed — turn {turn}, state: {state}]")
+                if goal_ok:
+                    print(f"Approved goal: {goal}")
+                elif goal:
+                    print(f"Proposed goal: {goal}")
+                print()
+        except Exception:
+            pass  # best-effort restore
 
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
@@ -357,6 +397,7 @@ async def run_repl(
         try:
             user_input = await prompt_session.prompt_async("> ")
         except (EOFError, KeyboardInterrupt):
+            _save_coordinator_state(session, coordinator)
             await _finalize(session, "user_interrupt")
             print("\nSession saved. Goodbye!")
             break
@@ -365,5 +406,7 @@ async def run_repl(
             user_input, session, coordinator, llm_port, test_mode=False
         )
         if result and result.get("action") == "exit":
+            _save_coordinator_state(session, coordinator)
+            await _finalize(session, "user_exit")
             print(result.get("message", "Goodbye!"))
             break

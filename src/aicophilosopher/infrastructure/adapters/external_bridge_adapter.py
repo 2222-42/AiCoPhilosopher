@@ -10,8 +10,11 @@ no data transmission without explicit consent.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
+import shutil
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,8 +30,9 @@ class AuditLogger:
 
     def __init__(self, log_path: str | Path | None = None) -> None:
         if log_path is None:
-            log_path = Path("logs") / "external_bridge.jsonl"
+            log_path = Path.home() / ".aicophilosopher" / "logs" / "external_bridge.jsonl"
         self._path = Path(log_path)
+        self._path.parent.mkdir(parents=True, exist_ok=True)
 
     def log(
         self,
@@ -86,8 +90,6 @@ class ExternalAgentBridge(ABC):
         if self._consent_granted.get(scope, False):
             return True
         self._audit.log("consent_requested", self.bridge_type, {"scope": scope})
-        # In MVP, consent must be pre-granted via config.
-        # Interactive consent flow deferred to post-MVP.
         logger.info(
             "Consent required for scope '%s' on bridge '%s'. "
             "Grant via grant_consent().",
@@ -115,29 +117,7 @@ class ExternalAgentBridge(ABC):
         payload: dict[str, object],
         consent_scope: str = "default",
     ) -> dict[str, object]:
-        """Dispatch a request to the external layer.
-
-        Checks consent, attempts external call, and falls back to
-        internal execution on failure.
-
-        Response schema:
-          - success:   {\"status\": \"success\", \"data\": <_send result>}
-          - denied:    {\"status\": \"consent_denied\", \"data\": {}, \"error\": ...}
-          - fallback:  {\"status\": \"fallback\", \"data\": {}, \"message\": ...}
-
-        Note: On success, ``response[\"data\"]`` contains the raw result from
-        ``_send()`` (which may have its own ``status`` field). Consumers
-        should check ``response[\"status\"]`` for the overall outcome and
-        inspect ``response[\"data\"]`` for bridge-specific payload.
-
-        Args:
-            endpoint: Logical endpoint name (e.g., 'delegate_task').
-            payload: JSON-serializable payload.
-            consent_scope: Scope identifier for consent check.
-
-        Returns:
-            Response dict with at least 'status' and 'data' keys.
-        """
+        """Dispatch a request to the external layer."""
         if not self.enabled:
             return await self.fallback(
                 RuntimeError(f"Bridge '{self.bridge_type}' is disabled")
@@ -192,11 +172,7 @@ class ExternalAgentBridge(ABC):
     # Fallback to internal execution
     # ------------------------------------------------------------------
     async def fallback(self, error: Exception) -> dict[str, object]:
-        """Fall back to internal LangGraph execution.
-
-        Subclasses can override to provide bridge-specific fallback logic.
-        The default implementation returns a graceful-degradation response.
-        """
+        """Fall back to internal LangGraph execution."""
         logger.info(
             "Falling back to internal execution for bridge '%s': %s",
             self.bridge_type,
@@ -217,11 +193,7 @@ class ExternalAgentBridge(ABC):
 # Hermes Agent bridge (skeleton)
 # ---------------------------------------------------------------------------
 class HermesAdapter(ExternalAgentBridge):
-    """Adapter for Hermes Agent orchestration layer (post-MVP).
-
-    Translates internal workstream requests to Hermes Agent delegate_task calls.
-    Falls back to internal LangGraph execution on failure.
-    """
+    """Adapter for Hermes Agent orchestration layer (post-MVP)."""
 
     def __init__(
         self,
@@ -237,8 +209,6 @@ class HermesAdapter(ExternalAgentBridge):
     async def _send(
         self, endpoint: str, payload: dict[str, object]
     ) -> dict[str, object]:
-        """Send to Hermes Agent. Skeleton — full impl deferred to Phase 6."""
-        # Placeholder: in production, this would call the Hermes Agent API
         return {
             "bridge": "hermes",
             "endpoint": endpoint,
@@ -248,33 +218,195 @@ class HermesAdapter(ExternalAgentBridge):
 
 
 # ---------------------------------------------------------------------------
-# OpenCode Go bridge (skeleton)
+# OpenCode Go bridge (real implementation)
 # ---------------------------------------------------------------------------
 class OpenCodeGoAdapter(ExternalAgentBridge):
-    """Adapter for OpenCode Go orchestration layer (post-MVP).
+    """Adapter for OpenCode Go orchestration layer.
 
-    Translates internal workstream requests to OpenCode Go CLI calls.
+    Delegates workstream tasks to OpenCode Go via ``opencode run``.
+    Parses JSON-lines output and returns structured results.
     Falls back to internal LangGraph execution on failure.
+
+    Environment:
+        OPENCODE_BIN: path to opencode binary (default: auto-detect)
+        OPENCODE_MODEL: default model (default: opencode-go/deepseek-v4-pro)
     """
 
+    # ------------------------------------------------------------------
+    # Discovery
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _find_opencode() -> str:
+        """Locate the opencode binary."""
+        # 1. Explicit env var
+        env_bin = os.environ.get("OPENCODE_BIN")
+        if env_bin and Path(env_bin).exists():
+            return env_bin
+
+        # 2. Common paths
+        candidates = [
+            Path.home() / ".opencode" / "bin" / "opencode",
+            Path("/usr/local/bin/opencode"),
+            Path("/opt/opencode/bin/opencode"),
+        ]
+        for c in candidates:
+            if c.exists():
+                return str(c)
+
+        # 3. PATH lookup
+        found = shutil.which("opencode")
+        if found:
+            return found
+
+        raise RuntimeError(
+            "OpenCode Go binary not found. Set OPENCODE_BIN or install opencode."
+        )
+
+    # ------------------------------------------------------------------
+    # Init
+    # ------------------------------------------------------------------
     def __init__(
         self,
         enabled: bool = False,
         consent_required: bool = True,
+        opencode_bin: str | None = None,
+        default_model: str | None = None,
     ) -> None:
         super().__init__(
             bridge_type="opencode_go",
             enabled=enabled,
             consent_required=consent_required,
         )
+        self._opencode_bin = opencode_bin  # None = lazy-discover on first use
+        self._default_model = (
+            default_model
+            or os.environ.get("OPENCODE_MODEL")
+            or "opencode/deepseek-v4-flash-free"
+        )
 
+    def _get_opencode_bin(self) -> str:
+        """Resolve the opencode binary (lazy — only when actually used)."""
+        if self._opencode_bin is None:
+            self._opencode_bin = self._find_opencode()
+        return self._opencode_bin
+
+    # ------------------------------------------------------------------
+    # Send (real implementation)
+    # ------------------------------------------------------------------
     async def _send(
         self, endpoint: str, payload: dict[str, object]
     ) -> dict[str, object]:
-        """Send to OpenCode Go. Skeleton — full impl deferred to Phase 6."""
+        """Execute a task via OpenCode Go CLI.
+
+        Args:
+            endpoint: Task type (e.g., 'delegate_task', 'analyze', 'search').
+            payload: Must contain 'prompt' (str). May contain:
+                - model (str): model override
+                - workdir (str): working directory
+                - file (str): file to attach
+
+        Returns:
+            dict with 'status', 'output', 'model', 'session_id', 'tokens'.
+        """
+        prompt = str(payload.get("prompt", ""))
+        if not prompt.strip():
+            return {"status": "error", "output": "Empty prompt.", "model": ""}
+
+        model = str(payload.get("model") or self._default_model)
+        workdir = str(payload.get("workdir") or os.getcwd())
+
+        cmd: list[str] = [
+            self._get_opencode_bin(),
+            "run",
+            "--format", "json",
+            "--model", model,
+            "--dir", workdir,
+        ]
+
+        # Attach file if provided
+        attached_file = payload.get("file")
+        if attached_file and isinstance(attached_file, str):
+            cmd.extend(["--file", attached_file])
+
+        # The prompt is the positional argument
+        cmd.append(prompt)
+
+        logger.debug("OpenCodeGoAdapter: spawning %s", cmd)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=120
+            )
+        except asyncio.TimeoutError:
+            return {
+                "status": "timeout",
+                "output": "OpenCode Go task timed out (120s).",
+                "model": model,
+            }
+
+        if proc.returncode != 0:
+            err_text = stderr.decode()[:500] if stderr else "(no stderr)"
+            return {
+                "status": "error",
+                "output": f"OpenCode Go exited {proc.returncode}: {err_text}",
+                "model": model,
+            }
+
+        # Parse JSON-lines output
+        output_parts: list[str] = []
+        session_id = ""
+        tokens: dict[str, int] = {}
+        raw = stdout.decode()
+
+        for line in raw.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = data.get("type", "")
+            part = data.get("part", {})
+
+            if msg_type == "text":
+                output_parts.append(str(part.get("text", "")))
+
+            if msg_type in ("step_start", "step_finish"):
+                sid = data.get("sessionID") or part.get("sessionID", "")
+                if sid:
+                    session_id = sid
+
+            if msg_type == "step_finish":
+                t = part.get("tokens", {})
+                if isinstance(t, dict):
+                    tokens = {k: int(v) for k, v in t.items() if isinstance(v, (int, float))}
+
+        output = "\n".join(output_parts).strip()
+
         return {
-            "bridge": "opencode_go",
-            "endpoint": endpoint,
-            "status": "not_implemented",
-            "message": "OpenCode Go bridge not yet implemented (post-MVP).",
+            "status": "completed",
+            "output": output,
+            "model": model,
+            "session_id": session_id,
+            "tokens": tokens,
         }
+
+
+# ---------------------------------------------------------------------------
+# Convenience factory
+# ---------------------------------------------------------------------------
+def create_opencode_bridge(enabled: bool = False) -> OpenCodeGoAdapter:
+    """Create a configured OpenCode Go bridge adapter.
+
+    Respects AICOPH_OPENCODE_ENABLED env var as a default for ``enabled``.
+    """
+    if not enabled:
+        env_enabled = os.environ.get("AICOPH_OPENCODE_ENABLED", "").lower()
+        enabled = env_enabled in ("1", "true", "yes")
+    return OpenCodeGoAdapter(enabled=enabled)

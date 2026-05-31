@@ -29,6 +29,8 @@ class ProjectCoordinatorAgent(BaseAgent):
         self._turn_count = 0
         self._goal_proposed: str | None = None
         self._goal_approved = False
+        self.external_bridge: Any = None
+        self.active_workstreams: dict[str, dict[str, Any]] = {}
 
     async def run(self, user_input: str = "", **kwargs: object) -> dict[str, Any]:  # type: ignore[override]
         command = str(kwargs.get("command", "")).lower()
@@ -96,7 +98,16 @@ class ProjectCoordinatorAgent(BaseAgent):
             return {"error": "No goal has been proposed yet."}
         self._goal_approved = True
         return {
-            "message": f"Goal approved! You can now launch workstreams using the `start workstream` command.\n\nApproved goal: **{self._goal_proposed}**",
+            "message": (
+                f"Goal approved! 🎉\n\n"
+                f"Approved goal: **{self._goal_proposed}**\n\n"
+                f"Now launch a workstream. Try typing:\n"
+                f"  • \"start literature search\"\n"
+                f"  • \"analyze this concept\"\n"
+                f"  • \"compare traditions\"\n"
+                f"  • \"construct an argument\"\n"
+                f"Or use slash commands: /search, /analyze, /argue, /compare, /status"
+            ),
             "dialogue_state": "goal_approved",
             "approved_goal": self._goal_proposed,
         }
@@ -104,9 +115,47 @@ class ProjectCoordinatorAgent(BaseAgent):
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
             return {"error": "Cannot start workstream: no approved goals. Use `approve_goal` first."}
+
+        # If external bridge is available, delegate the workstream
+        bridge_result = None
+        if self.external_bridge is not None:
+            try:
+                bridge_result = await self.external_bridge.request(
+                    endpoint="delegate_task",
+                    payload={
+                        "prompt": (
+                            f"You are a philosophical research agent executing a workstream.\n"
+                            f"Goal: {self._goal_proposed}\n"
+                            f"Workstream type: {workstream_type}\n"
+                            f"Execute this workstream and return your findings."
+                        ),
+                    },
+                    consent_scope="workstream_delegation",
+                )
+            except Exception:
+                bridge_result = None
+
+        ws_id = f"ws-{workstream_type}-{len(self.active_workstreams) + 1}"
+        self.active_workstreams[ws_id] = {
+            "workstream_id": ws_id,
+            "type": workstream_type,
+            "status": "running",
+            "goal": self._goal_proposed,
+            "bridge_result": bridge_result,
+        }
+
+        msg = f"Workstream '{workstream_type}' launched as {ws_id}."
+        if bridge_result and bridge_result.get("status") == "success":
+            output_preview = str(bridge_result.get("data", {}).get("output", ""))[:200]
+            msg += f"\n\nOpenCode Go response:\n{output_preview}"
+
         return {
-            "message": f"Workstream of type '{workstream_type}' proposed for goal: **{self._goal_proposed}**\n\nDo you want to proceed with this workstream?",
+            "message": msg,
             "workstream_type": workstream_type,
+            "workstream_id": ws_id,
+            "active_workstreams": [
+                f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
+            ],
             "proposal": {
                 "type": workstream_type,
                 "goal": {"description": self._goal_proposed, "approved": True},
@@ -123,13 +172,30 @@ class ProjectCoordinatorAgent(BaseAgent):
         }
 
     async def _get_status_summary(self) -> dict[str, Any]:
+        state = self.get_dialogue_state()
+        status_msg = {
+            "awaiting_question": "No dialogue started yet. Ask a philosophical question to begin.",
+            "clarifying": f"Socratic clarification in progress (turn {self._turn_count}/5). Continue the dialogue.",
+            "goal_proposed": "A goal has been proposed. Type 'yes' to approve, or continue refining.",
+            "goal_approved": "Goal approved! Launch workstreams: type 'start literature search', 'analyze this concept', etc.",
+        }.get(state, state)
+
         return {
+            "summary": (
+                f"Project: {self.project_id}\n"
+                f"State: {state} | Turn: {self._turn_count}/5\n"
+                f"Goal approved: {self._goal_approved}"
+            ),
+            "epistemic_status": status_msg,
+            "active_workstreams": [
+                f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
+            ],
             "project_id": self.project_id,
             "goal_approved": self._goal_approved,
             "proposed_goal": self._goal_proposed,
             "turn_count": self._turn_count,
-            "dialogue_state": "goal_approved" if self._goal_approved else ("goal_proposed" if self._goal_proposed else "clarifying"),
-            "active_hypotheses": 0,
+            "dialogue_state": state,
+            "active_hypotheses": len(self.active_workstreams),
             "refuted_hypotheses": 0,
             "under_review": 0,
             "stalled": 0,
@@ -147,3 +213,35 @@ class ProjectCoordinatorAgent(BaseAgent):
         elif self._turn_count == 0:
             return "awaiting_question"
         return "clarifying"
+
+    # ── State persistence ────────────────────────────────────────────
+
+    def get_state(self) -> dict[str, Any]:
+        """Return a JSON-serialisable snapshot of coordinator state."""
+        return {
+            "turn_count": self._turn_count,
+            "goal_proposed": self._goal_proposed,
+            "goal_approved": self._goal_approved,
+            "dialogue_history": self.dialogue_history,
+            "active_workstreams": {
+                wid: {"type": ws["type"], "status": ws["status"], "goal": ws.get("goal")}
+                for wid, ws in self.active_workstreams.items()
+            },
+        }
+
+    def restore_state(self, state: dict[str, Any]) -> None:
+        """Restore coordinator state from a previously saved snapshot."""
+        if not state:
+            return
+        self._turn_count = int(state.get("turn_count", 0))
+        self._goal_proposed = state.get("goal_proposed") or None
+        self._goal_approved = bool(state.get("goal_approved", False))
+        self.dialogue_history = state.get("dialogue_history") or []
+        saved_ws = state.get("active_workstreams") or {}
+        for wid, ws in saved_ws.items():
+            self.active_workstreams[wid] = {
+                "workstream_id": wid,
+                "type": ws.get("type", ""),
+                "status": ws.get("status", "running"),
+                "goal": ws.get("goal", ""),
+            }
