@@ -172,13 +172,30 @@ class ProjectCoordinatorAgent(BaseAgent):
         }
 
     async def _get_status_summary(self) -> dict[str, Any]:
+        state = self.get_dialogue_state()
+        status_msg = {
+            "awaiting_question": "No dialogue started yet. Ask a philosophical question to begin.",
+            "clarifying": f"Socratic clarification in progress (turn {self._turn_count}/5). Continue the dialogue.",
+            "goal_proposed": "A goal has been proposed. Type 'yes' to approve, or continue refining.",
+            "goal_approved": "Goal approved! Launch workstreams: type 'start literature search', 'analyze this concept', etc.",
+        }.get(state, state)
+
         return {
+            "summary": (
+                f"Project: {self.project_id}\n"
+                f"State: {state} | Turn: {self._turn_count}/5\n"
+                f"Goal approved: {self._goal_approved}"
+            ),
+            "epistemic_status": status_msg,
+            "active_workstreams": [
+                f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
+            ],
             "project_id": self.project_id,
             "goal_approved": self._goal_approved,
             "proposed_goal": self._goal_proposed,
             "turn_count": self._turn_count,
-            "dialogue_state": "goal_approved" if self._goal_approved else ("goal_proposed" if self._goal_proposed else "clarifying"),
-            "active_hypotheses": 0,
+            "dialogue_state": state,
+            "active_hypotheses": len(self.active_workstreams),
             "refuted_hypotheses": 0,
             "under_review": 0,
             "stalled": 0,
