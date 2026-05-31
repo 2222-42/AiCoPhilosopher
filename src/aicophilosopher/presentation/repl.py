@@ -126,12 +126,21 @@ async def _process_input(
         # Skip LLM in test_mode — use mock coordinator directly
         response = await coordinator.run(user_input=stripped)
     else:
-        intent = await classify_intent(stripped, session.current_focus, llm_port)
-        command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
-        response = await coordinator.run(
-            user_input=stripped,
-            command=command,
-        )
+        # Fast-path: explicit approve/reject keywords bypass NLU entirely
+        lower = stripped.lower().strip().rstrip(".!?")
+        if lower in ("yes", "y", "go ahead", "sure", "approved", "approve",
+                      "はい", "いい", "いいよ", "ok", "okay", "proceed"):
+            response = await coordinator.run(user_input=stripped, command="approve_goal")
+        elif lower in ("no", "n", "stop", "don't", "not yet", "cancel",
+                        "いいえ", "やめ", "だめ"):
+            response = await coordinator.run(user_input=stripped, command="start")
+        else:
+            intent = await classify_intent(stripped, session.current_focus, llm_port)
+            command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
+            response = await coordinator.run(
+                user_input=stripped,
+                command=command,
+            )
 
     render_response(response, session.current_focus)
     return response
