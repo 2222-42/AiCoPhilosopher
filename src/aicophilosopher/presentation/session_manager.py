@@ -3,10 +3,17 @@
 from __future__ import annotations
 
 import errno
+import json
 import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
-from aicophilosopher.domain.entities.session import SessionState, SessionStatus
+from aicophilosopher.domain.entities.session import (
+    FocusContext,
+    SessionState,
+    SessionStatus,
+)
 
 if TYPE_CHECKING:
     from aicophilosopher.domain.entities.session import (
@@ -24,8 +31,13 @@ class SessionManager:
     async def create_session(self, project_id: str) -> SessionState:
         session = SessionState(project_id=project_id)
         if self._storage:
-            await self._storage.save_session(self._to_dict(session))
+            await self._storage.save_session(self.session_to_storage(session))
         return session
+
+    async def save_session(self, session: SessionState) -> None:
+        """Persist full session state (upsert)."""
+        if self._storage:
+            await self._storage.save_session(self.session_to_storage(session))
 
     async def persist_turn(self, turn: DialogueTurn, session_id: str) -> None:
         if self._storage:
@@ -88,31 +100,114 @@ class SessionManager:
             return obj.model_dump(mode="json")  # type: ignore[no-any-return]
         return dict(obj)
 
+    @classmethod
+    def session_to_storage(cls, session: SessionState) -> dict[str, object]:
+        """Serialize SessionState into StoragePort session dict layout.
+
+        Includes both SQLite column-style ``*_json`` fields and native
+        Python objects so FileSystemAdapter can round-trip full state
+        (dialogue history, focus, config_snapshot) across process restarts.
+        """
+        dump = session.model_dump(mode="json")
+        return {
+            "session_id": dump["session_id"],
+            "project_id": dump["project_id"],
+            "status": dump["status"],
+            "pid": dump["pid"],
+            "heartbeat_at": dump["heartbeat_at"],
+            "created_at": dump["created_at"],
+            "last_active_at": dump["last_active_at"],
+            "exit_reason": dump["exit_reason"],
+            # SQLite / StoragePort column layout
+            "focus_json": json.dumps(dump["current_focus"]),
+            "active_workstreams_json": json.dumps(dump["active_workstreams"]),
+            "config_snapshot_json": json.dumps(dump["config_snapshot"]),
+            # Full-fidelity extras for FS resume
+            "current_focus": dump["current_focus"],
+            "active_workstreams": dump["active_workstreams"],
+            "config_snapshot": dump["config_snapshot"],
+            "dialogue_history": dump["dialogue_history"],
+            "context_blocks": dump["context_blocks"],
+            "approval_requests": dump["approval_requests"],
+        }
+
     @staticmethod
-    def _from_dict(data: dict[str, Any]) -> SessionState:
-        """Reconstruct SessionState from storage dict, parsing JSON columns."""
-        import json
-        from datetime import UTC, datetime
-        from uuid import UUID
+    def _parse_ts(val: Any) -> datetime | None:
+        if val is None:
+            return None
+        try:
+            return datetime.fromisoformat(str(val))
+        except (ValueError, TypeError):
+            return None
 
-        def _parse_ts(val: Any) -> datetime | None:
-            if val is None:
-                return None
-            try:
-                return datetime.fromisoformat(str(val))
-            except (ValueError, TypeError):
-                return None
+    @staticmethod
+    def _json_field(data: dict[str, Any], key_json: str, key_plain: str, default: Any) -> Any:
+        for key in (key_json, key_plain):
+            if key not in data or data[key] is None:
+                continue
+            val = data[key]
+            if isinstance(val, str):
+                try:
+                    return json.loads(val)
+                except json.JSONDecodeError:
+                    return default
+            return val
+        return default
 
+    @staticmethod
+    def _as_typed_list(raw: Any) -> list[Any]:
+        return raw if isinstance(raw, list) else []
+
+    @classmethod
+    def _from_dict(cls, data: dict[str, Any]) -> SessionState:
+        """Reconstruct SessionState from storage dict (FS or SQLite layout)."""
         sid = data.get("session_id")
-        return SessionState(
-            session_id=UUID(str(sid)) if sid else UUID("00000000-0000-0000-0000-000000000000"),
-            project_id=data.get("project_id", ""),
-            status=SessionStatus(data.get("status", "active")),
-            pid=int(data.get("pid", 0)),
-            heartbeat_at=_parse_ts(data.get("heartbeat_at")) or datetime.now(UTC),
-            created_at=_parse_ts(data.get("created_at")) or datetime.now(UTC),
-            last_active_at=_parse_ts(data.get("last_active_at")) or datetime.now(UTC),
-            exit_reason=data.get("exit_reason"),
-            active_workstreams=json.loads(str(data.get("active_workstreams_json", "[]"))),
-            config_snapshot=json.loads(str(data.get("config_snapshot_json", "{}"))),
-        )
+        focus_raw = cls._json_field(data, "focus_json", "current_focus", {})
+        try:
+            focus = FocusContext.model_validate(focus_raw) if focus_raw else FocusContext()
+        except Exception:
+            focus = FocusContext()
+
+        workstreams = cls._json_field(data, "active_workstreams_json", "active_workstreams", [])
+        config = cls._json_field(data, "config_snapshot_json", "config_snapshot", {})
+
+        kwargs: dict[str, Any] = {
+            "session_id": UUID(str(sid)) if sid else UUID("00000000-0000-0000-0000-000000000000"),
+            "project_id": data.get("project_id", ""),
+            "status": SessionStatus(data.get("status", "active")),
+            "pid": int(data.get("pid", 0) or 0),
+            "heartbeat_at": cls._parse_ts(data.get("heartbeat_at")) or datetime.now(UTC),
+            "created_at": cls._parse_ts(data.get("created_at")) or datetime.now(UTC),
+            "last_active_at": cls._parse_ts(data.get("last_active_at")) or datetime.now(UTC),
+            "exit_reason": data.get("exit_reason"),
+            "active_workstreams": workstreams if isinstance(workstreams, list) else [],
+            "config_snapshot": config if isinstance(config, dict) else {},
+            "current_focus": focus,
+        }
+        cls._restore_nested(kwargs, data)
+        return SessionState(**kwargs)
+
+    @staticmethod
+    def _restore_nested(kwargs: dict[str, Any], data: dict[str, Any]) -> None:
+        """Best-effort nested entity restore — invalid rows are dropped."""
+        try:
+            from aicophilosopher.domain.entities.session import (
+                ApprovalRequest,
+                ContextBlock,
+                DialogueTurn,
+            )
+
+            dialogue = SessionManager._as_typed_list(data.get("dialogue_history"))
+            contexts = SessionManager._as_typed_list(data.get("context_blocks"))
+            approvals = SessionManager._as_typed_list(data.get("approval_requests"))
+            kwargs["dialogue_history"] = [
+                DialogueTurn.model_validate(t) for t in dialogue if isinstance(t, dict)
+            ]
+            kwargs["context_blocks"] = [
+                ContextBlock.model_validate(c) for c in contexts if isinstance(c, dict)
+            ]
+            kwargs["approval_requests"] = [
+                ApprovalRequest.model_validate(a) for a in approvals if isinstance(a, dict)
+            ]
+        except Exception:
+            pass
