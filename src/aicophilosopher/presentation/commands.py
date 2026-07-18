@@ -135,8 +135,8 @@ def _wire_backends(  # noqa: C901
     if test_mode:
         return None, None, None
 
-    from aicophilosopher.domain.services.config import Config
     from aicophilosopher.container import Container
+    from aicophilosopher.domain.services.config import Config
     from aicophilosopher.infrastructure.adapters.filesystem_adapter import FileSystemAdapter
 
     # ── Load configuration ──────────────────────────────────────────
@@ -190,7 +190,7 @@ def _wire_backends(  # noqa: C901
         )
         bridge = create_opencode_bridge(enabled=True)
         coordinator.external_bridge = bridge  # type: ignore[attr-defined]
-        click.echo(f"[System] OpenCode Go bridge enabled")
+        click.echo("[System] OpenCode Go bridge enabled")
 
     return llm_port, coordinator, fs_adapter
 
@@ -221,8 +221,8 @@ def new_project(title: str, question: str | None = None) -> None:
     click.echo("Project Coordinator: Welcome to the AI Co-Philosopher.")
     click.echo()
     click.echo("Next steps:")
-    click.echo(f"  aicophilosopher refine-goal     — clarify your question")
-    click.echo(f"  aicophilosopher start-workstream literature_search")
+    click.echo("  aicophilosopher refine-goal     — clarify your question")
+    click.echo("  aicophilosopher start-workstream literature_search")
 
 
 @cli.command()
@@ -343,7 +343,9 @@ def refine_goal() -> None:
 ]))
 @click.option("--instructions", "-i", help="Additional instructions")
 @click.option("--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)")
-def start_workstream(workstream_type: str, instructions: str | None = None, traditions: str | None = None) -> None:
+def start_workstream(  # noqa: C901
+    workstream_type: str, instructions: str | None = None, traditions: str | None = None
+) -> None:
     """Launch a workstream using the appropriate AI agent."""
     proj_id = _get_current_project_id()
     if proj_id is None:
@@ -570,6 +572,7 @@ def add_note(text: str, attach_to: str | None = None) -> None:
 def compare_traditions(topic: str, traditions: str | None = None) -> None:
     """Cross-traditional comparison using the agent."""
     import asyncio
+
     from aicophilosopher.application.agents.cross_traditional import (
         CrossTraditionalComparisonAgent,
     )
@@ -607,7 +610,7 @@ def config(key: str | None = None, value: str | None = None) -> None:
         click.echo("  llm.backend: ollama")
         click.echo("  workspace: ./projects/")
     elif value is None:
-        raise click.UsageError(f"Usage: config <key> <value>")
+        raise click.UsageError("Usage: config <key> <value>")
     else:
         click.echo(f"Config '{key}' = '{value}' (not persisted in MVP)")
 

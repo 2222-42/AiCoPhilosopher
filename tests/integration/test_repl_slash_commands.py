@@ -59,9 +59,10 @@ async def test_status_via_repl(
 
 
 @pytest.mark.asyncio
-async def test_pause_resume_via_repl(
+async def test_pause_resume_via_repl_are_unimplemented(
     session: SessionState, mock_llm: MagicMock, mock_coordinator: MagicMock
 ) -> None:
+    """Pause/resume validate workstream ids but must not pretend to control them."""
     from aicophilosopher.presentation.repl import _process_input
 
     session.active_workstreams = ["ws-001"]
@@ -72,8 +73,12 @@ async def test_pause_resume_via_repl(
         r2 = await _process_input(
             "/resume ws-001", session, mock_coordinator, mock_llm, test_mode=True
         )
-    assert "paused" in r1["message"].lower()
-    assert "resumed" in r2["message"].lower()
+    assert r1 is not None and r2 is not None
+    assert "Not implemented" in r1["message"]
+    assert "Not implemented" in r2["message"]
+    assert r1.get("implemented") is False
+    assert r2.get("implemented") is False
+    mock_coordinator.run.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -117,7 +122,7 @@ async def test_slash_in_natural_language_not_treated_as_command(
 
 
 @pytest.mark.asyncio
-async def test_export_command_via_repl(
+async def test_export_command_via_repl_is_unimplemented(
     session: SessionState, mock_llm: MagicMock, mock_coordinator: MagicMock
 ) -> None:
     from aicophilosopher.presentation.repl import _process_input
@@ -126,4 +131,60 @@ async def test_export_command_via_repl(
         result = await _process_input(
             "/export markdown", session, mock_coordinator, mock_llm, test_mode=True
         )
-    assert "Exporting" in result["message"]
+    assert result is not None
+    assert "Not implemented" in result["message"]
+    assert result.get("implemented") is False
+    assert "Exporting" not in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_search_via_repl_calls_coordinator(
+    session: SessionState, mock_llm: MagicMock, mock_coordinator: MagicMock
+) -> None:
+    """Major inquiry slash commands must invoke Coordinator, not echo-only."""
+    from aicophilosopher.presentation.repl import _process_input
+
+    mock_coordinator.run.return_value = {
+        "message": "Workstream 'literature_search' launched as ws-1.",
+        "workstream_type": "literature_search",
+        "workstream_id": "ws-1",
+    }
+    mock_coordinator.active_workstreams = {"ws-1": {"status": "running"}}
+
+    with patch("aicophilosopher.presentation.repl.render_response"):
+        result = await _process_input(
+            "/search free will", session, mock_coordinator, mock_llm, test_mode=True
+        )
+
+    mock_coordinator.run.assert_called_once_with(
+        user_input="free will",
+        command="propose_workstream",
+        workstream_type="literature_search",
+    )
+    assert result is not None
+    assert "literature_search" in result.get("message", "") or result.get(
+        "workstream_type"
+    ) == "literature_search"
+    assert session.active_workstreams == ["ws-1"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_via_repl_calls_coordinator(
+    session: SessionState, mock_llm: MagicMock, mock_coordinator: MagicMock
+) -> None:
+    from aicophilosopher.presentation.repl import _process_input
+
+    mock_coordinator.run.return_value = {
+        "message": "Workstream 'concept_analysis' launched as ws-1.",
+        "workstream_type": "concept_analysis",
+    }
+    with patch("aicophilosopher.presentation.repl.render_response"):
+        await _process_input(
+            "/analyze intentionality", session, mock_coordinator, mock_llm, test_mode=True
+        )
+
+    mock_coordinator.run.assert_called_once_with(
+        user_input="intentionality",
+        command="propose_workstream",
+        workstream_type="concept_analysis",
+    )

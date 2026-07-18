@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re as _re
+from collections.abc import Callable
 from queue import Queue
-from typing import Any, Callable
+from typing import Any
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
 from aicophilosopher.presentation.nlu import classify_intent
@@ -95,8 +97,6 @@ _WORKSTREAM_LAUNCH_PATTERNS: list[tuple[str, str]] = [
     (r"\bsynthes(is|ize)\b", "synthesis"),
 ]
 
-import re as _re
-
 
 def _detect_workstream_launch(text: str) -> str | None:
     """If text matches a workstream launch pattern, return the type. Else None."""
@@ -105,6 +105,133 @@ def _detect_workstream_launch(text: str) -> str | None:
         if _re.search(pattern, lower):
             return ws_type
     return None
+
+
+async def _run_status(session: SessionState, coordinator: Any) -> dict[str, Any]:
+    """Route /status to coordinator with a session-based fallback."""
+    try:
+        status_response = await coordinator.run(command="status")
+        render_response(status_response, session.current_focus)
+        return status_response
+    except Exception:
+        fallback = {
+            "summary": (
+                f"Project: {session.project_id}\n"
+                f"Status: {session.status.value}\n"
+                f"Active workstreams: {len(session.active_workstreams)}"
+            ),
+        }
+        render_response(fallback, session.current_focus)
+        return {"summary": f"Project: {session.project_id} — {session.status.value}"}
+
+
+async def _run_logs(stripped: str, session: SessionState, coordinator: Any) -> dict[str, Any]:
+    """Route /logs [workstream_id] to coordinator."""
+    parts = stripped.strip().split(maxsplit=1)
+    ws_id = parts[1] if len(parts) > 1 else ""
+    try:
+        log_response = await coordinator.run(command="logs", workstream_id=ws_id)
+        render_response(log_response, session.current_focus)
+        return log_response
+    except Exception:
+        err = {"error": "Could not fetch workstream logs."}
+        render_response(err, session.current_focus)
+        return err
+
+
+async def _run_propose_workstream(
+    slash_result: dict[str, Any],
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+) -> dict[str, Any]:
+    """Execute an inquiry slash action via Coordinator.propose_workstream."""
+    try:
+        response = await coordinator.run(
+            user_input=str(slash_result.get("user_input", "")),
+            command="propose_workstream",
+            workstream_type=str(slash_result.get("workstream_type", "literature_search")),
+        )
+        active = getattr(coordinator, "active_workstreams", None)
+        if isinstance(active, dict):
+            session.active_workstreams = list(active.keys())
+        render_response(response, session.current_focus)
+        return response
+    except Exception as exc:
+        err = {
+            "error": f"Failed to run {stripped.split()[0]}: {exc}",
+            "message": f"Failed to run command: {exc}",
+        }
+        render_response(err, session.current_focus)
+        return err
+
+
+async def _process_slash(
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+) -> dict[str, Any]:
+    """Dispatch a slash command: coordinator-backed, local, or honest unimplemented."""
+    lower = stripped.strip().lower()
+    if lower == "/status":
+        return await _run_status(session, coordinator)
+    if lower.startswith("/logs"):
+        return await _run_logs(stripped, session, coordinator)
+
+    slash_result = _handle_slash(stripped, session)
+    if slash_result.get("message", "").startswith("Unknown command"):
+        try:
+            from aicophilosopher.presentation.slash_commands import dispatch
+
+            slash_result = dispatch(stripped, session)
+        except ImportError:
+            pass
+
+    if slash_result.get("action") == "exit":
+        await _finalize(session, "user_exit")
+        return slash_result
+
+    if slash_result.get("action") == "propose_workstream":
+        return await _run_propose_workstream(slash_result, stripped, session, coordinator)
+
+    render_response(slash_result, session.current_focus)
+    return slash_result
+
+
+async def _process_natural_language(
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+    llm_port: Any,
+    test_mode: bool,
+) -> dict[str, Any]:
+    """Route natural-language input via NLU / keyword fast-path to the coordinator."""
+    if test_mode:
+        return await coordinator.run(user_input=stripped)
+
+    lower = stripped.lower().strip().rstrip(".!?")
+
+    if lower in (
+        "yes", "y", "go ahead", "sure", "approved", "approve",
+        "はい", "いい", "いいよ", "ok", "okay", "proceed",
+    ):
+        return await coordinator.run(user_input=stripped, command="approve_goal")
+    if lower in (
+        "no", "n", "stop", "don't", "not yet", "cancel",
+        "いいえ", "やめ", "だめ",
+    ):
+        return await coordinator.run(user_input=stripped, command="start")
+
+    if (ws_type := _detect_workstream_launch(lower)) is not None:
+        return await coordinator.run(
+            user_input=stripped,
+            command="propose_workstream",
+            workstream_type=ws_type,
+        )
+
+    intent = await classify_intent(stripped, session.current_focus, llm_port)
+    command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
+    return await coordinator.run(user_input=stripped, command=command)
 
 
 async def _process_input(
@@ -119,82 +246,11 @@ async def _process_input(
         return None
 
     if stripped.startswith("/"):
-        # Route /status to coordinator for rich status display
-        if stripped.strip().lower() == "/status":
-            try:
-                status_response = await coordinator.run(command="status")
-                render_response(status_response, session.current_focus)
-                return status_response
-            except Exception:
-                # Fallback: show minimal session-based status
-                render_response({
-                    "summary": (
-                        f"Project: {session.project_id}\n"
-                        f"Status: {session.status.value}\n"
-                        f"Active workstreams: {len(session.active_workstreams)}"
-                    ),
-                }, session.current_focus)
-                return {"summary": f"Project: {session.project_id} — {session.status.value}"}
+        return await _process_slash(stripped, session, coordinator)
 
-        # /logs [workstream_id] — view workstream output
-        if stripped.strip().lower().startswith("/logs"):
-            parts = stripped.strip().split(maxsplit=1)
-            ws_id = parts[1] if len(parts) > 1 else ""
-            try:
-                log_response = await coordinator.run(command="logs", workstream_id=ws_id)
-                render_response(log_response, session.current_focus)
-                return log_response
-            except Exception:
-                render_response({"error": "Could not fetch workstream logs."}, session.current_focus)
-                return {"error": "Could not fetch workstream logs."}
-
-        slash_result = _handle_slash(stripped, session)
-        # Delegate to full command registry if available
-        if slash_result.get("message", "").startswith("Unknown command"):
-            try:
-                from aicophilosopher.presentation.slash_commands import dispatch
-
-                slash_result = dispatch(stripped, session)
-            except ImportError:
-                pass
-        if slash_result.get("action") == "exit":
-            await _finalize(session, "user_exit")
-            return slash_result
-        render_response(slash_result, session.current_focus)
-        return slash_result
-
-    # Natural language → NLU → coordinator
-    if test_mode:
-        # Skip LLM in test_mode — use mock coordinator directly
-        response = await coordinator.run(user_input=stripped)
-    else:
-        # Fast-path: explicit keywords bypass NLU entirely
-        lower = stripped.lower().strip().rstrip(".!?")
-
-        # Approve / reject
-        if lower in ("yes", "y", "go ahead", "sure", "approved", "approve",
-                      "はい", "いい", "いいよ", "ok", "okay", "proceed"):
-            response = await coordinator.run(user_input=stripped, command="approve_goal")
-        elif lower in ("no", "n", "stop", "don't", "not yet", "cancel",
-                        "いいえ", "やめ", "だめ"):
-            response = await coordinator.run(user_input=stripped, command="start")
-
-        # Workstream launch — detect type from keywords
-        elif (ws_type := _detect_workstream_launch(lower)) is not None:
-            response = await coordinator.run(
-                user_input=stripped,
-                command="propose_workstream",
-                workstream_type=ws_type,
-            )
-
-        else:
-            intent = await classify_intent(stripped, session.current_focus, llm_port)
-            command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
-            response = await coordinator.run(
-                user_input=stripped,
-                command=command,
-            )
-
+    response = await _process_natural_language(
+        stripped, session, coordinator, llm_port, test_mode
+    )
     render_response(response, session.current_focus)
     return response
 
@@ -306,11 +362,10 @@ class WorkstreamPoller:
     def __init__(
         self,
         poll_fn: Callable[[], list[dict[str, object]]],
-        update_queue: "Queue[dict[str, object]]",
+        update_queue: Queue[dict[str, object]],
         interval_seconds: float = 2.0,
     ) -> None:
         import threading
-        from queue import Queue
 
         self._poll_fn = poll_fn
         self._queue: Queue[dict[str, object]] = update_queue
@@ -409,7 +464,7 @@ def _save_coordinator_state(session: SessionState, coordinator: Any) -> None:
     session.config_snapshot["coordinator_state"] = state
 
 
-async def run_repl(
+async def run_repl(  # noqa: C901
     project_id: str | None = None,
     test_mode: bool = False,
     llm_port: Any = None,

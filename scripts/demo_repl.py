@@ -90,13 +90,12 @@ def _mock_coordinator():
 # ── Main loop ──────────────────────────────────────────────────────────
 
 
-async def main() -> None:
+async def main() -> None:  # noqa: C901
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
 
     session = SessionState(project_id="demo-project")
     coordinator = _mock_coordinator()
-    llm_port = MagicMock()
 
     prompt_session = PromptSession(history=FileHistory(".aicophilosopher_demo_history"))
     print("═" * 60)
