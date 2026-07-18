@@ -293,75 +293,30 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
     # ------------------------------------------------------------------
     # Send (real implementation)
     # ------------------------------------------------------------------
-    async def _send(
-        self, endpoint: str, payload: dict[str, object]
-    ) -> dict[str, object]:
-        """Execute a task via OpenCode Go CLI.
-
-        Args:
-            endpoint: Task type (e.g., 'delegate_task', 'analyze', 'search').
-            payload: Must contain 'prompt' (str). May contain:
-                - model (str): model override
-                - workdir (str): working directory
-                - file (str): file to attach
-
-        Returns:
-            dict with 'status', 'output', 'model', 'session_id', 'tokens'.
-        """
-        prompt = str(payload.get("prompt", ""))
-        if not prompt.strip():
-            return {"status": "error", "output": "Empty prompt.", "model": ""}
-
-        model = str(payload.get("model") or self._default_model)
-        workdir = str(payload.get("workdir") or os.getcwd())
-
+    def _build_opencode_cmd(
+        self, prompt: str, model: str, workdir: str, attached_file: object
+    ) -> list[str]:
         cmd: list[str] = [
             self._get_opencode_bin(),
             "run",
-            "--format", "json",
-            "--model", model,
-            "--dir", workdir,
+            "--format",
+            "json",
+            "--model",
+            model,
+            "--dir",
+            workdir,
         ]
-
-        # Attach file if provided
-        attached_file = payload.get("file")
         if attached_file and isinstance(attached_file, str):
             cmd.extend(["--file", attached_file])
-
-        # The prompt is the positional argument
         cmd.append(prompt)
+        return cmd
 
-        logger.debug("OpenCodeGoAdapter: spawning %s", cmd)
-
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=120
-            )
-        except asyncio.TimeoutError:
-            return {
-                "status": "timeout",
-                "output": "OpenCode Go task timed out (120s).",
-                "model": model,
-            }
-
-        if proc.returncode != 0:
-            err_text = stderr.decode()[:500] if stderr else "(no stderr)"
-            return {
-                "status": "error",
-                "output": f"OpenCode Go exited {proc.returncode}: {err_text}",
-                "model": model,
-            }
-
-        # Parse JSON-lines output
+    @staticmethod
+    def _parse_opencode_stdout(raw: str) -> tuple[str, str, dict[str, int]]:
+        """Parse OpenCode JSON-lines stdout into (output, session_id, tokens)."""
         output_parts: list[str] = []
         session_id = ""
         tokens: dict[str, int] = {}
-        raw = stdout.decode()
 
         for line in raw.strip().split("\n"):
             if not line.strip():
@@ -385,10 +340,59 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
             if msg_type == "step_finish":
                 t = part.get("tokens", {})
                 if isinstance(t, dict):
-                    tokens = {k: int(v) for k, v in t.items() if isinstance(v, (int, float))}
+                    tokens = {
+                        k: int(v) for k, v in t.items() if isinstance(v, (int, float))
+                    }
 
-        output = "\n".join(output_parts).strip()
+        return "\n".join(output_parts).strip(), session_id, tokens
 
+    async def _send(
+        self, endpoint: str, payload: dict[str, object]
+    ) -> dict[str, object]:
+        """Execute a task via OpenCode Go CLI.
+
+        Args:
+            endpoint: Task type (e.g., 'delegate_task', 'analyze', 'search').
+            payload: Must contain 'prompt' (str). May contain:
+                - model (str): model override
+                - workdir (str): working directory
+                - file (str): file to attach
+
+        Returns:
+            dict with 'status', 'output', 'model', 'session_id', 'tokens'.
+        """
+        prompt = str(payload.get("prompt", ""))
+        if not prompt.strip():
+            return {"status": "error", "output": "Empty prompt.", "model": ""}
+
+        model = str(payload.get("model") or self._default_model)
+        workdir = str(payload.get("workdir") or os.getcwd())
+        cmd = self._build_opencode_cmd(prompt, model, workdir, payload.get("file"))
+        logger.debug("OpenCodeGoAdapter: spawning %s", cmd)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+        except TimeoutError:
+            return {
+                "status": "timeout",
+                "output": "OpenCode Go task timed out (120s).",
+                "model": model,
+            }
+
+        if proc.returncode != 0:
+            err_text = stderr.decode()[:500] if stderr else "(no stderr)"
+            return {
+                "status": "error",
+                "output": f"OpenCode Go exited {proc.returncode}: {err_text}",
+                "model": model,
+            }
+
+        output, session_id, tokens = self._parse_opencode_stdout(stdout.decode())
         return {
             "status": "completed",
             "output": output,

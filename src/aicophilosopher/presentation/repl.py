@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re as _re
+from collections.abc import Callable
 from queue import Queue
-from typing import Any, Callable
+from typing import Any
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
 from aicophilosopher.presentation.nlu import classify_intent
@@ -95,8 +97,6 @@ _WORKSTREAM_LAUNCH_PATTERNS: list[tuple[str, str]] = [
     (r"\bsynthes(is|ize)\b", "synthesis"),
 ]
 
-import re as _re
-
 
 def _detect_workstream_launch(text: str) -> str | None:
     """If text matches a workstream launch pattern, return the type. Else None."""
@@ -105,6 +105,114 @@ def _detect_workstream_launch(text: str) -> str | None:
         if _re.search(pattern, lower):
             return ws_type
     return None
+
+
+_APPROVE_WORDS = frozenset(
+    {
+        "yes",
+        "y",
+        "go ahead",
+        "sure",
+        "approved",
+        "approve",
+        "はい",
+        "いい",
+        "いいよ",
+        "ok",
+        "okay",
+        "proceed",
+    }
+)
+_REJECT_WORDS = frozenset(
+    {"no", "n", "stop", "don't", "not yet", "cancel", "いいえ", "やめ", "だめ"}
+)
+
+
+async def _handle_status_slash(
+    session: SessionState, coordinator: Any
+) -> dict[str, Any]:
+    try:
+        status_response = await coordinator.run(command="status")
+        render_response(status_response, session.current_focus)
+        return status_response
+    except Exception:
+        fallback = {
+            "summary": (
+                f"Project: {session.project_id}\n"
+                f"Status: {session.status.value}\n"
+                f"Active workstreams: {len(session.active_workstreams)}"
+            ),
+        }
+        render_response(fallback, session.current_focus)
+        return {"summary": f"Project: {session.project_id} — {session.status.value}"}
+
+
+async def _handle_logs_slash(
+    stripped: str, session: SessionState, coordinator: Any
+) -> dict[str, Any]:
+    parts = stripped.strip().split(maxsplit=1)
+    ws_id = parts[1] if len(parts) > 1 else ""
+    try:
+        log_response = await coordinator.run(command="logs", workstream_id=ws_id)
+        render_response(log_response, session.current_focus)
+        return log_response
+    except Exception:
+        err = {"error": "Could not fetch workstream logs."}
+        render_response(err, session.current_focus)
+        return err
+
+
+async def _handle_slash_input(
+    stripped: str, session: SessionState, coordinator: Any
+) -> dict[str, Any]:
+    lower = stripped.strip().lower()
+    if lower == "/status":
+        return await _handle_status_slash(session, coordinator)
+    if lower.startswith("/logs"):
+        return await _handle_logs_slash(stripped, session, coordinator)
+
+    slash_result = _handle_slash(stripped, session)
+    if slash_result.get("message", "").startswith("Unknown command"):
+        try:
+            from aicophilosopher.presentation.slash_commands import dispatch
+
+            slash_result = dispatch(stripped, session)
+        except ImportError:
+            pass
+    if slash_result.get("action") == "exit":
+        await _finalize(session, "user_exit")
+        return slash_result
+    render_response(slash_result, session.current_focus)
+    return slash_result
+
+
+async def _route_natural_language(
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+    llm_port: Any,
+    test_mode: bool,
+) -> dict[str, Any]:
+    if test_mode:
+        return await coordinator.run(user_input=stripped)
+
+    lower = stripped.lower().strip().rstrip(".!?")
+    if lower in _APPROVE_WORDS:
+        return await coordinator.run(user_input=stripped, command="approve_goal")
+    if lower in _REJECT_WORDS:
+        return await coordinator.run(user_input=stripped, command="start")
+
+    ws_type = _detect_workstream_launch(lower)
+    if ws_type is not None:
+        return await coordinator.run(
+            user_input=stripped,
+            command="propose_workstream",
+            workstream_type=ws_type,
+        )
+
+    intent = await classify_intent(stripped, session.current_focus, llm_port)
+    command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
+    return await coordinator.run(user_input=stripped, command=command)
 
 
 async def _process_input(
@@ -119,82 +227,11 @@ async def _process_input(
         return None
 
     if stripped.startswith("/"):
-        # Route /status to coordinator for rich status display
-        if stripped.strip().lower() == "/status":
-            try:
-                status_response = await coordinator.run(command="status")
-                render_response(status_response, session.current_focus)
-                return status_response
-            except Exception:
-                # Fallback: show minimal session-based status
-                render_response({
-                    "summary": (
-                        f"Project: {session.project_id}\n"
-                        f"Status: {session.status.value}\n"
-                        f"Active workstreams: {len(session.active_workstreams)}"
-                    ),
-                }, session.current_focus)
-                return {"summary": f"Project: {session.project_id} — {session.status.value}"}
+        return await _handle_slash_input(stripped, session, coordinator)
 
-        # /logs [workstream_id] — view workstream output
-        if stripped.strip().lower().startswith("/logs"):
-            parts = stripped.strip().split(maxsplit=1)
-            ws_id = parts[1] if len(parts) > 1 else ""
-            try:
-                log_response = await coordinator.run(command="logs", workstream_id=ws_id)
-                render_response(log_response, session.current_focus)
-                return log_response
-            except Exception:
-                render_response({"error": "Could not fetch workstream logs."}, session.current_focus)
-                return {"error": "Could not fetch workstream logs."}
-
-        slash_result = _handle_slash(stripped, session)
-        # Delegate to full command registry if available
-        if slash_result.get("message", "").startswith("Unknown command"):
-            try:
-                from aicophilosopher.presentation.slash_commands import dispatch
-
-                slash_result = dispatch(stripped, session)
-            except ImportError:
-                pass
-        if slash_result.get("action") == "exit":
-            await _finalize(session, "user_exit")
-            return slash_result
-        render_response(slash_result, session.current_focus)
-        return slash_result
-
-    # Natural language → NLU → coordinator
-    if test_mode:
-        # Skip LLM in test_mode — use mock coordinator directly
-        response = await coordinator.run(user_input=stripped)
-    else:
-        # Fast-path: explicit keywords bypass NLU entirely
-        lower = stripped.lower().strip().rstrip(".!?")
-
-        # Approve / reject
-        if lower in ("yes", "y", "go ahead", "sure", "approved", "approve",
-                      "はい", "いい", "いいよ", "ok", "okay", "proceed"):
-            response = await coordinator.run(user_input=stripped, command="approve_goal")
-        elif lower in ("no", "n", "stop", "don't", "not yet", "cancel",
-                        "いいえ", "やめ", "だめ"):
-            response = await coordinator.run(user_input=stripped, command="start")
-
-        # Workstream launch — detect type from keywords
-        elif (ws_type := _detect_workstream_launch(lower)) is not None:
-            response = await coordinator.run(
-                user_input=stripped,
-                command="propose_workstream",
-                workstream_type=ws_type,
-            )
-
-        else:
-            intent = await classify_intent(stripped, session.current_focus, llm_port)
-            command = _translate_intent(intent.intent_type.value if intent else "start_inquiry")
-            response = await coordinator.run(
-                user_input=stripped,
-                command=command,
-            )
-
+    response = await _route_natural_language(
+        stripped, session, coordinator, llm_port, test_mode
+    )
     render_response(response, session.current_focus)
     return response
 
@@ -306,11 +343,10 @@ class WorkstreamPoller:
     def __init__(
         self,
         poll_fn: Callable[[], list[dict[str, object]]],
-        update_queue: "Queue[dict[str, object]]",
+        update_queue: Queue[dict[str, object]],
         interval_seconds: float = 2.0,
     ) -> None:
         import threading
-        from queue import Queue
 
         self._poll_fn = poll_fn
         self._queue: Queue[dict[str, object]] = update_queue
@@ -409,68 +445,59 @@ def _save_coordinator_state(session: SessionState, coordinator: Any) -> None:
     session.config_snapshot["coordinator_state"] = state
 
 
-async def run_repl(
-    project_id: str | None = None,
-    test_mode: bool = False,
-    llm_port: Any = None,
-    coordinator: Any = None,
-    storage: Any = None,
-) -> None:
-    session = await _startup_flow(project_id=project_id, test_mode=test_mode, storage=storage)
-    if session is None:
-        if test_mode:
-            return
-        print("No projects found. Start a new project first.")
-        return
+def _ensure_test_backends(
+    coordinator: Any, llm_port: Any
+) -> tuple[Any, Any]:
+    """Provide mock coordinator/LLM for --test-mode when not injected."""
+    if coordinator is None:
+        from unittest.mock import AsyncMock, MagicMock
 
-    if test_mode:
-        if coordinator is None:
-            from unittest.mock import AsyncMock, MagicMock
-
-            coordinator = MagicMock()
-            coordinator.run = AsyncMock(
-                return_value={
-                    "message": "Welcome to test mode! Try typing a philosophical question.",
-                    "dialogue_state": "awaiting_question",
-                    "turn": 0,
-                }
-            )
-        if llm_port is None:
-            from unittest.mock import MagicMock
-
-            llm_port = MagicMock()
-        # Run interactive REPL loop with mock backends (no LLM needed)
-        # (fall through to shared loop below)
-
-    # ── Production mode ──────────────────────────────────────────────
-    if coordinator is None or llm_port is None:
-        print(
-            "REPL backend not fully configured.\n"
-            "Launch with --test-mode for a mock session, or provide\n"
-            "a coordinator and LLM port via the Hermes Agent integration."
+        coordinator = MagicMock()
+        coordinator.run = AsyncMock(
+            return_value={
+                "message": "Welcome to test mode! Try typing a philosophical question.",
+                "dialogue_state": "awaiting_question",
+                "turn": 0,
+            }
         )
+    if llm_port is None:
+        from unittest.mock import MagicMock
+
+        llm_port = MagicMock()
+    return coordinator, llm_port
+
+
+def _restore_coordinator_if_saved(session: SessionState, coordinator: Any) -> None:
+    saved_state = (
+        session.config_snapshot.get("coordinator_state")
+        if session.config_snapshot
+        else None
+    )
+    if not saved_state:
         return
+    try:
+        coordinator.restore_state(saved_state)
+        state = coordinator.get_dialogue_state()
+        turn = saved_state.get("turn_count", 0)
+        goal = saved_state.get("goal_proposed", "")
+        goal_ok = saved_state.get("goal_approved", False)
+        if turn > 0:
+            print(f"\n[Session resumed — turn {turn}, state: {state}]")
+            if goal_ok:
+                print(f"Approved goal: {goal}")
+            elif goal:
+                print(f"Proposed goal: {goal}")
+            print()
+    except Exception:
+        pass  # best-effort restore
 
-    # ── Restore coordinator state from previous session ──────────────
-    saved_state = session.config_snapshot.get("coordinator_state") if session.config_snapshot else None
-    if saved_state:
-        try:
-            coordinator.restore_state(saved_state)
-            state = coordinator.get_dialogue_state()
-            turn = saved_state.get("turn_count", 0)
-            goal = saved_state.get("goal_proposed", "")
-            goal_ok = saved_state.get("goal_approved", False)
 
-            if turn > 0:
-                print(f"\n[Session resumed — turn {turn}, state: {state}]")
-                if goal_ok:
-                    print(f"Approved goal: {goal}")
-                elif goal:
-                    print(f"Proposed goal: {goal}")
-                print()
-        except Exception:
-            pass  # best-effort restore
-
+async def _repl_loop(
+    session: SessionState,
+    coordinator: Any,
+    llm_port: Any,
+    storage: Any,
+) -> None:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
 
@@ -496,3 +523,32 @@ async def run_repl(
             await _finalize(session, "user_exit", storage)
             print(result.get("message", "Goodbye!"))
             break
+
+
+async def run_repl(
+    project_id: str | None = None,
+    test_mode: bool = False,
+    llm_port: Any = None,
+    coordinator: Any = None,
+    storage: Any = None,
+) -> None:
+    session = await _startup_flow(project_id=project_id, test_mode=test_mode, storage=storage)
+    if session is None:
+        if test_mode:
+            return
+        print("No projects found. Start a new project first.")
+        return
+
+    if test_mode:
+        coordinator, llm_port = _ensure_test_backends(coordinator, llm_port)
+
+    if coordinator is None or llm_port is None:
+        print(
+            "REPL backend not fully configured.\n"
+            "Launch with --test-mode for a mock session, or provide\n"
+            "a coordinator and LLM port via the Hermes Agent integration."
+        )
+        return
+
+    _restore_coordinator_if_saved(session, coordinator)
+    await _repl_loop(session, coordinator, llm_port, storage)
