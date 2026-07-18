@@ -65,8 +65,7 @@ _This living document will be populated by AI Co-Philosopher agents as you run w
     (base / "living_document.md").write_text(frontmatter)
 
     # Subdirectories
-    for sub in ("workstreams", "conceptual_genealogy", "artifacts",
-                "margin_notes", "logs"):
+    for sub in ("workstreams", "conceptual_genealogy", "artifacts", "margin_notes", "logs"):
         (base / sub).mkdir(exist_ok=True)
 
     # Derived export files (empty JSONL)
@@ -97,9 +96,17 @@ def _save_current_project(project_id: str) -> None:
 @click.option("--project", "-p", help="Project ID to open directly in REPL")
 @click.option("--new", "-n", "new_question", help="Create a new project with this question")
 @click.option("--test-mode", is_flag=True, help="Launch REPL with mock coordinator (no LLM)")
-@click.option("--backend", "-b", help="LLM backend: ollama, claude, gemini (overrides AICOPH_LLM_BACKEND)")
+@click.option(
+    "--backend", "-b", help="LLM backend: ollama, claude, gemini (overrides AICOPH_LLM_BACKEND)"
+)
 @click.pass_context
-def cli(ctx: click.Context, project: str | None, new_question: str | None, test_mode: bool, backend: str | None) -> None:  # noqa: C901
+def cli(
+    ctx: click.Context,
+    project: str | None,
+    new_question: str | None,
+    test_mode: bool,
+    backend: str | None,
+) -> None:  # noqa: C901
     """AI Co-Philosopher — An agentic workbench for philosophical research.
 
     Run without subcommands to enter an interactive REPL session.
@@ -118,8 +125,18 @@ def cli(ctx: click.Context, project: str | None, new_question: str | None, test_
         click.echo(f"Created project {project_id} — entering REPL...")
         project = project_id
 
-    llm_port, coordinator, storage = _wire_backends(project, test_mode=test_mode, backend_override=backend)
-    asyncio.run(run_repl(project_id=project, test_mode=test_mode, llm_port=llm_port, coordinator=coordinator, storage=storage))
+    llm_port, coordinator, storage = _wire_backends(
+        project, test_mode=test_mode, backend_override=backend
+    )
+    asyncio.run(
+        run_repl(
+            project_id=project,
+            test_mode=test_mode,
+            llm_port=llm_port,
+            coordinator=coordinator,
+            storage=storage,
+        )
+    )
 
 
 def _wire_backends(  # noqa: C901
@@ -177,6 +194,7 @@ def _wire_backends(  # noqa: C901
     resolved_pid = project_id or "default"
 
     from aicophilosopher.application.orchestration.coordinator import ProjectCoordinatorAgent
+
     coordinator = ProjectCoordinatorAgent(
         project_id=resolved_pid,
         llm_backend=llm_port,
@@ -188,6 +206,7 @@ def _wire_backends(  # noqa: C901
         from aicophilosopher.infrastructure.adapters.external_bridge_adapter import (
             create_opencode_bridge,
         )
+
         bridge = create_opencode_bridge(enabled=True)
         coordinator.external_bridge = bridge  # type: ignore[attr-defined]
         click.echo("[System] OpenCode Go bridge enabled")
@@ -300,14 +319,20 @@ def refine_goal() -> None:
     click.echo()
 
     questions = [
-        ("Which philosophical traditions are most relevant? "
-         "(e.g., analytic, continental, philosophy_of_technology, "
-         "philosophy_of_mathematics)"),
-        ("What specific aspect of this question interests you most? "
-         "(e.g., ontological, epistemological, ethical, phenomenological)"),
+        (
+            "Which philosophical traditions are most relevant? "
+            "(e.g., analytic, continental, philosophy_of_technology, "
+            "philosophy_of_mathematics)"
+        ),
+        (
+            "What specific aspect of this question interests you most? "
+            "(e.g., ontological, epistemological, ethical, phenomenological)"
+        ),
         ("Are there particular philosophers or texts you want to engage with?"),
-        ("What would a satisfactory answer look like — a clear argument, "
-         "a conceptual map, or a cross-traditional comparison?"),
+        (
+            "What would a satisfactory answer look like — a clear argument, "
+            "a conceptual map, or a cross-traditional comparison?"
+        ),
     ]
 
     answers = []
@@ -345,9 +370,7 @@ def _echo_workstream_result(workstream_type: str, result: dict[str, Any]) -> Non
             click.echo(f"\nPosition {i} [{arg.get('tradition', '?')}]:")
             click.echo(f"  Conclusion: {arg.get('conclusion', '')}")
             click.echo(f"  Confidence: {arg.get('confidence', '?')}")
-        click.echo(
-            f"\nCompeting positions: {len(result.get('competing_positions') or [])}"
-        )
+        click.echo(f"\nCompeting positions: {len(result.get('competing_positions') or [])}")
     elif workstream_type == "critical_review":
         click.echo("=== Critical Review ===")
         click.echo(f"Fallacies found: {len(result.get('fallacies') or [])}")
@@ -357,10 +380,7 @@ def _echo_workstream_result(workstream_type: str, result: dict[str, Any]) -> Non
     elif workstream_type == "cross_traditional_comparison":
         click.echo("=== Cross-Traditional Comparison ===")
         click.echo(f"Bridges found: {len(result.get('bridge_map') or [])}")
-        click.echo(
-            f"Incommensurabilities: "
-            f"{len(result.get('incommensurability_register') or [])}"
-        )
+        click.echo(f"Incommensurabilities: {len(result.get('incommensurability_register') or [])}")
     elif workstream_type == "synthesis":
         click.echo("=== Synthesis ===")
         doc = str(result.get("synthesized_document") or "")
@@ -390,9 +410,7 @@ async def _run_workstream_agent(
         from aicophilosopher.application.agents.argumentation import ArgumentationAgent
         from aicophilosopher.application.agents.critical_review import CriticalReviewAgent
 
-        arg_result = await ArgumentationAgent(agent_id=f"cli-arg-{proj_id}").run(
-            query, **kwargs
-        )
+        arg_result = await ArgumentationAgent(agent_id=f"cli-arg-{proj_id}").run(query, **kwargs)
         review_input = list(arg_result.get("arguments") or []) + list(
             arg_result.get("competing_positions") or []
         )
@@ -403,9 +421,7 @@ async def _run_workstream_agent(
             CrossTraditionalComparisonAgent,
         )
 
-        return await CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}").run(
-            query, **kwargs
-        )
+        return await CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}").run(query, **kwargs)
 
     if workstream_type == "synthesis":
         from aicophilosopher.application.agents.synthesis import SynthesisAgent
@@ -433,29 +449,36 @@ async def _run_workstream_agent(
             LiteratureSearchAgent,
         )
 
-        return await LiteratureSearchAgent(agent_id=f"cli-{proj_id}").run(
-            query, **kwargs
-        )
+        return await LiteratureSearchAgent(agent_id=f"cli-{proj_id}").run(query, **kwargs)
 
     if workstream_type == "concept_analysis":
         from aicophilosopher.application.agents.concept_analysis import (
             ConceptAnalysisAgent,
         )
 
-        return await ConceptAnalysisAgent(agent_id=f"cli-{proj_id}").run(
-            query, **kwargs
-        )
+        return await ConceptAnalysisAgent(agent_id=f"cli-{proj_id}").run(query, **kwargs)
 
     raise ValueError(f"Unsupported workstream type: {workstream_type}")
 
 
 @cli.command()
-@click.argument("workstream_type", type=click.Choice([
-    "literature_search", "concept_analysis", "cross_traditional_comparison",
-    "argumentation", "critical_review", "synthesis",
-]))
+@click.argument(
+    "workstream_type",
+    type=click.Choice(
+        [
+            "literature_search",
+            "concept_analysis",
+            "cross_traditional_comparison",
+            "argumentation",
+            "critical_review",
+            "synthesis",
+        ]
+    ),
+)
 @click.option("--instructions", "-i", help="Additional instructions")
-@click.option("--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)")
+@click.option(
+    "--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)"
+)
 def start_workstream(
     workstream_type: str,
     instructions: str | None = None,
@@ -498,6 +521,7 @@ def start_workstream(
         f"document updated; report: {summary['report_path']}"
     )
     click.echo("  View with: aicophilosopher show-hypotheses | show-document")
+
 
 @cli.command()
 @click.argument("workstream_id")
@@ -555,8 +579,9 @@ def show_document() -> None:
 
 
 @cli.command()
-@click.option("--status", "filter_status",
-              type=click.Choice(["active", "abandoned", "refined", "refuted"]))
+@click.option(
+    "--status", "filter_status", type=click.Choice(["active", "abandoned", "refined", "refuted"])
+)
 def show_hypotheses(filter_status: str | None = None) -> None:
     """Display hypothesis history."""
     from aicophilosopher.application.services.workstream_persistence import (
@@ -615,9 +640,7 @@ def show_dead_ends() -> None:
 
     click.echo(f"Dead ends ({len(dead)}):")
     for h in dead:
-        click.echo(
-            f"  [{h.get('hypothesis_id', '?')}] status={h.get('status', '?')}"
-        )
+        click.echo(f"  [{h.get('hypothesis_id', '?')}] status={h.get('status', '?')}")
         click.echo(f"    {h.get('statement', '')}")
 
 
@@ -674,8 +697,9 @@ def compare_traditions(topic: str, traditions: str | None = None) -> None:
 
 
 @cli.command()
-@click.argument("fmt", required=False, default="markdown",
-              type=click.Choice(["markdown", "html", "latex"]))
+@click.argument(
+    "fmt", required=False, default="markdown", type=click.Choice(["markdown", "html", "latex"])
+)
 def export(fmt: str = "markdown") -> None:
     """Export living document."""
     click.echo(f"Export format: {fmt}")
