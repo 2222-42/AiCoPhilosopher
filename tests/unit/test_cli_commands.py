@@ -60,11 +60,14 @@ def test_refine_goal() -> None:
 
 
 def test_start_workstream() -> None:
-    # Create a project first so start-workstream has context
-    runner.invoke(cli, ["new-project", "Test"])
-    result = runner.invoke(cli, ["start-workstream", "literature_search"])
-    assert result.exit_code == 0
-    assert "literature_search" in result.output
+    # Isolate filesystem so project artifacts don't leak into the real workspace
+    with runner.isolated_filesystem():
+        created = runner.invoke(cli, ["new-project", "Test"])
+        assert created.exit_code == 0
+        result = runner.invoke(cli, ["start-workstream", "literature_search"])
+        assert result.exit_code == 0
+        assert "literature_search" in result.output
+        assert "Results saved" in result.output
 
 
 def test_start_workstream_invalid_type() -> None:
@@ -72,17 +75,20 @@ def test_start_workstream_invalid_type() -> None:
     assert result.exit_code != 0
 
 
-def test_pause_resume() -> None:
+def test_pause_resume_not_implemented() -> None:
+    """Unwired lifecycle commands must fail honestly (not silent success)."""
     result = runner.invoke(cli, ["pause", "ws-001"])
-    assert result.exit_code == 0
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
     result = runner.invoke(cli, ["resume", "ws-001"])
-    assert result.exit_code == 0
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
 
 
-def test_steer() -> None:
+def test_steer_not_implemented() -> None:
     result = runner.invoke(cli, ["steer", "ws-001", "Focus on compatibilism"])
-    assert result.exit_code == 0
-    assert "Focus" in result.output
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
 
 
 def test_show_hypotheses() -> None:
@@ -100,10 +106,10 @@ def test_show_hypotheses_invalid_filter() -> None:
     assert result.exit_code != 0
 
 
-def test_show_dead_ends() -> None:
+def test_show_dead_ends_not_implemented() -> None:
     result = runner.invoke(cli, ["show-dead-ends"])
-    assert result.exit_code == 0
-    assert "dead" in result.output.lower()
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
 
 
 def test_add_note() -> None:
@@ -136,14 +142,22 @@ def test_config_no_args() -> None:
     assert "configuration" in result.output.lower()
 
 
-def test_config_with_args() -> None:
+def test_config_with_args_not_implemented() -> None:
     result = runner.invoke(cli, ["config", "llm.backend", "claude"])
-    assert result.exit_code == 0
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
 
 
-def test_request_help() -> None:
+def test_request_help_not_implemented() -> None:
     result = runner.invoke(cli, ["request-help"])
-    assert result.exit_code == 0
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
+
+
+def test_export_not_implemented() -> None:
+    result = runner.invoke(cli, ["export", "markdown"])
+    assert result.exit_code != 0
+    assert "not implemented" in result.output.lower()
 
 
 def test_help() -> None:
