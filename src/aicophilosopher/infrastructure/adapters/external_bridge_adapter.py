@@ -293,7 +293,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
     # ------------------------------------------------------------------
     # Send (real implementation)
     # ------------------------------------------------------------------
-    async def _send(
+    async def _send(  # noqa: C901
         self, endpoint: str, payload: dict[str, object]
     ) -> dict[str, object]:
         """Execute a task via OpenCode Go CLI.
@@ -342,7 +342,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=120
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "status": "timeout",
                 "output": "OpenCode Go task timed out (120s).",

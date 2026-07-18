@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import re as _re
+from collections.abc import Callable
 from queue import Queue
-from typing import Any, Callable
+from typing import Any
 
 from aicophilosopher.domain.entities.session import SessionState, SessionStatus
 from aicophilosopher.presentation.nlu import classify_intent
@@ -95,8 +97,6 @@ _WORKSTREAM_LAUNCH_PATTERNS: list[tuple[str, str]] = [
     (r"\bsynthes(is|ize)\b", "synthesis"),
 ]
 
-import re as _re
-
 
 def _detect_workstream_launch(text: str) -> str | None:
     """If text matches a workstream launch pattern, return the type. Else None."""
@@ -107,7 +107,7 @@ def _detect_workstream_launch(text: str) -> str | None:
     return None
 
 
-async def _process_input(
+async def _process_input(  # noqa: C901
     user_input: str,
     session: SessionState,
     coordinator: Any,
@@ -306,11 +306,10 @@ class WorkstreamPoller:
     def __init__(
         self,
         poll_fn: Callable[[], list[dict[str, object]]],
-        update_queue: "Queue[dict[str, object]]",
+        update_queue: Queue[dict[str, object]],
         interval_seconds: float = 2.0,
     ) -> None:
         import threading
-        from queue import Queue
 
         self._poll_fn = poll_fn
         self._queue: Queue[dict[str, object]] = update_queue
@@ -409,7 +408,7 @@ def _save_coordinator_state(session: SessionState, coordinator: Any) -> None:
     session.config_snapshot["coordinator_state"] = state
 
 
-async def run_repl(
+async def run_repl(  # noqa: C901
     project_id: str | None = None,
     test_mode: bool = False,
     llm_port: Any = None,

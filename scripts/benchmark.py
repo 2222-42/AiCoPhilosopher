@@ -235,7 +235,7 @@ def main() -> int:
         print("RESULT: ALL CHECKS PASSED")
     else:
         print(f"RESULT: {failed} CHECK(S) FAILED")
-    print(f"Mode: heuristic (no LLM) — production timing may differ with LLM")
+    print("Mode: heuristic (no LLM) — production timing may differ with LLM")
     print("=" * 60)
     return 1 if failed > 0 else 0
 
