@@ -8,7 +8,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from aicophilosopher.domain.entities.session import SessionState
-from aicophilosopher.presentation.rendering import render_response
 from aicophilosopher.presentation.repl import _process_input
 
 
