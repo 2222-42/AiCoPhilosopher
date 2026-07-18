@@ -293,6 +293,55 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
     # ------------------------------------------------------------------
     # Send (real implementation)
     # ------------------------------------------------------------------
+    def _build_opencode_cmd(self, payload: dict[str, object], model: str, workdir: str) -> list[str]:
+        """Build the OpenCode Go CLI command list for a payload."""
+        prompt = str(payload.get("prompt", ""))
+        cmd: list[str] = [
+            self._get_opencode_bin(),
+            "run",
+            "--format", "json",
+            "--model", model,
+            "--dir", workdir,
+        ]
+        attached_file = payload.get("file")
+        if attached_file and isinstance(attached_file, str):
+            cmd.extend(["--file", attached_file])
+        cmd.append(prompt)
+        return cmd
+
+    @staticmethod
+    def _parse_opencode_output(raw: str) -> tuple[str, str, dict[str, int]]:
+        """Parse OpenCode Go JSON-lines stdout into (output, session_id, tokens)."""
+        output_parts: list[str] = []
+        session_id = ""
+        tokens: dict[str, int] = {}
+
+        for line in raw.strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+
+            msg_type = data.get("type", "")
+            part = data.get("part", {})
+
+            if msg_type == "text":
+                output_parts.append(str(part.get("text", "")))
+
+            if msg_type in ("step_start", "step_finish"):
+                sid = data.get("sessionID") or part.get("sessionID", "")
+                if sid:
+                    session_id = str(sid)
+
+            if msg_type == "step_finish":
+                t = part.get("tokens", {})
+                if isinstance(t, dict):
+                    tokens = {k: int(v) for k, v in t.items() if isinstance(v, (int, float))}
+
+        return "\n".join(output_parts).strip(), session_id, tokens
+
     async def _send(
         self, endpoint: str, payload: dict[str, object]
     ) -> dict[str, object]:
@@ -314,22 +363,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
 
         model = str(payload.get("model") or self._default_model)
         workdir = str(payload.get("workdir") or os.getcwd())
-
-        cmd: list[str] = [
-            self._get_opencode_bin(),
-            "run",
-            "--format", "json",
-            "--model", model,
-            "--dir", workdir,
-        ]
-
-        # Attach file if provided
-        attached_file = payload.get("file")
-        if attached_file and isinstance(attached_file, str):
-            cmd.extend(["--file", attached_file])
-
-        # The prompt is the positional argument
-        cmd.append(prompt)
+        cmd = self._build_opencode_cmd(payload, model, workdir)
 
         logger.debug("OpenCodeGoAdapter: spawning %s", cmd)
 
@@ -342,7 +376,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(), timeout=120
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return {
                 "status": "timeout",
                 "output": "OpenCode Go task timed out (120s).",
@@ -357,38 +391,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
                 "model": model,
             }
 
-        # Parse JSON-lines output
-        output_parts: list[str] = []
-        session_id = ""
-        tokens: dict[str, int] = {}
-        raw = stdout.decode()
-
-        for line in raw.strip().split("\n"):
-            if not line.strip():
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-
-            msg_type = data.get("type", "")
-            part = data.get("part", {})
-
-            if msg_type == "text":
-                output_parts.append(str(part.get("text", "")))
-
-            if msg_type in ("step_start", "step_finish"):
-                sid = data.get("sessionID") or part.get("sessionID", "")
-                if sid:
-                    session_id = sid
-
-            if msg_type == "step_finish":
-                t = part.get("tokens", {})
-                if isinstance(t, dict):
-                    tokens = {k: int(v) for k, v in t.items() if isinstance(v, (int, float))}
-
-        output = "\n".join(output_parts).strip()
-
+        output, session_id, tokens = self._parse_opencode_output(stdout.decode())
         return {
             "status": "completed",
             "output": output,
