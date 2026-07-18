@@ -75,30 +75,38 @@ aicophilosopher export html
 
 ## Running Offline
 
-The AI Co-Philosopher operates fully offline by default. To disable external search:
+The AI Co-Philosopher operates fully offline by default. External literature APIs are gated by `AICOPH_ALLOW_EXTERNAL_SEARCH` (default: `false`).
 
 ```bash
-export ALLOW_EXTERNAL_SEARCH=false
+export AICOPH_ALLOW_EXTERNAL_SEARCH=false
 aicophilosopher new-project "What is truth?"
 ```
 
 All core features (argumentation, concept analysis, critical review, synthesis) work without network access.
 
+**Literature sources today:**
+- **Live** (when `AICOPH_ALLOW_EXTERNAL_SEARCH=true`): Semantic Scholar, arXiv
+- **Stub** (not connected; no fabricated results/URLs): PhilPapers, SEP
+- **Unimplemented**: IEP
+
 ## Configuration
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (settings use the `AICOPH_` prefix):
 
 ```env
 # LLM backend (optional; heuristic mode works without LLM)
-LLM_BACKEND=ollama              # ollama | claude | gemini
-LLM_MODEL=llama3                # model name
+AICOPH_LLM_BACKEND=ollama              # ollama | claude | gemini
+AICOPH_LLM_MODEL=llama3                # model name
 
 # Storage
-WORKSPACE_DIR=./projects        # where project data lives
+AICOPH_WORKSPACE_DIR=./projects        # where project data lives
 
-# Privacy
-ALLOW_EXTERNAL_SEARCH=false     # disable PhilPapers/SEP search
-LOG_LEVEL=INFO                  # DEBUG | INFO | WARNING | ERROR
+# Privacy / external search
+# false (default): offline placeholders only
+# true: enable live Semantic Scholar + arXiv (query terms only)
+# PhilPapers / SEP remain stubs either way — they are not live APIs yet.
+AICOPH_ALLOW_EXTERNAL_SEARCH=false
+AICOPH_LOG_LEVEL=INFO                  # DEBUG | INFO | WARNING | ERROR
 ```
 
 ## Running Tests
