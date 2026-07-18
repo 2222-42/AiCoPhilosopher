@@ -10,12 +10,18 @@ from typing import Any
 
 import click
 
-DEFAULT_WORKSPACE = Path("projects")
 CURRENT_PROJECT_FILE = Path(".current_project")
 
 
 def _get_workspace() -> Path:
-    return DEFAULT_WORKSPACE
+    """Return the projects directory from Config (single source of truth).
+
+    Uses ``AICOPH_WORKSPACE_DIR`` (default ``~/.aicophilosopher``); projects
+    are stored under ``<workspace>/projects/`` to match FileSystemAdapter.
+    """
+    from aicophilosopher.domain.services.config import Config
+
+    return Config().projects_dir()
 
 
 def _ensure_workspace() -> None:
@@ -597,19 +603,27 @@ def export(fmt: str = "markdown") -> None:
     click.echo(f"Export format: {fmt}")
 
 
-@cli.command()
+@cli.command("config")
 @click.argument("key", required=False)
 @click.argument("value", required=False)
-def config(key: str | None = None, value: str | None = None) -> None:
-    """View or set configuration."""
+def config_cmd(key: str | None = None, value: str | None = None) -> None:
+    """View or set configuration (env prefix: AICOPH_)."""
+    from aicophilosopher.domain.services.config import Config
+
+    cfg = Config()
     if key is None:
-        click.echo("Current configuration:")
-        click.echo("  llm.backend: ollama")
-        click.echo("  workspace: ./projects/")
+        click.echo("Current configuration (env prefix AICOPH_):")
+        click.echo(f"  llm.backend: {cfg.llm_backend}")
+        click.echo(f"  llm.model: {cfg.llm_model or '(default)'}")
+        click.echo(f"  workspace_dir: {cfg.workspace_dir}")
+        click.echo(f"  workspace (resolved): {cfg.resolved_workspace_dir()}")
+        click.echo(f"  projects_dir: {cfg.projects_dir()}")
+        click.echo(f"  allow_external_search: {cfg.allow_external_search}")
+        click.echo(f"  log_level: {cfg.log_level}")
     elif value is None:
-        raise click.UsageError(f"Usage: config <key> <value>")
+        raise click.UsageError("Usage: config <key> <value>")
     else:
-        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP)")
+        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP; set AICOPH_* env vars)")
 
 
 @cli.command()
