@@ -1,4 +1,4 @@
-"""Unit tests for slash command parser and router (T-019)."""
+"""Unit tests for slash command parser and router (T-019 / Issue #59)."""
 
 import pytest
 
@@ -45,11 +45,14 @@ def test_steer_requires_two_args(session: SessionState) -> None:
     assert "Usage" in result["message"]
 
 
-def test_steer_with_two_args_ok(session: SessionState) -> None:
+def test_steer_with_two_args_is_unimplemented(session: SessionState) -> None:
+    """/steer is registered but not wired — must not pretend success."""
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/steer ws-001 focus on compatibilism", session)
-    assert "Steering" in result["message"]
+    assert result.get("implemented") is False
+    assert "Not implemented" in result["message"]
+    assert "error" in result
 
 
 # ── Quoted argument parsing ──────────────────────────────────────────
@@ -58,8 +61,9 @@ def test_steer_with_two_args_ok(session: SessionState) -> None:
 def test_quoted_args_preserved(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
-    result = dispatch('/new "What is truth?"', session)
-    assert "What is truth?" in result["message"]
+    result = dispatch('/search "What is truth?"', session)
+    assert result["action"] == "propose_workstream"
+    assert "What is truth?" in result["user_input"]
 
 
 # ── Pause / Resume with workstream validation ────────────────────────
@@ -88,22 +92,27 @@ def test_pause_ambiguous_multiple(session: SessionState) -> None:
     assert "Which workstream?" in result["message"]
 
 
-def test_pause_single_auto_selects(session: SessionState) -> None:
+def test_pause_single_is_unimplemented(session: SessionState) -> None:
+    """Validation passes, but pause is not wired — no fake success."""
     from aicophilosopher.presentation.slash_commands import dispatch
 
     session.active_workstreams = ["ws-001"]
     result = dispatch("/pause", session)
-    assert "ws-001 paused" in result["message"].lower()
+    assert result.get("implemented") is False
+    assert "Not implemented" in result["message"]
+    assert "paused" not in result["message"].lower() or "not implemented" in result["message"].lower()
 
 
-# ── Archive confirmation ─────────────────────────────────────────────
+# ── Archive is not a fake approval flow ──────────────────────────────
 
 
-def test_archive_prompts_confirmation(session: SessionState) -> None:
+def test_archive_is_unimplemented(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/archive", session)
-    assert "Are you sure" in result["message"]
+    assert result.get("implemented") is False
+    assert "Not implemented" in result["message"]
+    assert result.get("is_approval_request") is not True
 
 
 # ── Toggle commands ──────────────────────────────────────────────────
@@ -178,6 +187,74 @@ def test_all_commands_dispatch_without_error(session: SessionState) -> None:
         assert isinstance(result, dict)
 
 
+# ── Inquiry → coordinator action ─────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("cmd", "ws_type"),
+    [
+        ("/search free will", "literature_search"),
+        ("/analyze intentionality", "concept_analysis"),
+        ("/argue compatibilism", "argumentation"),
+        ("/compare free will", "cross_traditional_comparison"),
+        ("/review", "critical_review"),
+        ("/synthesize", "synthesis"),
+    ],
+)
+def test_inquiry_commands_return_propose_workstream(
+    session: SessionState, cmd: str, ws_type: str
+) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch(cmd, session)
+    assert result["action"] == "propose_workstream"
+    assert result["workstream_type"] == ws_type
+    # Must not look like a completed search/analysis
+    assert "Searching for" not in result.get("message", "")
+    assert "Analyzing concept" not in result.get("message", "")
+    assert "acknowledged" not in result.get("message", "").lower()
+
+
+# ── Echo-only commands are explicitly unimplemented ──────────────────
+
+
+@pytest.mark.parametrize(
+    "cmd",
+    [
+        "/new question",
+        "/open proj-1",
+        "/projects",
+        "/export markdown",
+        "/add-note hello",
+        "/upload path.pdf",
+        "/help-request",
+        "/config key=value",
+        "/hypotheses",
+        "/dead-ends",
+        "/document",
+        "/deepen concept",
+        "/abandon h-1",
+    ],
+)
+def test_echo_only_commands_are_unimplemented(session: SessionState, cmd: str) -> None:
+    from aicophilosopher.presentation.slash_commands import dispatch
+
+    result = dispatch(cmd, session)
+    assert result.get("implemented") is False
+    assert "Not implemented" in result["message"]
+    assert "error" in result
+    # Must not pretend success (progressive/completed verbs as the primary claim)
+    lower = result["message"].lower()
+    for fake in (
+        "creating new project",
+        "opening project",
+        "exporting as",
+        "acknowledged",
+        "help request sent",
+    ):
+        assert fake not in lower
+
+
 # ── /status ──────────────────────────────────────────────────────────
 
 
@@ -221,8 +298,9 @@ def test_toggle_commands_return_message(session: SessionState) -> None:
     assert "Details" in result["message"]
 
 
-def test_archive_response_is_approval(session: SessionState) -> None:
+def test_archive_response_not_approval(session: SessionState) -> None:
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/archive", session)
-    assert result.get("is_approval_request") is True
+    assert result.get("is_approval_request") is not True
+    assert result.get("implemented") is False
