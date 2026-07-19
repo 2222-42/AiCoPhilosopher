@@ -100,6 +100,16 @@ The project is governed by a [constitution](.specify/memory/constitution.md) wit
 4. **Testing Standards & Determinism** — automated tests, no network requirement, regression tests
 5. **MVP-First Delivery** — working product before perfection
 
+## Architecture Decision Records
+
+Significant design decisions are recorded under [`docs/adr/`](docs/adr/README.md):
+
+| ADR | Decision |
+|-----|----------|
+| [0001](docs/adr/0001-persistence-source-of-truth.md) | Project artifacts on the filesystem; sessions via StoragePort (SQLite or FS) |
+| [0002](docs/adr/0002-orchestration-handmade-coordinator.md) | Handmade Coordinator is canonical; LangGraph is unused (future or remove) |
+| [0003](docs/adr/0003-llm-heuristic-offline-fallback.md) | Heuristic offline path is production-grade; LLM is an optional enhancer |
+
 ## License
 
 MIT
