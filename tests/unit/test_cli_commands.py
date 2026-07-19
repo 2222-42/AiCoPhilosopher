@@ -3,11 +3,23 @@
 Exercises all Click command definitions with CliRunner.
 """
 
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
 from click.testing import CliRunner
 
 from aicophilosopher.presentation.commands import cli
 
 runner = CliRunner()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Route all CLI project I/O through a temp Config workspace (Issue #62)."""
+    monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path / "workspace"))
+    monkeypatch.chdir(tmp_path)
 
 
 def test_new_project() -> None:
@@ -28,27 +40,25 @@ def test_list_projects() -> None:
 
 
 def test_open_project() -> None:
-    with runner.isolated_filesystem():
-        result = runner.invoke(cli, ["new-project", "TestOpen"])
-        assert result.exit_code == 0
-        # Extract project ID from output
-        import re
-        m = re.search(r"ID: (proj-\w+)", result.output)
-        if m:
-            result = runner.invoke(cli, ["open-project", m.group(1)])
-            assert result.exit_code == 0
-            assert "Opened project" in result.output
+    result = runner.invoke(cli, ["new-project", "TestOpen"])
+    assert result.exit_code == 0
+    # Extract project ID from output
+    import re
+    m = re.search(r"ID: (proj-\w+)", result.output)
+    assert m is not None, f"project ID not found in new-project output: {result.output!r}"
+    result = runner.invoke(cli, ["open-project", m.group(1)])
+    assert result.exit_code == 0
+    assert "Opened project" in result.output
 
 
 def test_archive_project() -> None:
-    with runner.isolated_filesystem():
-        result = runner.invoke(cli, ["new-project", "ToArchive"])
-        assert result.exit_code == 0
-        import re
-        m = re.search(r"ID: (proj-\w+)", result.output)
-        if m:
-            result = runner.invoke(cli, ["archive-project", m.group(1)], input="y\n")
-            assert result.exit_code == 0
+    result = runner.invoke(cli, ["new-project", "ToArchive"])
+    assert result.exit_code == 0
+    import re
+    m = re.search(r"ID: (proj-\w+)", result.output)
+    assert m is not None, f"project ID not found in new-project output: {result.output!r}"
+    result = runner.invoke(cli, ["archive-project", m.group(1)], input="y\n")
+    assert result.exit_code == 0
 
 
 def test_refine_goal() -> None:
@@ -107,6 +117,9 @@ def test_show_dead_ends() -> None:
 
 
 def test_add_note() -> None:
+    # Need an active project for note persistence under workspace
+    created = runner.invoke(cli, ["new-project", "NoteHost"])
+    assert created.exit_code == 0, f"new-project failed: {created.output!r}"
     result = runner.invoke(cli, ["add-note", "Important insight", "--attach-to", "hyp-001"])
     assert result.exit_code == 0
     assert "hyp-001" in result.output
@@ -122,7 +135,7 @@ def test_compare_traditions() -> None:
 def test_status() -> None:
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
-    assert "Project:" in result.output or "Status:" in result.output
+    assert "Project:" in result.output or "Status:" in result.output or "No active" in result.output
 
 
 def test_show_document() -> None:
@@ -134,6 +147,7 @@ def test_config_no_args() -> None:
     result = runner.invoke(cli, ["config"])
     assert result.exit_code == 0
     assert "configuration" in result.output.lower()
+    assert "AICOPH_" in result.output
 
 
 def test_config_with_args() -> None:

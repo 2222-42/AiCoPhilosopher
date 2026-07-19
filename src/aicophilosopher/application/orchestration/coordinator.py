@@ -10,6 +10,28 @@ CLARIFICATION_QUESTIONS = [
     "Do you have a preference for how we should proceed — for example, conceptual analysis, literature review, argument reconstruction, or cross-traditional comparison?",
 ]
 
+# Labels for user answers that follow the initial question, aligned with
+# CLARIFICATION_QUESTIONS order (deterministic goal synthesis; no LLM required).
+_GOAL_ASPECT_LABELS = (
+    "philosophical tradition / framework",
+    "central concepts",
+    "success criteria",
+    "thinkers, texts, or arguments",
+    "preferred method",
+)
+
+_DEFAULT_GOAL = (
+    "To investigate the philosophical question through conceptual analysis and "
+    "cross-traditional comparison, producing a structured living document with "
+    "annotated arguments and a dialectical history appendix."
+)
+
+_GOAL_DELIVERABLE = (
+    "Approach: conceptual analysis and cross-traditional comparison; deliver a "
+    "structured living document with annotated arguments and a dialectical history "
+    "appendix."
+)
+
 
 class ProjectCoordinatorAgent(BaseAgent):
     def __init__(
@@ -238,9 +260,52 @@ class ProjectCoordinatorAgent(BaseAgent):
             "epistemic_status": f"Status: {ws['status']}",
         }
 
+    def _user_utterances(self) -> list[str]:
+        """Return non-empty user turns from dialogue_history, in order."""
+        utterances: list[str] = []
+        for entry in self.dialogue_history:
+            if entry.get("role") != "user":
+                continue
+            content = (entry.get("content") or "").strip()
+            if content:
+                utterances.append(content)
+        return utterances
+
     def _synthesize_goal(self) -> str:
-        # TODO: incorporate dialogue_history to generate a meaningful goal
-        return "To investigate the philosophical question through conceptual analysis and cross-traditional comparison, producing a structured living document with annotated arguments and a dialectical history appendix."
+        """Build a research goal from dialogue_history.
+
+        Deterministic rule-based synthesis (no LLM required) so offline tests
+        can assert that user content is reflected in the proposed goal. The
+        first user turn is treated as the research question; subsequent turns
+        are labeled by the clarification aspect they answer.
+        """
+        user_turns = self._user_utterances()
+        if not user_turns:
+            return _DEFAULT_GOAL
+
+        question = user_turns[0].rstrip(".!? ").strip()
+        if not question:
+            return _DEFAULT_GOAL
+
+        header = f'To investigate the question: "{question}".'
+
+        aspect_parts: list[str] = []
+        for idx, turn in enumerate(user_turns[1:]):
+            cleaned = turn.rstrip().strip()
+            if not cleaned:
+                continue
+            if idx < len(_GOAL_ASPECT_LABELS):
+                label = _GOAL_ASPECT_LABELS[idx]
+            else:
+                label = f"further guidance ({idx - len(_GOAL_ASPECT_LABELS) + 1})"
+            aspect_parts.append(f"{label}: {cleaned}")
+
+        if aspect_parts:
+            context = " Constraints and context from dialogue — " + "; ".join(aspect_parts) + "."
+        else:
+            context = ""
+
+        return f"{header}{context} {_GOAL_DELIVERABLE}"
 
     def get_dialogue_state(self) -> str:
         if self._goal_approved:
