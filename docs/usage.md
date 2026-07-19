@@ -56,8 +56,20 @@ Continue until the goal is approved. You can stop at any time.
 aicophilosopher start-workstream literature_search
 ```
 
-The agent searches PhilPapers, SEP, IEP, arXiv, and Semantic Scholar. Results include:
+The agent searches **live** sources when external search is enabled, and falls back to offline placeholders otherwise. Current source availability:
+
+| Source | Status | Notes |
+|--------|--------|-------|
+| Semantic Scholar | **live** | Real API (no key required) when external search is allowed |
+| arXiv | **live** | Real API when external search is allowed |
+| PhilPapers | **stub** | Not connected; returns no results (no fabricated entries) |
+| SEP | **stub** | No public search API; does **not** invent plato.stanford.edu URLs |
+| IEP | **unimplemented** | Not wired |
+
+Results include:
 - Structured bibliography with BibTeX entries
+- Per-result `source` / `source_status` (`live` / `stub` / `offline` / `unimplemented`)
+- Aggregate `source_statuses` map (also printed by the CLI)
 - Tradition tags (analytic, continental, philosophy_of_technology, etc.)
 - Cross-traditional bridge notes
 - Relevance scores
@@ -198,14 +210,20 @@ aicophilosopher export markdown
 
 ## Offline Mode
 
-All core features work without network access:
+All core features work without network access. External literature APIs are **off by default**.
 
 ```bash
 export AICOPH_ALLOW_EXTERNAL_SEARCH=false
 aicophilosopher new-project "What is truth?"
 ```
 
-Literature search will be limited to locally ingested PDFs (via `add note --attach`), but argumentation, concept analysis, critical review, and synthesis all function fully.
+To enable live Semantic Scholar / arXiv queries (query terms only; not project content):
+
+```bash
+export AICOPH_ALLOW_EXTERNAL_SEARCH=true
+```
+
+When external search is disabled, literature search returns offline placeholder results with `source_status: offline`. PhilPapers / SEP / IEP remain stub or unimplemented either way. Argumentation, concept analysis, critical review, and synthesis all function fully offline.
 
 ## Privacy
 
