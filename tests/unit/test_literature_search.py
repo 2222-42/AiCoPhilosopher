@@ -16,8 +16,9 @@ from aicophilosopher.infrastructure.adapters.search_adapter import (
 
 
 @pytest.fixture
-def offline_search_tool() -> SearchTool:
-    """Default: external search disabled (consent + config off)."""
+def offline_search_tool(monkeypatch: pytest.MonkeyPatch) -> SearchTool:
+    """Force offline mode regardless of ambient .env / AICOPH_* (Copilot #80)."""
+    monkeypatch.setenv("AICOPH_ALLOW_EXTERNAL_SEARCH", "false")
     return SearchTool(allow_external=False)
 
 
@@ -41,7 +42,10 @@ class TestSourceStatusHonesty:
         assert statuses["sep"] == SOURCE_STATUS_STUB
         assert statuses["iep"] == SOURCE_STATUS_UNIMPLEMENTED
 
-    def test_source_statuses_when_external_allowed(self) -> None:
+    def test_source_statuses_when_external_allowed(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AICOPH_ALLOW_EXTERNAL_SEARCH", "true")
         tool = SearchTool(allow_external=True)
         statuses = tool.get_source_statuses()
         assert statuses["semantic_scholar"] == SOURCE_STATUS_LIVE
@@ -63,7 +67,10 @@ class TestSourceStatusHonesty:
             )
 
     @pytest.mark.asyncio
-    async def test_sep_empty_even_with_external_consent(self) -> None:
+    async def test_sep_empty_even_with_external_consent(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("AICOPH_ALLOW_EXTERNAL_SEARCH", "true")
         tool = SearchTool(allow_external=True)
         results = await tool.query_sep("free will")
         assert results == []
