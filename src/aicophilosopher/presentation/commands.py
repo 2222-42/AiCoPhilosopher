@@ -96,6 +96,94 @@ def _save_current_project(project_id: str) -> None:
     CURRENT_PROJECT_FILE.write_text(project_id)
 
 
+def _require_active_project() -> str:
+    """Return the current project id or abort with a non-zero exit."""
+    proj_id = _get_current_project_id()
+    if proj_id is None:
+        raise click.ClickException(
+            "No active project. Use `new-project` or `open-project` first."
+        )
+    proj_dir = _project_dir(proj_id)
+    if not proj_dir.exists():
+        raise click.ClickException(f"Project '{proj_id}' not found at {proj_dir}.")
+    return proj_id
+
+
+def _load_metadata(proj_id: str) -> dict[str, Any]:
+    meta_path = _project_dir(proj_id) / "metadata.json"
+    if not meta_path.exists():
+        raise click.ClickException(f"Project '{proj_id}' has no metadata.json.")
+    return json.loads(meta_path.read_text(encoding="utf-8"))
+
+
+def _as_dict_list(raw: object) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict)]
+
+
+def _failed_workstream_entry(ws_id: str, ws: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "exploration_id": ws.get("workstream_id", ws_id),
+        "goal_attempted": ws.get("goal_statement") or ws.get("type") or ws_id,
+        "failure_reason": ws.get("failure_reason") or "workstream failed",
+        "lessons_learned": ws.get("lessons_learned") or "",
+        "timestamp": ws.get("timestamp") or ws.get("updated_at") or "",
+    }
+
+
+def _load_jsonl_dicts(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(record, dict):
+            records.append(record)
+    return records
+
+
+def _load_hypotheses(proj_id: str) -> list[dict[str, Any]]:
+    """Load hypotheses from metadata.json and hypotheses.jsonl."""
+    meta = _load_metadata(proj_id)
+    hypotheses = _as_dict_list(meta.get("hypotheses"))
+    hypotheses.extend(_load_jsonl_dicts(_project_dir(proj_id) / "hypotheses.jsonl"))
+    return hypotheses
+
+
+def _load_dead_ends(proj_id: str) -> list[dict[str, Any]]:
+    """Load failed explorations from project metadata and dead_ends.jsonl."""
+    meta = _load_metadata(proj_id)
+    dead_ends: list[dict[str, Any]] = []
+    dead_ends.extend(_as_dict_list(meta.get("dead_ends")))
+    dead_ends.extend(_as_dict_list(meta.get("failed_explorations")))
+
+    workstreams = meta.get("workstreams") or {}
+    if isinstance(workstreams, dict):
+        for ws_id, ws in workstreams.items():
+            if not isinstance(ws, dict):
+                continue
+            dead_ends.extend(_as_dict_list(ws.get("failed_explorations")))
+            if ws.get("status") == "failed":
+                dead_ends.append(_failed_workstream_entry(ws_id, ws))
+
+    dead_ends.extend(_load_jsonl_dicts(_project_dir(proj_id) / "dead_ends.jsonl"))
+    return dead_ends
+
+
+def _not_implemented(feature: str, detail: str) -> None:
+    """Fail loudly for CLI features that would otherwise silent no-op."""
+    raise click.ClickException(
+        f"{feature} is not implemented yet. {detail}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # CLI group
 # ---------------------------------------------------------------------------
@@ -514,14 +602,22 @@ async def _run_concept_analysis(proj_id: str, query: str, kwargs: dict[str, obje
 @click.argument("workstream_id")
 def pause(workstream_id: str) -> None:
     """Pause a running workstream."""
-    click.echo(f"Workstream '{workstream_id}' paused.")
+    _not_implemented(
+        "pause",
+        f"Workstream lifecycle control is not wired yet "
+        f"(requested id={workstream_id!r}). See issue #60.",
+    )
 
 
 @cli.command()
 @click.argument("workstream_id")
 def resume(workstream_id: str) -> None:
     """Resume a paused or stalled workstream."""
-    click.echo(f"Workstream '{workstream_id}' resumed.")
+    _not_implemented(
+        "resume",
+        f"Workstream lifecycle control is not wired yet "
+        f"(requested id={workstream_id!r}). See issue #60.",
+    )
 
 
 @cli.command()
@@ -529,7 +625,12 @@ def resume(workstream_id: str) -> None:
 @click.argument("instruction")
 def steer(workstream_id: str, instruction: str) -> None:
     """Direct steering of a specific workstream."""
-    click.echo(f"Steering '{workstream_id}': {instruction}")
+    _not_implemented(
+        "steer",
+        f"Workstream steering is not wired yet "
+        f"(requested id={workstream_id!r}, instruction={instruction!r}). "
+        f"See issue #60.",
+    )
 
 
 @cli.command()
@@ -569,18 +670,63 @@ def show_document() -> None:
 @click.option("--status", "filter_status",
               type=click.Choice(["active", "abandoned", "refined", "refuted"]))
 def show_hypotheses(filter_status: str | None = None) -> None:
-    """Display hypothesis history."""
-    proj_id = _get_current_project_id()
-    if proj_id is None:
-        click.echo("No active project.")
+    """Display hypothesis history from project metadata / hypotheses.jsonl."""
+    proj_id = _require_active_project()
+    hypotheses = _load_hypotheses(proj_id)
+
+    if filter_status is not None:
+        hypotheses = [
+            h for h in hypotheses
+            if str(h.get("status", "")).lower() == filter_status
+        ]
+
+    if not hypotheses:
+        if filter_status is None:
+            click.echo("No hypotheses recorded yet. Start a workstream to generate them.")
+        else:
+            click.echo(f"No hypotheses with status '{filter_status}'.")
         return
-    click.echo("No hypotheses yet. Start a workstream to generate them.")
+
+    click.echo(f"Hypotheses ({len(hypotheses)}) for project {proj_id}:")
+    for h in hypotheses:
+        hid = h.get("hypothesis_id") or h.get("id") or "?"
+        statement = h.get("statement") or h.get("text") or ""
+        status = h.get("status", "?")
+        strength = h.get("strength", "?")
+        confidence = h.get("confidence_score", h.get("confidence", "?"))
+        origin = h.get("origin", "?")
+        click.echo(
+            f"  [{hid}] status={status} strength={strength} "
+            f"confidence={confidence} origin={origin}"
+        )
+        if statement:
+            click.echo(f"    {statement}")
 
 
 @cli.command()
 def show_dead_ends() -> None:
-    """Display failed explorations."""
-    click.echo("No dead ends yet.")
+    """Display failed explorations from project metadata / dead_ends.jsonl."""
+    proj_id = _require_active_project()
+    dead_ends = _load_dead_ends(proj_id)
+
+    if not dead_ends:
+        click.echo("No dead ends recorded yet.")
+        return
+
+    click.echo(f"Dead ends ({len(dead_ends)}) for project {proj_id}:")
+    for de in dead_ends:
+        eid = de.get("exploration_id") or de.get("id") or "?"
+        goal = de.get("goal_attempted") or de.get("goal") or ""
+        reason = de.get("failure_reason") or de.get("reason") or ""
+        lesson = de.get("lessons_learned") or de.get("lesson") or ""
+        ts = de.get("timestamp") or ""
+        click.echo(f"  [{eid}] {goal}")
+        if reason:
+            click.echo(f"    failure: {reason}")
+        if lesson:
+            click.echo(f"    lesson: {lesson}")
+        if ts:
+            click.echo(f"    at: {ts}")
 
 
 @cli.command()
@@ -635,38 +781,125 @@ def compare_traditions(topic: str, traditions: str | None = None) -> None:
     asyncio.run(_run())
 
 
-@cli.command()
+@cli.command("export")
 @click.argument("fmt", required=False, default="markdown",
               type=click.Choice(["markdown", "html", "latex"]))
-def export(fmt: str = "markdown") -> None:
-    """Export living document."""
-    click.echo(f"Export format: {fmt}")
+@click.option(
+    "--output", "-o",
+    type=click.Path(path_type=Path),
+    help="Destination file path (default: <project>/exports/living_document.<ext>)",
+)
+def export_document(fmt: str = "markdown", output: Path | None = None) -> None:
+    """Export living document to a file (markdown/html). latex is not implemented."""
+    if fmt == "latex":
+        _not_implemented(
+            "export latex",
+            "LaTeX export is post-MVP. Use `export markdown` or `export html`.",
+        )
+
+    proj_id = _require_active_project()
+    doc_path = _project_dir(proj_id) / "living_document.md"
+    if not doc_path.exists():
+        raise click.ClickException(
+            f"No living document found at {doc_path}."
+        )
+    content = doc_path.read_text(encoding="utf-8")
+
+    if fmt == "html":
+        # Minimal, honest HTML wrapper (not a full Markdown renderer).
+        import html as html_lib
+        escaped = html_lib.escape(content)
+        title = _load_metadata(proj_id).get("title", proj_id)
+        safe_title = html_lib.escape(str(title))
+        content = (
+            "<!DOCTYPE html>\n"
+            '<html lang="en">\n'
+            "<head>\n"
+            '  <meta charset="utf-8">\n'
+            f"  <title>{safe_title}</title>\n"
+            "</head>\n"
+            "<body>\n"
+            f"<pre>{escaped}</pre>\n"
+            "</body>\n"
+            "</html>\n"
+        )
+        default_name = "living_document.html"
+    else:
+        default_name = "living_document.md"
+
+    if output is None:
+        exports_dir = _project_dir(proj_id) / "exports"
+        exports_dir.mkdir(parents=True, exist_ok=True)
+        out_path = exports_dir / default_name
+    else:
+        out_path = output
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    out_path.write_text(content, encoding="utf-8")
+    click.echo(f"Exported living document ({fmt}) to {out_path}")
 
 
 @cli.command("config")
 @click.argument("key", required=False)
 @click.argument("value", required=False)
 def config_cmd(key: str | None = None, value: str | None = None) -> None:
-    """View or set configuration (env prefix: AICOPH_)."""
+    """View configuration (read-only). Setting values is not persisted."""
     from aicophilosopher.domain.services.config import Config
 
-    cfg = Config()
+    # Do not swallow Config errors — mis-set AICOPH_* / .env must surface.
+    try:
+        cfg = Config()
+    except Exception as exc:
+        raise click.ClickException(
+            f"Failed to load configuration: {exc}. "
+            "Check AICOPH_* environment variables and .env."
+        ) from exc
+
+    # Keys are shell-friendly identifiers usable with `config <key>`.
+    display = {
+        "llm.backend": cfg.llm_backend,
+        "llm.model": cfg.llm_model or "(default)",
+        "llm.temperature": cfg.llm_temperature,
+        "workspace_dir": cfg.workspace_dir,
+        "workspace.resolved": cfg.resolved_workspace_dir(),
+        "projects_dir": cfg.projects_dir(),
+        "log_level": cfg.log_level,
+        "allow_external_search": cfg.allow_external_search,
+        "allow_external_agents": cfg.allow_external_agents,
+        "opencode_enabled": cfg.opencode_enabled,
+        "hermes_enabled": cfg.hermes_enabled,
+    }
+
     if key is None:
-        click.echo("Current configuration (env prefix AICOPH_):")
-        click.echo(f"  llm.backend: {cfg.llm_backend}")
-        click.echo(f"  llm.model: {cfg.llm_model or '(default)'}")
-        click.echo(f"  workspace_dir: {cfg.workspace_dir}")
-        click.echo(f"  workspace (resolved): {cfg.resolved_workspace_dir()}")
-        click.echo(f"  projects_dir: {cfg.projects_dir()}")
-        click.echo(f"  allow_external_search: {cfg.allow_external_search}")
-        click.echo(f"  log_level: {cfg.log_level}")
-    elif value is None:
-        raise click.UsageError("Usage: config <key> <value>")
-    else:
-        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP; set AICOPH_* env vars)")
+        click.echo("Current configuration (from env/defaults; AICOPH_*):")
+        for k, v in display.items():
+            click.echo(f"  {k}: {v}")
+        click.echo()
+        click.echo("Note: `config <key> <value>` does not persist settings.")
+        click.echo("Set AICOPH_* environment variables or edit .env instead.")
+        return
+
+    if value is None:
+        # Read a single key if known; otherwise usage error.
+        if key in display:
+            click.echo(f"{key}: {display[key]}")
+            return
+        raise click.UsageError(
+            f"Unknown config key '{key}'. Known keys: {', '.join(display)}"
+        )
+
+    # Refuse to pretend a write succeeded.
+    raise click.ClickException(
+        f"Setting config is not persisted. "
+        f"Refused to pretend '{key}'='{value}' was saved. "
+        f"Set AICOPH_* environment variables or edit .env instead."
+    )
 
 
 @cli.command()
 def request_help() -> None:
     """Request human assistance from Project Coordinator."""
-    click.echo("Help request sent.")
+    _not_implemented(
+        "request-help",
+        "Project Coordinator help-request routing is not wired for the CLI yet.",
+    )
