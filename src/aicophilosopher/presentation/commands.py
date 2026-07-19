@@ -430,6 +430,28 @@ def refine_goal() -> None:
     click.echo("  aicophilosopher start-workstream concept_analysis")
 
 
+
+def _print_literature_search_result(result: dict[str, Any]) -> None:
+    """Print literature search results with explicit source statuses (#68)."""
+    click.echo()
+    click.echo("=== Literature Search ===")
+    click.echo(f"Results: {result.get('result_count', 0)}")
+    click.echo(f"Bridge notes: {len(result.get('bridge_notes', []))}")
+    source_statuses = result.get("source_statuses") or {}
+    if source_statuses:
+        click.echo("Sources:")
+        for name, status in source_statuses.items():
+            click.echo(f"  - {name}: {status}")
+    bibliography = result.get("bibliography") or []
+    for entry in bibliography[:5]:
+        if not isinstance(entry, dict):
+            continue
+        title = entry.get("title", "")
+        source = entry.get("source", "")
+        status = entry.get("source_status", "")
+        click.echo(f"  • [{source}/{status}] {title}")
+
+
 @cli.command()
 @click.argument("workstream_type", type=click.Choice([
     "literature_search", "concept_analysis", "cross_traditional_comparison",
@@ -562,10 +584,7 @@ async def _run_literature_search(proj_id: str, query: str, kwargs: dict[str, obj
 
     agent = LiteratureSearchAgent(agent_id=f"cli-{proj_id}")
     result = await agent.run(query, **kwargs)
-    click.echo()
-    click.echo("=== Literature Search ===")
-    click.echo(f"Results: {result.get('result_count', 0)}")
-    click.echo(f"Bridge notes: {len(result.get('bridge_notes', []))}")
+    _print_literature_search_result(result)
 
 
 async def _run_concept_analysis(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
