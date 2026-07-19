@@ -459,7 +459,9 @@ def _print_literature_search_result(result: dict[str, Any]) -> None:
 ]))
 @click.option("--instructions", "-i", help="Additional instructions")
 @click.option("--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)")
-def start_workstream(workstream_type: str, instructions: str | None = None, traditions: str | None = None) -> None:
+def start_workstream(  # noqa: C901
+    workstream_type: str, instructions: str | None = None, traditions: str | None = None
+) -> None:
     """Launch a workstream using the appropriate AI agent."""
     proj_id = _get_current_project_id()
     if proj_id is None:

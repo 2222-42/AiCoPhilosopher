@@ -107,6 +107,8 @@ def test_slash_help() -> None:
 
     result = _handle_slash("/help", SessionState(project_id="p1"))
     assert "commands" in result["message"].lower()
+    # Must surface registry markers for unwired commands (Issue #59 / Copilot)
+    assert "not yet implemented" in result["message"].lower() or "*" in result["message"]
 
 
 def test_slash_details(mock_session: SessionState) -> None:
