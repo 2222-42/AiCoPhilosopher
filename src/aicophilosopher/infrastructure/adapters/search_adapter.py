@@ -122,6 +122,26 @@ def _assign_tradition_tag(result: dict[str, Any], traditions_hint: list[str] | N
     return traditions_hint[0] if traditions_hint else "analytic"
 
 
+# Source availability labels exposed to CLI / agent results.
+# live          — real external API is wired and may return results
+# stub          — known placeholder; returns no live literature
+# offline       — external search disabled (consent / config)
+# unimplemented — not wired at all (no results, no fabricated URLs)
+SOURCE_STATUS_LIVE = "live"
+SOURCE_STATUS_STUB = "stub"
+SOURCE_STATUS_OFFLINE = "offline"
+SOURCE_STATUS_UNIMPLEMENTED = "unimplemented"
+
+# Capability map independent of consent. Consent only flips live → offline.
+SOURCE_CAPABILITIES: dict[str, str] = {
+    "semantic_scholar": SOURCE_STATUS_LIVE,
+    "arxiv": SOURCE_STATUS_LIVE,
+    "philpapers": SOURCE_STATUS_STUB,
+    "sep": SOURCE_STATUS_STUB,
+    "iep": SOURCE_STATUS_UNIMPLEMENTED,
+}
+
+
 class ConsentGate:
     def __init__(self, config: Config | None = None, allow_external: bool = False) -> None:
         self.config = config or Config()
@@ -145,6 +165,17 @@ class SearchTool:
         self.consent = ConsentGate(self.config, allow_external=allow_external)
         self._timeout = 15.0
 
+    def get_source_statuses(self) -> dict[str, str]:
+        """Return per-source availability for UX honesty (live/stub/offline/unimplemented)."""
+        external_allowed = self.consent.require()
+        statuses: dict[str, str] = {}
+        for name, capability in SOURCE_CAPABILITIES.items():
+            if capability == SOURCE_STATUS_LIVE and not external_allowed:
+                statuses[name] = SOURCE_STATUS_OFFLINE
+            else:
+                statuses[name] = capability
+        return statuses
+
     async def _try_semantic_scholar(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:
@@ -164,6 +195,7 @@ class SearchTool:
                         "url": p.get("url", ""),
                         "abstract": p.get("abstract", ""),
                         "source": "semantic_scholar",
+                        "source_status": SOURCE_STATUS_LIVE,
                         "relevance_score": 0.0,
                     })
                 return papers
@@ -204,6 +236,7 @@ class SearchTool:
                         "url": link_el.attrib.get("href", "") if link_el is not None else "",
                         "abstract": summary_text,
                         "source": "arxiv",
+                        "source_status": SOURCE_STATUS_LIVE,
                         "relevance_score": 0.0,
                     })
                 return papers
@@ -233,6 +266,7 @@ class SearchTool:
                     abstract_len = len(p.get("abstract", ""))
                     score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
                     p["relevance_score"] = score
+                    p.setdefault("source_status", SOURCE_STATUS_LIVE)
                     results.append(p)
 
         for eq in expanded[:3]:
@@ -245,6 +279,7 @@ class SearchTool:
                     abstract_len = len(p.get("abstract", ""))
                     score = min(round(0.5 + (abstract_len / 1000) * 0.3, 2), 1.0) if p.get("abstract") else 0.3
                     p["relevance_score"] = score
+                    p.setdefault("source_status", SOURCE_STATUS_LIVE)
                     results.append(p)
 
         return results[:20]
@@ -262,13 +297,22 @@ class SearchTool:
         return [dict(p) for p in papers]
 
     async def query_philpapers(self, query: str, **kwargs: object) -> list[dict[str, object]]:
+        """PhilPapers is a stub: no live API is wired. Returns no results.
+
+        Callers should consult ``get_source_statuses()`` (status: stub) rather
+        than treating an empty list as a successful empty search.
+        """
+        _ = query, kwargs
         return []
 
     async def query_sep(self, query: str, **kwargs: object) -> list[dict[str, object]]:
-        slug = re.sub(r"[^a-z0-9]+", "-", query.lower()).strip("-")[:80]
-        return [
-            {"title": f"SEP entry: {query}", "url": f"https://plato.stanford.edu/entries/{slug}/", "source": "sep_stub", "relevance_score": 0.8},
-        ]
+        """SEP has no public search API; do not fabricate plato.stanford.edu URLs.
+
+        Returns an empty list. Status is disclosed via ``get_source_statuses()``
+        as stub so UX can show that SEP is not connected.
+        """
+        _ = query, kwargs
+        return []
 
     def _offline_results(self, query: str, traditions: list[str] | None = None) -> list[dict[str, Any]]:
         return [
@@ -278,6 +322,7 @@ class SearchTool:
                 "year": 2024,
                 "abstract": f"An analysis of {query} across multiple philosophical traditions.",
                 "source": "offline",
+                "source_status": SOURCE_STATUS_OFFLINE,
                 "tradition_tag": traditions[0] if traditions else "analytic",
                 "relevance_score": 0.7,
             },
@@ -287,6 +332,7 @@ class SearchTool:
                 "year": 2025,
                 "abstract": f"Examining {query} through analytic and continental frameworks.",
                 "source": "offline",
+                "source_status": SOURCE_STATUS_OFFLINE,
                 "tradition_tag": traditions[1] if traditions and len(traditions) > 1 else "continental",
                 "relevance_score": 0.6,
             },
