@@ -90,7 +90,41 @@ def _mock_coordinator():
 # ── Main loop ──────────────────────────────────────────────────────────
 
 
-async def main() -> None:  # noqa: C901
+def _handle_demo_slash(stripped: str, session: SessionState) -> str | None:
+    """Handle demo slash commands. Returns 'continue'/'break' or None for NL."""
+    if stripped == "/exit":
+        print("Session saved. Goodbye!")
+        return "break"
+
+    if stripped == "/help":
+        print("Commands: /exit, /status, /details, /hide-details, /suggestions, /hide-suggestions")
+        print("Or just type a philosophical question!\n")
+        return "continue"
+
+    if stripped == "/details":
+        session.current_focus.toggle_state.show_details = True
+        print("[Details] section enabled.")
+        return "continue"
+
+    if stripped == "/hide-details":
+        session.current_focus.toggle_state.show_details = False
+        print("[Details] section hidden.")
+        return "continue"
+
+    if stripped == "/suggestions":
+        session.current_focus.toggle_state.show_suggestions = True
+        print("[Suggestions] section enabled.")
+        return "continue"
+
+    if stripped == "/hide-suggestions":
+        session.current_focus.toggle_state.show_suggestions = False
+        print("[Suggestions] section hidden.")
+        return "continue"
+
+    return None
+
+
+async def main() -> None:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.history import FileHistory
 
@@ -122,38 +156,15 @@ async def main() -> None:  # noqa: C901
         if not stripped:
             continue
 
-        if stripped == "/exit":
-            print("Session saved. Goodbye!")
-            break
-
-        if stripped == "/help":
-            print("Commands: /exit, /status, /details, /hide-details, /suggestions, /hide-suggestions")
-            print("Or just type a philosophical question!\n")
-            continue
-
         if stripped == "/status":
             resp = await coordinator.run(command="status")
             render_response(resp, session.current_focus)
             continue
 
-        if stripped == "/details":
-            session.current_focus.toggle_state.show_details = True
-            print("[Details] section enabled.")
-            continue
-
-        if stripped == "/hide-details":
-            session.current_focus.toggle_state.show_details = False
-            print("[Details] section hidden.")
-            continue
-
-        if stripped == "/suggestions":
-            session.current_focus.toggle_state.show_suggestions = True
-            print("[Suggestions] section enabled.")
-            continue
-
-        if stripped == "/hide-suggestions":
-            session.current_focus.toggle_state.show_suggestions = False
-            print("[Suggestions] section hidden.")
+        action = _handle_demo_slash(stripped, session)
+        if action == "break":
+            break
+        if action == "continue":
             continue
 
         # Natural language → coordinator
