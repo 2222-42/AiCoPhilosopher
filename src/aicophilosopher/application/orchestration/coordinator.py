@@ -161,6 +161,25 @@ class ProjectCoordinatorAgent(BaseAgent):
         except Exception:
             return None
 
+
+    @staticmethod
+    def _agent_confidence(agent_result: dict[str, Any], default: float = 0.6) -> float:
+        """Read confidence from heterogeneous agent result shapes."""
+        for key in (
+            "confidence",
+            "overall_confidence",
+            "synthesis_confidence",
+            "adversarial_confidence",
+        ):
+            val = agent_result.get(key)
+            if val is None:
+                continue
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                continue
+        return default
+
     def _collect_prior_outputs(self) -> list[dict[str, object]]:
         """Build synthesis inputs from completed workstreams with agent results."""
         outputs: list[dict[str, object]] = []
@@ -168,16 +187,17 @@ class ProjectCoordinatorAgent(BaseAgent):
             agent_result = ws.get("agent_result")
             if not agent_result or agent_result.get("error"):
                 continue
+            conf = self._agent_confidence(agent_result)
             outputs.append(
                 {
                     "workstream_id": wid,
                     "type": ws.get("type", "unknown"),
                     "results": summarize_agent_result(str(ws.get("type", "")), agent_result),
-                    "confidence": float(agent_result.get("confidence", 0.6) or 0.6),
+                    "confidence": conf,
                     "claims": [
                         {
                             "text": summarize_agent_result(str(ws.get("type", "")), agent_result),
-                            "confidence": float(agent_result.get("confidence", 0.6) or 0.6),
+                            "confidence": conf,
                             "origin": wid,
                         }
                     ],

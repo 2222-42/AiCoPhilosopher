@@ -1,4 +1,8 @@
-"""Dispatch workstream types to concrete agents (CLI + Coordinator shared path).
+"""Dispatch workstream types to concrete agents for the Coordinator path.
+
+Used by ``ProjectCoordinatorAgent`` when proposing/running workstreams
+(Issue #60). The CLI ``start-workstream`` path may still dispatch agents
+directly; consolidating CLI onto this runner is optional follow-up.
 
 Agents operate in offline/heuristic mode when no LLM is configured and always
 return a result dict. Persistence of results into living documents is out of

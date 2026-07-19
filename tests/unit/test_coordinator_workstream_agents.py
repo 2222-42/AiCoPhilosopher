@@ -13,17 +13,6 @@ from aicophilosopher.application.services.workstream_runner import (
 )
 
 
-@pytest.fixture
-def approved_coordinator() -> ProjectCoordinatorAgent:
-    """Coordinator with an approved goal, ready for workstream launch."""
-    coord = ProjectCoordinatorAgent(project_id="test-proj-60")
-    # Drive dialogue to goal_proposed then approve
-    for _ in range(5):
-        # run is async; tests use pytest-asyncio
-        pass
-    return coord
-
-
 async def _approve(coord: ProjectCoordinatorAgent) -> None:
     for _ in range(5):
         result = await coord.run("test inquiry")
@@ -131,3 +120,13 @@ def test_normalize_cross_traditional_alias() -> None:
         == "cross_traditional_comparison"
     )
     assert "cross_traditional_comparison" in SUPPORTED_WORKSTREAM_TYPES
+
+
+def test_agent_confidence_reads_overall_and_synthesis() -> None:
+    conf = ProjectCoordinatorAgent._agent_confidence
+    assert conf({"confidence": 0.9}) == 0.9
+    assert conf({"overall_confidence": 0.42}) == 0.42
+    assert conf({"synthesis_confidence": 0.33}) == 0.33
+    # preferred order: confidence before overall
+    assert conf({"confidence": 0.1, "overall_confidence": 0.9}) == 0.1
+    assert conf({}) == 0.6
