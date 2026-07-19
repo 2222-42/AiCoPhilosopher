@@ -21,13 +21,19 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
         return {"action": "exit", "message": "Goodbye!"}
 
     if cmd == "/help":
-        return {
-            "message": "Available commands:\n"
-            "  /exit, /help, /status\n"
-            "  /details, /hide-details\n"
-            "  /suggestions, /hide-suggestions\n"
-            "\nUse natural language for philosophical inquiry."
-        }
+        # Prefer full registry help (marks unwired commands) over a local stub list.
+        try:
+            from aicophilosopher.presentation.slash_commands import dispatch
+
+            return dispatch("/help", session)
+        except ImportError:
+            return {
+                "message": "Available commands:\n"
+                "  /exit, /help, /status\n"
+                "  /details, /hide-details\n"
+                "  /suggestions, /hide-suggestions\n"
+                "\nUse natural language for philosophical inquiry."
+            }
 
     if cmd == "/details":
         session.current_focus.toggle_state.show_details = True
@@ -126,9 +132,11 @@ async def _run_propose_workstream(
         render_response(response, session.current_focus)
         return response
     except Exception as exc:
+        # Put details only in `error` so the Summary panel does not duplicate them.
         err = {
             "error": f"Failed to run {stripped.split()[0]}: {exc}",
-            "message": f"Failed to run command: {exc}",
+            "message": f"Failed to run {stripped.split()[0]}.",
+            "implemented": False,
         }
         render_response(err, session.current_focus)
         return err

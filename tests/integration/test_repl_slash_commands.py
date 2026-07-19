@@ -37,6 +37,8 @@ async def test_help_via_repl(
         result = await _process_input("/help", session, mock_coordinator, mock_llm, test_mode=True)
     assert result is not None
     assert "commands" in result["message"].lower()
+    # Full slash_commands registry, not the local stub list
+    assert "not yet implemented" in result["message"].lower() or "*" in result["message"]
 
 
 @pytest.mark.asyncio
