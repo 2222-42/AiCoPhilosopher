@@ -10,12 +10,18 @@ from typing import Any
 
 import click
 
-DEFAULT_WORKSPACE = Path("projects")
 CURRENT_PROJECT_FILE = Path(".current_project")
 
 
 def _get_workspace() -> Path:
-    return DEFAULT_WORKSPACE
+    """Return the projects directory from Config (single source of truth).
+
+    Uses ``AICOPH_WORKSPACE_DIR`` (default ``~/.aicophilosopher``); projects
+    are stored under ``<workspace>/projects/`` to match FileSystemAdapter.
+    """
+    from aicophilosopher.domain.services.config import Config
+
+    return Config().projects_dir()
 
 
 def _ensure_workspace() -> None:
@@ -487,10 +493,6 @@ def start_workstream(
     """Launch a workstream using the appropriate AI agent."""
     import asyncio
 
-    from aicophilosopher.application.services.workstream_persistence import (
-        persist_workstream_results,
-    )
-
     proj_id = _get_current_project_id()
     if proj_id is None:
         click.echo("No active project. Use `new-project` or `open-project` first.")
@@ -499,28 +501,60 @@ def start_workstream(
     click.echo(f"Launching {workstream_type} workstream...")
 
     # Load project question as default instruction
-    proj_dir = _project_dir(proj_id)
-    proj_meta = json.loads((proj_dir / "metadata.json").read_text())
+    proj_meta = json.loads((_project_dir(proj_id) / "metadata.json").read_text())
     default_query = str(proj_meta.get("original_question", proj_meta.get("title", "")))
-    query = instructions or default_query
 
     # Parse traditions if provided
-    kwargs: dict[str, object] = {}
+    trad_list: list[str] | None = None
     if traditions:
-        kwargs["traditions"] = [t.strip() for t in traditions.split(",")]
+        trad_list = [t.strip() for t in traditions.split(",")]
 
-    result = asyncio.run(_run_workstream_agent(workstream_type, proj_id, query, kwargs))
+    summary = asyncio.run(
+        _dispatch_workstream(
+            workstream_type,
+            proj_id,
+            instructions or default_query,
+            trad_list,
+        )
+    )
+    click.echo()
+    click.echo(f"Workstream '{workstream_type}' completed.")
+    if summary is not None:
+        click.echo(
+            f"Persisted: {summary['hypotheses_added']} hypotheses → metadata/jsonl; "
+            f"document updated; report: {summary['report_path']}"
+        )
+        click.echo("  View with: aicophilosopher show-hypotheses | show-document")
+
+
+async def _dispatch_workstream(
+    workstream_type: str,
+    proj_id: str,
+    query: str,
+    trad_list: list[str] | None,
+) -> dict[str, Any] | None:
+    """Run the agent, print results, and persist to living document / hypotheses."""
+    from aicophilosopher.application.services.workstream_persistence import (
+        persist_workstream_results,
+    )
+
+    kwargs: dict[str, object] = {}
+    if trad_list:
+        kwargs["traditions"] = trad_list
+
+    try:
+        result = await _run_workstream_agent(workstream_type, proj_id, query, kwargs)
+    except ValueError:
+        click.echo(f"Unknown workstream type: {workstream_type}")
+        return None
+
     _echo_workstream_result(workstream_type, result)
 
     # Persist hypotheses + living document so show-* commands can read them.
-    summary = persist_workstream_results(proj_dir, workstream_type, result)
-    click.echo()
-    click.echo(f"Workstream '{workstream_type}' completed.")
-    click.echo(
-        f"Persisted: {summary['hypotheses_added']} hypotheses → metadata/jsonl; "
-        f"document updated; report: {summary['report_path']}"
+    summary = persist_workstream_results(
+        _project_dir(proj_id), workstream_type, result
     )
-    click.echo("  View with: aicophilosopher show-hypotheses | show-document")
+    return summary
 
 
 @cli.command()
@@ -705,19 +739,27 @@ def export(fmt: str = "markdown") -> None:
     click.echo(f"Export format: {fmt}")
 
 
-@cli.command()
+@cli.command("config")
 @click.argument("key", required=False)
 @click.argument("value", required=False)
-def config(key: str | None = None, value: str | None = None) -> None:
-    """View or set configuration."""
+def config_cmd(key: str | None = None, value: str | None = None) -> None:
+    """View or set configuration (env prefix: AICOPH_)."""
+    from aicophilosopher.domain.services.config import Config
+
+    cfg = Config()
     if key is None:
-        click.echo("Current configuration:")
-        click.echo("  llm.backend: ollama")
-        click.echo("  workspace: ./projects/")
+        click.echo("Current configuration (env prefix AICOPH_):")
+        click.echo(f"  llm.backend: {cfg.llm_backend}")
+        click.echo(f"  llm.model: {cfg.llm_model or '(default)'}")
+        click.echo(f"  workspace_dir: {cfg.workspace_dir}")
+        click.echo(f"  workspace (resolved): {cfg.resolved_workspace_dir()}")
+        click.echo(f"  projects_dir: {cfg.projects_dir()}")
+        click.echo(f"  allow_external_search: {cfg.allow_external_search}")
+        click.echo(f"  log_level: {cfg.log_level}")
     elif value is None:
         raise click.UsageError("Usage: config <key> <value>")
     else:
-        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP)")
+        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP; set AICOPH_* env vars)")
 
 
 @cli.command()

@@ -239,8 +239,8 @@ class TestCliPersistenceRoundtrip:
 
         from aicophilosopher.presentation import commands as cmd_mod
 
-        # Point CLI workspace at tmp_path so we don't pollute real projects/
-        monkeypatch.setattr(cmd_mod, "DEFAULT_WORKSPACE", tmp_path)
+        # Point CLI workspace at tmp_path via Config (Issue #62 / AICOPH_WORKSPACE_DIR)
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path / "workspace"))
         monkeypatch.setattr(cmd_mod, "CURRENT_PROJECT_FILE", tmp_path / ".current_project")
         monkeypatch.chdir(tmp_path)
 
