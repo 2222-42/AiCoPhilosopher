@@ -24,7 +24,9 @@ Start with a philosophical question — it can be as vague as you like:
 aicophilosopher new-project "What is abstraction?"
 ```
 
-This creates a persistent workspace under `projects/<project_id>/` containing:
+This creates a persistent workspace under
+`~/.aicophilosopher/projects/<project_id>/`
+(override with `AICOPH_WORKSPACE_DIR`) containing:
 - `living_document.md` — your working paper
 - `dialectical_history.jsonl` — complete argument history
 - `hypotheses.jsonl` — all hypotheses with status
@@ -211,7 +213,6 @@ aicophilosopher export markdown
 All core features work without network access. External literature APIs are **off by default**.
 
 ```bash
-# Explicit offline (default). Env prefix is AICOPH_.
 export AICOPH_ALLOW_EXTERNAL_SEARCH=false
 aicophilosopher new-project "What is truth?"
 ```

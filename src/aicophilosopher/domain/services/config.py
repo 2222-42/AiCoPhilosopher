@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -5,8 +6,18 @@ from pydantic_settings import BaseSettings
 
 LLMBackend = Literal["ollama", "claude", "gemini"]
 
+# Canonical default workspace root (override with AICOPH_WORKSPACE_DIR).
+DEFAULT_WORKSPACE_DIR = "~/.aicophilosopher"
+
 
 class Config(BaseSettings):
+    """Application configuration.
+
+    All settings are loaded from environment variables with the ``AICOPH_`` prefix
+    (e.g. ``AICOPH_LLM_BACKEND``, ``AICOPH_WORKSPACE_DIR``). A ``.env`` file is
+    also read when present.
+    """
+
     model_config = {"env_prefix": "AICOPH_", "env_file": ".env", "extra": "ignore"}
 
     llm_backend: LLMBackend = Field(default="ollama", description="LLM backend: ollama, claude, gemini")
@@ -18,9 +29,28 @@ class Config(BaseSettings):
     allow_external_agents: bool = Field(default=False, description="Allow external agent integration")
     consent_required: bool = Field(default=True, description="Require consent for external services")
 
-    workspace_dir: str = Field(default="~/.aicophilosopher", description="Workspace root directory")
+    workspace_dir: str = Field(
+        default=DEFAULT_WORKSPACE_DIR,
+        description="Workspace root directory (projects live under <workspace>/projects/)",
+    )
     log_level: str = Field(default="INFO", description="Log level: DEBUG, INFO, WARNING, ERROR")
     project_dir: str = Field(default="", description="Override project directory")
 
     hermes_enabled: bool = Field(default=False, description="Enable Hermes Agent bridge")
     opencode_enabled: bool = Field(default=False, description="Enable OpenCode Go bridge")
+
+    def resolved_workspace_dir(self) -> Path:
+        """Return the expanded absolute workspace root.
+
+        This is the single source of truth for where application data lives.
+        Projects are stored under ``<workspace>/projects/<project_id>/``
+        (see :meth:`projects_dir` and FileSystemAdapter).
+        """
+        return Path(self.workspace_dir).expanduser().resolve()
+
+    def projects_dir(self) -> Path:
+        """Return the directory that contains individual project folders.
+
+        Layout matches FileSystemAdapter: ``{workspace_dir}/projects/``.
+        """
+        return self.resolved_workspace_dir() / "projects"
