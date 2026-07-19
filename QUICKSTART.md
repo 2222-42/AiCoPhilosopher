@@ -33,7 +33,9 @@ python -c "import aicophilosopher; print(aicophilosopher.__version__)"
 aicophilosopher new-project "What is the nature of abstraction?"
 ```
 
-This creates a persistent workspace under `projects/<project_id>/`.
+This creates a persistent workspace under
+`~/.aicophilosopher/projects/<project_id>/`
+(override root with `AICOPH_WORKSPACE_DIR`).
 
 ### 2. Refine your question
 
@@ -78,7 +80,7 @@ aicophilosopher export html
 The AI Co-Philosopher operates fully offline by default. To disable external search:
 
 ```bash
-export ALLOW_EXTERNAL_SEARCH=false
+export AICOPH_ALLOW_EXTERNAL_SEARCH=false
 aicophilosopher new-project "What is truth?"
 ```
 
@@ -86,19 +88,22 @@ All core features (argumentation, concept analysis, critical review, synthesis) 
 
 ## Configuration
 
-Create a `.env` file in the project root:
+All settings use the **`AICOPH_`** environment variable prefix (see `Config` in
+`src/aicophilosopher/domain/services/config.py`). Create a `.env` file in the
+project root:
 
 ```env
 # LLM backend (optional; heuristic mode works without LLM)
-LLM_BACKEND=ollama              # ollama | claude | gemini
-LLM_MODEL=llama3                # model name
+AICOPH_LLM_BACKEND=ollama              # ollama | claude | gemini
+AICOPH_LLM_MODEL=llama3                # model name
+# AICOPH_LLM_API_KEY=...               # required for claude / gemini
 
-# Storage
-WORKSPACE_DIR=./projects        # where project data lives
+# Storage — workspace root (projects live under <workspace>/projects/)
+AICOPH_WORKSPACE_DIR=~/.aicophilosopher
 
 # Privacy
-ALLOW_EXTERNAL_SEARCH=false     # disable PhilPapers/SEP search
-LOG_LEVEL=INFO                  # DEBUG | INFO | WARNING | ERROR
+AICOPH_ALLOW_EXTERNAL_SEARCH=false     # disable PhilPapers/SEP search
+AICOPH_LOG_LEVEL=INFO                  # DEBUG | INFO | WARNING | ERROR
 ```
 
 ## Running Tests

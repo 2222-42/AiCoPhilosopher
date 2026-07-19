@@ -18,6 +18,9 @@ lint:
 format:
 	ruff format $(SRC) $(TEST) $(SCRIPTS)
 
+# Strict: mypy failures fail this target (and therefore `make check`).
+# Pre-existing type debt on main is tolerated in CI only — see the Typecheck
+# step `continue-on-error: true` in `.github/workflows/ci.yml`.
 typecheck:
 	$(PYTHON) -m mypy $(SRC)
 
