@@ -201,7 +201,7 @@ aicophilosopher export markdown
 All core features work without network access:
 
 ```bash
-export ALLOW_EXTERNAL_SEARCH=false
+export AICOPH_ALLOW_EXTERNAL_SEARCH=false
 aicophilosopher new-project "What is truth?"
 ```
 

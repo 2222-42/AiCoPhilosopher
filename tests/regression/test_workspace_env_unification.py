@@ -94,6 +94,20 @@ class TestIssue62DocsEnvNames:
         )
         assert bare == [], f"QUICKSTART still documents bare env names: {bare}"
 
+
+    def test_usage_uses_aicoph_prefix(self) -> None:
+        text = (REPO_ROOT / "docs" / "usage.md").read_text(encoding="utf-8")
+        for name in (
+            "AICOPH_WORKSPACE_DIR",
+            "AICOPH_ALLOW_EXTERNAL_SEARCH",
+        ):
+            assert name in text, f"docs/usage.md missing {name}"
+        bare = re.findall(
+            r"(?m)^(?:export\s+)?(LLM_BACKEND|WORKSPACE_DIR|ALLOW_EXTERNAL_SEARCH|LOG_LEVEL)=",
+            text,
+        )
+        assert bare == [], f"docs/usage.md still documents bare env names: {bare}"
+
     def test_pyproject_homepage_points_to_org(self) -> None:
         text = (REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8")
         assert "github.com/2222-42/AiCoPhilosopher" in text

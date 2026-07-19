@@ -45,10 +45,10 @@ def test_open_project() -> None:
     # Extract project ID from output
     import re
     m = re.search(r"ID: (proj-\w+)", result.output)
-    if m:
-        result = runner.invoke(cli, ["open-project", m.group(1)])
-        assert result.exit_code == 0
-        assert "Opened project" in result.output
+    assert m is not None, f"project ID not found in new-project output: {result.output!r}"
+    result = runner.invoke(cli, ["open-project", m.group(1)])
+    assert result.exit_code == 0
+    assert "Opened project" in result.output
 
 
 def test_archive_project() -> None:
@@ -56,9 +56,9 @@ def test_archive_project() -> None:
     assert result.exit_code == 0
     import re
     m = re.search(r"ID: (proj-\w+)", result.output)
-    if m:
-        result = runner.invoke(cli, ["archive-project", m.group(1)], input="y\n")
-        assert result.exit_code == 0
+    assert m is not None, f"project ID not found in new-project output: {result.output!r}"
+    result = runner.invoke(cli, ["archive-project", m.group(1)], input="y\n")
+    assert result.exit_code == 0
 
 
 def test_refine_goal() -> None:
@@ -118,7 +118,8 @@ def test_show_dead_ends() -> None:
 
 def test_add_note() -> None:
     # Need an active project for note persistence under workspace
-    runner.invoke(cli, ["new-project", "NoteHost"])
+    created = runner.invoke(cli, ["new-project", "NoteHost"])
+    assert created.exit_code == 0, f"new-project failed: {created.output!r}"
     result = runner.invoke(cli, ["add-note", "Important insight", "--attach-to", "hyp-001"])
     assert result.exit_code == 0
     assert "hyp-001" in result.output
