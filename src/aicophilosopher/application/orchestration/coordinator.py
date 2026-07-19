@@ -1,6 +1,10 @@
 from typing import Any
 
 from aicophilosopher.application.orchestration.base import BaseAgent
+from aicophilosopher.application.services.workstream_runner import (
+    run_workstream_agent,
+    summarize_agent_result,
+)
 
 CLARIFICATION_QUESTIONS = [
     "Thank you for your question. Could you clarify which philosophical tradition or methodological framework you're approaching this from?",
@@ -137,39 +141,103 @@ class ProjectCoordinatorAgent(BaseAgent):
             "approved_goal": self._goal_proposed,
         }
 
+    async def _maybe_bridge_delegate(self, workstream_type: str) -> dict[str, Any] | None:
+        """Optionally delegate via external bridge (best-effort, never required)."""
+        if self.external_bridge is None:
+            return None
+        try:
+            return await self.external_bridge.request(
+                endpoint="delegate_task",
+                payload={
+                    "prompt": (
+                        f"You are a philosophical research agent executing a workstream.\n"
+                        f"Goal: {self._goal_proposed}\n"
+                        f"Workstream type: {workstream_type}\n"
+                        f"Execute this workstream and return your findings."
+                    ),
+                },
+                consent_scope="workstream_delegation",
+            )
+        except Exception:
+            return None
+
+
+    @staticmethod
+    def _agent_confidence(agent_result: dict[str, Any], default: float = 0.6) -> float:
+        """Read confidence from heterogeneous agent result shapes."""
+        for key in (
+            "confidence",
+            "overall_confidence",
+            "synthesis_confidence",
+            "adversarial_confidence",
+        ):
+            val = agent_result.get(key)
+            if val is None:
+                continue
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                continue
+        return default
+
+    def _collect_prior_outputs(self) -> list[dict[str, object]]:
+        """Build synthesis inputs from completed workstreams with agent results."""
+        outputs: list[dict[str, object]] = []
+        for wid, ws in self.active_workstreams.items():
+            agent_result = ws.get("agent_result")
+            if not agent_result or agent_result.get("error"):
+                continue
+            conf = self._agent_confidence(agent_result)
+            outputs.append(
+                {
+                    "workstream_id": wid,
+                    "type": ws.get("type", "unknown"),
+                    "results": summarize_agent_result(str(ws.get("type", "")), agent_result),
+                    "confidence": conf,
+                    "claims": [
+                        {
+                            "text": summarize_agent_result(str(ws.get("type", "")), agent_result),
+                            "confidence": conf,
+                            "origin": wid,
+                        }
+                    ],
+                }
+            )
+        return outputs
+
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
             return {"error": "Cannot start workstream: no approved goals. Use `approve_goal` first."}
 
-        # If external bridge is available, delegate the workstream
-        bridge_result = None
-        if self.external_bridge is not None:
-            try:
-                bridge_result = await self.external_bridge.request(
-                    endpoint="delegate_task",
-                    payload={
-                        "prompt": (
-                            f"You are a philosophical research agent executing a workstream.\n"
-                            f"Goal: {self._goal_proposed}\n"
-                            f"Workstream type: {workstream_type}\n"
-                            f"Execute this workstream and return your findings."
-                        ),
-                    },
-                    consent_scope="workstream_delegation",
-                )
-            except Exception:
-                bridge_result = None
+        # Optional external bridge (does not replace local agent execution)
+        bridge_result = await self._maybe_bridge_delegate(workstream_type)
 
+        query = self._goal_proposed or ""
+        prior = self._collect_prior_outputs()
+        try:
+            agent_result = await run_workstream_agent(
+                workstream_type,
+                query,
+                agent_id=f"coord-{self.project_id}",
+                prior_outputs=prior or None,
+            )
+        except Exception as exc:
+            agent_result = {"error": str(exc)}
+
+        status = "failed" if agent_result.get("error") else "completed"
         ws_id = f"ws-{workstream_type}-{len(self.active_workstreams) + 1}"
         self.active_workstreams[ws_id] = {
             "workstream_id": ws_id,
             "type": workstream_type,
-            "status": "running",
+            "status": status,
             "goal": self._goal_proposed,
             "bridge_result": bridge_result,
+            "agent_result": agent_result,
         }
 
-        msg = f"Workstream '{workstream_type}' launched as {ws_id}."
+        agent_summary = summarize_agent_result(workstream_type, agent_result)
+        msg = f"Workstream '{workstream_type}' launched as {ws_id} — {status}."
+        msg += f"\nAgent result: {agent_summary}"
         if bridge_result and bridge_result.get("status") == "success":
             output_preview = str(bridge_result.get("data", {}).get("output", ""))[:200]
             msg += f"\n\nOpenCode Go response:\n{output_preview}"
@@ -178,6 +246,9 @@ class ProjectCoordinatorAgent(BaseAgent):
             "message": msg,
             "workstream_type": workstream_type,
             "workstream_id": ws_id,
+            "status": status,
+            "agent_result": agent_result,
+            "details": agent_summary,
             "active_workstreams": [
                 f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
             ],
@@ -226,20 +297,25 @@ class ProjectCoordinatorAgent(BaseAgent):
             "stalled": 0,
         }
 
+    def _format_ws_log_line(self, wid: str, ws: dict[str, Any]) -> str:
+        agent_result = ws.get("agent_result")
+        if agent_result:
+            preview = summarize_agent_result(str(ws.get("type", "")), agent_result)
+            return f"{wid} — {ws['status']} | {preview}"
+
+        br = ws.get("bridge_result")
+        preview = ""
+        if br and br.get("status") == "success":
+            output = br.get("data", {}).get("output", "")
+            preview = output[:80] + ("..." if len(output) > 80 else "")
+        return f"{wid} — {ws['status']} | {preview}"
+
     def _get_workstream_logs(self, workstream_id: str) -> dict[str, Any]:
         """Return output/logs for a specific workstream."""
         if not workstream_id:
-            # List all workstreams
             if not self.active_workstreams:
                 return {"summary": "No workstreams running.", "active_workstreams": []}
-            lines = []
-            for wid, ws in self.active_workstreams.items():
-                br = ws.get("bridge_result")
-                preview = ""
-                if br and br.get("status") == "success":
-                    output = br.get("data", {}).get("output", "")
-                    preview = output[:80] + ("..." if len(output) > 80 else "")
-                lines.append(f"{wid} — {ws['status']} | {preview}")
+            lines = [self._format_ws_log_line(wid, ws) for wid, ws in self.active_workstreams.items()]
             return {
                 "summary": "Active workstreams:\n" + "\n".join(lines),
                 "active_workstreams": [
@@ -249,15 +325,33 @@ class ProjectCoordinatorAgent(BaseAgent):
 
         ws = self.active_workstreams.get(workstream_id)
         if ws is None:
-            return {"error": f"Workstream '{workstream_id}' not found. Active: {list(self.active_workstreams)}"}
-        br = ws.get("bridge_result")
-        output = ""
-        if br and br.get("status") == "success":
-            output = br.get("data", {}).get("output", "")
+            return {
+                "error": f"Workstream '{workstream_id}' not found. Active: {list(self.active_workstreams)}"
+            }
+
+        agent_result = ws.get("agent_result")
+        if agent_result:
+            import json
+
+            details = json.dumps(agent_result, default=str, indent=2)
+            agent_summary = summarize_agent_result(str(ws.get("type", "")), agent_result)
+        else:
+            br = ws.get("bridge_result")
+            details = ""
+            if br and br.get("status") == "success":
+                details = str(br.get("data", {}).get("output", ""))
+            agent_summary = details[:80] if details else "(no output yet — workstream may still be running)"
+
         return {
-            "summary": f"Workstream: {workstream_id}\nType: {ws['type']}\nStatus: {ws['status']}",
-            "details": output or "(no output yet — workstream may still be running)",
+            "summary": (
+                f"Workstream: {workstream_id}\n"
+                f"Type: {ws['type']}\n"
+                f"Status: {ws['status']}\n"
+                f"Result: {agent_summary}"
+            ),
+            "details": details or "(no output yet — workstream may still be running)",
             "epistemic_status": f"Status: {ws['status']}",
+            "agent_result": agent_result,
         }
 
     def _user_utterances(self) -> list[str]:
@@ -326,7 +420,12 @@ class ProjectCoordinatorAgent(BaseAgent):
             "goal_approved": self._goal_approved,
             "dialogue_history": self.dialogue_history,
             "active_workstreams": {
-                wid: {"type": ws["type"], "status": ws["status"], "goal": ws.get("goal")}
+                wid: {
+                    "type": ws["type"],
+                    "status": ws["status"],
+                    "goal": ws.get("goal"),
+                    "agent_result": ws.get("agent_result"),
+                }
                 for wid, ws in self.active_workstreams.items()
             },
         }
@@ -346,4 +445,5 @@ class ProjectCoordinatorAgent(BaseAgent):
                 "type": ws.get("type", ""),
                 "status": ws.get("status", "running"),
                 "goal": ws.get("goal", ""),
+                "agent_result": ws.get("agent_result"),
             }
