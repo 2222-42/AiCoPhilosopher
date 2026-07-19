@@ -84,3 +84,70 @@ async def test_status_before_any_goal(coordinator: ProjectCoordinatorAgent) -> N
     assert result.get("goal_approved") is False
     assert result.get("active_hypotheses") == 0
     assert result.get("refuted_hypotheses") == 0
+
+
+@pytest.mark.asyncio
+async def test_synthesize_goal_reflects_dialogue_history(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
+    """_synthesize_goal incorporates the research question and clarification answers."""
+    turns = [
+        "What is the nature of free will?",
+        "Analytic philosophy and action theory",
+        "agency, moral responsibility, determinism",
+        "A clear map of compatibilist vs libertarian positions",
+        "Frankfurt, Strawson, and van Inwagen",
+    ]
+    result: dict = {}
+    for turn in turns:
+        result = await coordinator.run(turn)
+
+    assert result["dialogue_state"] == "goal_proposed"
+    goal = result["proposed_goal"]
+    assert "What is the nature of free will" in goal
+    assert "Analytic philosophy and action theory" in goal
+    assert "agency, moral responsibility, determinism" in goal
+    assert "compatibilist vs libertarian" in goal
+    assert "Frankfurt" in goal
+    assert "living document" in goal
+
+
+def test_synthesize_goal_empty_history_uses_default(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
+    """Empty dialogue_history falls back to the default goal template."""
+    goal = coordinator._synthesize_goal()
+    assert "philosophical question" in goal
+    assert "living document" in goal
+
+
+def test_synthesize_goal_single_question_only(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
+    """A lone research question is still reflected without aspect constraints."""
+    coordinator.dialogue_history = [
+        {"role": "user", "content": "Is knowledge justified true belief?"},
+    ]
+    goal = coordinator._synthesize_goal()
+    assert "Is knowledge justified true belief" in goal
+    assert "Constraints and context from dialogue" not in goal
+    assert "living document" in goal
+
+
+@pytest.mark.asyncio
+async def test_refine_goal_incorporates_new_input(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
+    """refine_goal re-synthesizes using the additional user utterance."""
+    for i in range(5):
+        result = await coordinator.run(f"seed turn {i}: base topic free will")
+        if result.get("dialogue_state") == "goal_proposed":
+            break
+
+    refined = await coordinator.run(
+        command="refine_goal",
+        user_input="Prefer phenomenological method over analytic reconstruction",
+    )
+    assert refined["dialogue_state"] == "goal_proposed"
+    assert "phenomenological method" in refined["proposed_goal"]
+    assert "seed turn 0: base topic free will" in refined["proposed_goal"]

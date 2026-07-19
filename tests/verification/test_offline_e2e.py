@@ -80,13 +80,14 @@ class TestNoOpHonesty:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """export either writes a real artifact or fails with Not implemented."""
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         runner.invoke(cli, ["new-project", "Export Probe", "-q", "probe?"])
         result = runner.invoke(cli, ["export", "markdown"])
         if result.exit_code == 0:
             # Real effect: some export artifact or non-empty living doc copy
-            exports = list(Path(".").rglob("*.md")) + list(Path(".").rglob("exports/**/*"))
+            exports = list(tmp_path.rglob("*.md")) + list(tmp_path.rglob("exports/**/*"))
             wrote = any(p.is_file() and p.stat().st_size > 0 for p in exports)
             # Also accept output that clearly references a written path
             wrote = wrote or bool(
@@ -99,6 +100,7 @@ class TestNoOpHonesty:
     def test_show_dead_ends_is_honest_or_real(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
         runner.invoke(cli, ["new-project", "DeadEnd Probe"])
@@ -126,6 +128,8 @@ class TestWorkstreamResultsPersist:
     def test_argumentation_workstream_leaves_artifacts(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Align with Config.projects_dir layout (#71 / #62)
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
@@ -148,7 +152,7 @@ class TestWorkstreamResultsPersist:
         assert "Argumentation Results" in started.output
         assert "completed" in started.output.lower()
 
-        proj = Path("projects") / project_id
+        proj = tmp_path / "projects" / project_id
         ws_dir = proj / "workstreams"
         assert ws_dir.is_dir(), "workstreams/ directory must exist"
 
@@ -183,6 +187,7 @@ class TestWorkstreamResultsPersist:
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Second workstream type — still offline, still durable."""
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path))
         monkeypatch.chdir(tmp_path)
         runner = CliRunner()
 
@@ -198,7 +203,7 @@ class TestWorkstreamResultsPersist:
         started = runner.invoke(cli, ["start-workstream", "concept_analysis"])
         assert started.exit_code == 0, started.output
 
-        ws_dir = Path("projects") / project_id / "workstreams"
+        ws_dir = tmp_path / "projects" / project_id / "workstreams"
         result_files = list(ws_dir.glob("*_result.json"))
         assert result_files
         payload = json.loads(result_files[0].read_text(encoding="utf-8"))

@@ -50,7 +50,7 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/anomalyco/AiCoPhilosopher"
+Homepage = "https://github.com/2222-42/AiCoPhilosopher"
 
 [project.scripts]
 aicophilosopher = "aicophilosopher.presentation.cli:main"
