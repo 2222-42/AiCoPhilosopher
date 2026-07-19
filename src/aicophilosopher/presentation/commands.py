@@ -846,21 +846,22 @@ def config_cmd(key: str | None = None, value: str | None = None) -> None:
     """View configuration (read-only). Setting values is not persisted."""
     from aicophilosopher.domain.services.config import Config
 
+    # Do not swallow Config errors — mis-set AICOPH_* / .env must surface.
     try:
         cfg = Config()
-    except Exception:
-        cfg = Config(
-            llm_backend="ollama",  # type: ignore[call-arg]
-            llm_model="",
-            llm_api_key="",
-        )
+    except Exception as exc:
+        raise click.ClickException(
+            f"Failed to load configuration: {exc}. "
+            "Check AICOPH_* environment variables and .env."
+        ) from exc
 
+    # Keys are shell-friendly identifiers usable with `config <key>`.
     display = {
         "llm.backend": cfg.llm_backend,
         "llm.model": cfg.llm_model or "(default)",
         "llm.temperature": cfg.llm_temperature,
         "workspace_dir": cfg.workspace_dir,
-        "workspace (resolved)": cfg.resolved_workspace_dir(),
+        "workspace.resolved": cfg.resolved_workspace_dir(),
         "projects_dir": cfg.projects_dir(),
         "log_level": cfg.log_level,
         "allow_external_search": cfg.allow_external_search,

@@ -296,6 +296,25 @@ def test_config_get_known_key() -> None:
     assert "llm.backend" in result.output
 
 
+def test_config_get_workspace_resolved_shell_friendly_key() -> None:
+    """Lookup keys must be shell-friendly (no spaces/parentheses)."""
+    result = runner.invoke(cli, ["config", "workspace.resolved"])
+    assert result.exit_code == 0
+    assert "workspace.resolved" in result.output
+    # Listing must not advertise unusable keys with spaces
+    listed = runner.invoke(cli, ["config"])
+    assert "workspace (resolved)" not in listed.output
+    assert "workspace.resolved" in listed.output
+
+
+def test_config_surfaces_load_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Misconfigured AICOPH_* must not fall back to silent hard-coded defaults."""
+    monkeypatch.setenv("AICOPH_LLM_BACKEND", "not-a-valid-backend")
+    result = runner.invoke(cli, ["config"])
+    assert result.exit_code != 0
+    assert "Failed to load configuration" in result.output or "configuration" in result.output.lower()
+
+
 def test_request_help_not_implemented() -> None:
     result = runner.invoke(cli, ["request-help"])
     assert result.exit_code != 0
