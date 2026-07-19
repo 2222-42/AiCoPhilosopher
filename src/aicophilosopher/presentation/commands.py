@@ -10,12 +10,18 @@ from typing import Any
 
 import click
 
-DEFAULT_WORKSPACE = Path("projects")
 CURRENT_PROJECT_FILE = Path(".current_project")
 
 
 def _get_workspace() -> Path:
-    return DEFAULT_WORKSPACE
+    """Return the projects directory from Config (single source of truth).
+
+    Uses ``AICOPH_WORKSPACE_DIR`` (default ``~/.aicophilosopher``); projects
+    are stored under ``<workspace>/projects/`` to match FileSystemAdapter.
+    """
+    from aicophilosopher.domain.services.config import Config
+
+    return Config().projects_dir()
 
 
 def _ensure_workspace() -> None:
@@ -343,17 +349,8 @@ def refine_goal() -> None:
 ]))
 @click.option("--instructions", "-i", help="Additional instructions")
 @click.option("--traditions", "-t", help="Comma-separated tradition list (e.g. analytic,continental)")
-def start_workstream(
-    workstream_type: str, instructions: str | None = None, traditions: str | None = None
-) -> None:
+def start_workstream(workstream_type: str, instructions: str | None = None, traditions: str | None = None) -> None:
     """Launch a workstream using the appropriate AI agent."""
-    import asyncio
-
-    from aicophilosopher.application.services.workstream_runner import (
-        run_workstream_agent,
-        summarize_agent_result,
-    )
-
     proj_id = _get_current_project_id()
     if proj_id is None:
         click.echo("No active project. Use `new-project` or `open-project` first.")
@@ -361,47 +358,137 @@ def start_workstream(
 
     click.echo(f"Launching {workstream_type} workstream...")
 
+    # Load project question as default instruction
     proj_meta = json.loads((_project_dir(proj_id) / "metadata.json").read_text())
     default_query = str(proj_meta.get("original_question", proj_meta.get("title", "")))
-    trad_list = [t.strip() for t in traditions.split(",")] if traditions else None
-    query = instructions or default_query
 
-    async def _run() -> dict[str, Any]:
-        return await run_workstream_agent(
+    # Parse traditions if provided
+    trad_list: list[str] | None = None
+    if traditions:
+        trad_list = [t.strip() for t in traditions.split(",")]
+
+    import asyncio
+
+    asyncio.run(
+        _dispatch_workstream(
             workstream_type,
-            query,
-            agent_id=f"cli-{proj_id}",
-            traditions=trad_list,
+            proj_id,
+            instructions or default_query,
+            trad_list,
         )
-
-    result = asyncio.run(_run())
-    click.echo()
-    click.echo(f"=== {workstream_type} ===")
-    click.echo(summarize_agent_result(workstream_type, result))
-    _echo_workstream_details(workstream_type, result)
+    )
     click.echo()
     click.echo(f"Workstream '{workstream_type}' completed.")
 
 
-def _echo_workstream_details(workstream_type: str, result: dict[str, Any]) -> None:
-    """Print type-specific detail lines for CLI start-workstream."""
-    if result.get("error"):
-        click.echo(f"Error: {result['error']}")
+async def _dispatch_workstream(
+    workstream_type: str,
+    proj_id: str,
+    query: str,
+    trad_list: list[str] | None,
+) -> None:
+    """Run the agent corresponding to *workstream_type* and print results."""
+    kwargs: dict[str, object] = {}
+    if trad_list:
+        kwargs["traditions"] = trad_list
+
+    dispatch = {
+        "argumentation": _run_argumentation,
+        "critical_review": _run_critical_review,
+        "cross_traditional_comparison": _run_cross_traditional,
+        "synthesis": _run_synthesis,
+        "literature_search": _run_literature_search,
+        "concept_analysis": _run_concept_analysis,
+    }
+    handler = dispatch.get(workstream_type)
+    if handler is None:
+        click.echo(f"Unknown workstream type: {workstream_type}")
         return
-    if workstream_type == "argumentation":
-        for i, arg in enumerate(result.get("arguments", []), 1):
-            click.echo(f"\nPosition {i} [{arg.get('tradition', '?')}]:")
-            click.echo(f"  Conclusion: {arg.get('conclusion', '')}")
-            click.echo(f"  Confidence: {arg.get('confidence', '?')}")
-    elif workstream_type == "critical_review":
-        for f in result.get("fallacies", []):
-            click.echo(f"  [{f.get('severity', '?')}] {f.get('name', '?')}")
-    elif workstream_type == "synthesis":
-        doc = str(result.get("synthesized_document", ""))
-        if doc:
-            click.echo(doc[:500])
-    elif workstream_type == "concept_analysis":
-        click.echo(f"Concept map: {result.get('concept_map', 'no data')}")
+    await handler(proj_id, query, kwargs)
+
+
+async def _run_argumentation(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.argumentation import ArgumentationAgent
+
+    agent = ArgumentationAgent(agent_id=f"cli-{proj_id}")
+    result = await agent.run(query, **kwargs)
+    click.echo()
+    click.echo("=== Argumentation Results ===")
+    for i, arg in enumerate(result["arguments"], 1):
+        click.echo(f"\nPosition {i} [{arg.get('tradition', '?')}]:")
+        click.echo(f"  Conclusion: {arg.get('conclusion', '')}")
+        click.echo(f"  Confidence: {arg.get('confidence', '?')}")
+    click.echo(f"\nCompeting positions: {len(result.get('competing_positions', []))}")
+
+
+async def _run_critical_review(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.argumentation import ArgumentationAgent
+    from aicophilosopher.application.agents.critical_review import CriticalReviewAgent
+
+    agent = CriticalReviewAgent(agent_id=f"cli-{proj_id}")
+    arg_agent = ArgumentationAgent(agent_id=f"cli-arg-{proj_id}")
+    arg_result = await arg_agent.run(query, **kwargs)
+    review_input = arg_result["arguments"] + arg_result["competing_positions"]
+    result = await agent.run(review_input)
+    click.echo()
+    click.echo("=== Critical Review ===")
+    click.echo(f"Fallacies found: {len(result['fallacies'])}")
+    for f in result["fallacies"]:
+        click.echo(f"  [{f.get('severity', '?')}] {f.get('name', '?')}")
+    click.echo(f"Counter-arguments: {len(result['counter_arguments'])}")
+
+
+async def _run_cross_traditional(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.cross_traditional import (
+        CrossTraditionalComparisonAgent,
+    )
+
+    agent = CrossTraditionalComparisonAgent(agent_id=f"cli-{proj_id}")
+    result = await agent.run(query, **kwargs)
+    click.echo()
+    click.echo("=== Cross-Traditional Comparison ===")
+    click.echo(f"Bridges found: {len(result['bridge_map'])}")
+    click.echo(f"Incommensurabilities: {len(result['incommensurability_register'])}")
+
+
+async def _run_synthesis(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.synthesis import SynthesisAgent
+
+    agent = SynthesisAgent(agent_id=f"cli-{proj_id}")
+    result = await agent.run([
+        {
+            "workstream_id": "ws-1",
+            "type": "argumentation",
+            "results": "Argument analysis results would go here.",
+            "confidence": 0.7,
+            "claims": [{"text": "Key finding", "confidence": 0.8, "origin": "analysis"}],
+        },
+    ])
+    click.echo()
+    click.echo("=== Synthesis ===")
+    click.echo(result["synthesized_document"][:500])
+
+
+async def _run_literature_search(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.literature_search import LiteratureSearchAgent
+
+    agent = LiteratureSearchAgent(agent_id=f"cli-{proj_id}")
+    result = await agent.run(query, **kwargs)
+    click.echo()
+    click.echo("=== Literature Search ===")
+    click.echo(f"Results: {result.get('result_count', 0)}")
+    click.echo(f"Bridge notes: {len(result.get('bridge_notes', []))}")
+
+
+async def _run_concept_analysis(proj_id: str, query: str, kwargs: dict[str, object]) -> None:
+    from aicophilosopher.application.agents.concept_analysis import ConceptAnalysisAgent
+
+    agent = ConceptAnalysisAgent(agent_id=f"cli-{proj_id}")
+    result = await agent.run(query, **kwargs)
+    click.echo()
+    click.echo("=== Concept Analysis ===")
+    click.echo(f"Concept map: {result.get('concept_map', 'no data')}")
+
 
 
 @cli.command()
@@ -510,24 +597,23 @@ def compare_traditions(topic: str, traditions: str | None = None) -> None:
     """Cross-traditional comparison using the agent."""
     import asyncio
 
-    from aicophilosopher.application.services.workstream_runner import (
-        run_workstream_agent,
-        summarize_agent_result,
+    from aicophilosopher.application.agents.cross_traditional import (
+        CrossTraditionalComparisonAgent,
     )
 
     trad_list = [t.strip() for t in traditions.split(",")] if traditions else None
 
-    async def _run() -> dict[str, Any]:
-        return await run_workstream_agent(
-            "cross_traditional_comparison",
-            topic,
-            agent_id="cli-ct",
-            traditions=trad_list,
-        )
+    async def _run() -> None:
+        agent = CrossTraditionalComparisonAgent(agent_id="cli-ct")
+        kwargs: dict[str, object] = {}
+        if trad_list:
+            kwargs["traditions"] = trad_list
+        result = await agent.run(topic, **kwargs)
+        click.echo(f"\n=== Cross-Traditional: {topic} ===")
+        click.echo(f"Bridges: {len(result['bridge_map'])}")
+        click.echo(f"Incommensurabilities: {len(result['incommensurability_register'])}")
 
-    result = asyncio.run(_run())
-    click.echo(f"\n=== Cross-Traditional: {topic} ===")
-    click.echo(summarize_agent_result("cross_traditional_comparison", result))
+    asyncio.run(_run())
 
 
 @cli.command()
@@ -538,19 +624,27 @@ def export(fmt: str = "markdown") -> None:
     click.echo(f"Export format: {fmt}")
 
 
-@cli.command()
+@cli.command("config")
 @click.argument("key", required=False)
 @click.argument("value", required=False)
-def config(key: str | None = None, value: str | None = None) -> None:
-    """View or set configuration."""
+def config_cmd(key: str | None = None, value: str | None = None) -> None:
+    """View or set configuration (env prefix: AICOPH_)."""
+    from aicophilosopher.domain.services.config import Config
+
+    cfg = Config()
     if key is None:
-        click.echo("Current configuration:")
-        click.echo("  llm.backend: ollama")
-        click.echo("  workspace: ./projects/")
+        click.echo("Current configuration (env prefix AICOPH_):")
+        click.echo(f"  llm.backend: {cfg.llm_backend}")
+        click.echo(f"  llm.model: {cfg.llm_model or '(default)'}")
+        click.echo(f"  workspace_dir: {cfg.workspace_dir}")
+        click.echo(f"  workspace (resolved): {cfg.resolved_workspace_dir()}")
+        click.echo(f"  projects_dir: {cfg.projects_dir()}")
+        click.echo(f"  allow_external_search: {cfg.allow_external_search}")
+        click.echo(f"  log_level: {cfg.log_level}")
     elif value is None:
         raise click.UsageError("Usage: config <key> <value>")
     else:
-        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP)")
+        click.echo(f"Config '{key}' = '{value}' (not persisted in MVP; set AICOPH_* env vars)")
 
 
 @cli.command()

@@ -7,7 +7,6 @@ Usage:
 """
 
 import asyncio
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 from aicophilosopher.domain.entities.session import SessionState
@@ -91,35 +90,37 @@ def _mock_coordinator():
 # ── Main loop ──────────────────────────────────────────────────────────
 
 
-async def _handle_demo_slash(stripped: str, session: SessionState, coordinator: Any) -> str | None:
-    """Handle demo slash commands. Returns 'exit'/'continue'/None (not a slash)."""
+def _handle_demo_slash(stripped: str, session: SessionState) -> str | None:
+    """Handle demo slash commands. Returns 'continue'/'break' or None for NL."""
     if stripped == "/exit":
         print("Session saved. Goodbye!")
-        return "exit"
+        return "break"
+
     if stripped == "/help":
         print("Commands: /exit, /status, /details, /hide-details, /suggestions, /hide-suggestions")
         print("Or just type a philosophical question!\n")
         return "continue"
-    if stripped == "/status":
-        resp = await coordinator.run(command="status")
-        render_response(resp, session.current_focus)
-        return "continue"
+
     if stripped == "/details":
         session.current_focus.toggle_state.show_details = True
         print("[Details] section enabled.")
         return "continue"
+
     if stripped == "/hide-details":
         session.current_focus.toggle_state.show_details = False
         print("[Details] section hidden.")
         return "continue"
+
     if stripped == "/suggestions":
         session.current_focus.toggle_state.show_suggestions = True
         print("[Suggestions] section enabled.")
         return "continue"
+
     if stripped == "/hide-suggestions":
         session.current_focus.toggle_state.show_suggestions = False
         print("[Suggestions] section hidden.")
         return "continue"
+
     return None
 
 
@@ -140,6 +141,7 @@ async def main() -> None:
     print("Try: /help, /status, /details, /exit")
     print()
 
+    # Show welcome
     resp = await coordinator.run(user_input="")
     render_response(resp, session.current_focus)
 
@@ -154,12 +156,18 @@ async def main() -> None:
         if not stripped:
             continue
 
-        if stripped.startswith("/"):
-            action = await _handle_demo_slash(stripped, session, coordinator)
-            if action == "exit":
-                break
+        if stripped == "/status":
+            resp = await coordinator.run(command="status")
+            render_response(resp, session.current_focus)
             continue
 
+        action = _handle_demo_slash(stripped, session)
+        if action == "break":
+            break
+        if action == "continue":
+            continue
+
+        # Natural language → coordinator
         resp = await coordinator.run(user_input=stripped)
         render_response(resp, session.current_focus)
 

@@ -293,27 +293,25 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
     # ------------------------------------------------------------------
     # Send (real implementation)
     # ------------------------------------------------------------------
-    def _build_opencode_cmd(
-        self, prompt: str, model: str, workdir: str, attached_file: object
-    ) -> list[str]:
+    def _build_opencode_cmd(self, payload: dict[str, object], model: str, workdir: str) -> list[str]:
+        """Build the OpenCode Go CLI command list for a payload."""
+        prompt = str(payload.get("prompt", ""))
         cmd: list[str] = [
             self._get_opencode_bin(),
             "run",
-            "--format",
-            "json",
-            "--model",
-            model,
-            "--dir",
-            workdir,
+            "--format", "json",
+            "--model", model,
+            "--dir", workdir,
         ]
+        attached_file = payload.get("file")
         if attached_file and isinstance(attached_file, str):
             cmd.extend(["--file", attached_file])
         cmd.append(prompt)
         return cmd
 
     @staticmethod
-    def _parse_opencode_stdout(raw: str) -> tuple[str, str, dict[str, int]]:
-        """Parse OpenCode JSON-lines stdout into (output, session_id, tokens)."""
+    def _parse_opencode_output(raw: str) -> tuple[str, str, dict[str, int]]:
+        """Parse OpenCode Go JSON-lines stdout into (output, session_id, tokens)."""
         output_parts: list[str] = []
         session_id = ""
         tokens: dict[str, int] = {}
@@ -335,14 +333,12 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
             if msg_type in ("step_start", "step_finish"):
                 sid = data.get("sessionID") or part.get("sessionID", "")
                 if sid:
-                    session_id = sid
+                    session_id = str(sid)
 
             if msg_type == "step_finish":
                 t = part.get("tokens", {})
                 if isinstance(t, dict):
-                    tokens = {
-                        k: int(v) for k, v in t.items() if isinstance(v, (int, float))
-                    }
+                    tokens = {k: int(v) for k, v in t.items() if isinstance(v, (int, float))}
 
         return "\n".join(output_parts).strip(), session_id, tokens
 
@@ -367,7 +363,8 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
 
         model = str(payload.get("model") or self._default_model)
         workdir = str(payload.get("workdir") or os.getcwd())
-        cmd = self._build_opencode_cmd(prompt, model, workdir, payload.get("file"))
+        cmd = self._build_opencode_cmd(payload, model, workdir)
+
         logger.debug("OpenCodeGoAdapter: spawning %s", cmd)
 
         try:
@@ -376,7 +373,9 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=120
+            )
         except TimeoutError:
             return {
                 "status": "timeout",
@@ -392,7 +391,7 @@ class OpenCodeGoAdapter(ExternalAgentBridge):
                 "model": model,
             }
 
-        output, session_id, tokens = self._parse_opencode_stdout(stdout.decode())
+        output, session_id, tokens = self._parse_opencode_output(stdout.decode())
         return {
             "status": "completed",
             "output": output,
