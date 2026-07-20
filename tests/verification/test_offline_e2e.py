@@ -86,13 +86,11 @@ class TestNoOpHonesty:
         assert created.exit_code == 0, created.output
         result = runner.invoke(cli, ["export", "markdown"])
         if result.exit_code == 0:
+            # Real effect must be a non-empty file — printed keywords alone are not enough.
             exports = list(tmp_path.rglob("exports/**/*")) + list(
                 tmp_path.rglob("living_document.*")
             )
             wrote = any(p.is_file() and p.stat().st_size > 0 for p in exports)
-            wrote = wrote or bool(
-                re.search(r"export|wrote|saved|written|exported", result.output, re.I)
-            )
             _assert_not_silent_noop(result, real_effect=wrote)
         else:
             _assert_not_silent_noop(result, real_effect=False)
@@ -107,11 +105,15 @@ class TestNoOpHonesty:
         assert created.exit_code == 0, created.output
         result = runner.invoke(cli, ["show-dead-ends"])
         if result.exit_code == 0:
+            # Accept only an explicit empty-registry message or a structured listing.
             honest_empty = bool(
-                re.search(r"no dead end|0 dead|none|empty", result.output, re.I)
+                re.search(r"no dead ends(?: yet)?", result.output, re.I)
+            )
+            structured_list = bool(
+                re.search(r"dead ends\s*\(|failed exploration|exploration_id|\[fe-", result.output, re.I)
             )
             _assert_not_silent_noop(
-                result, real_effect=honest_empty or bool(result.output.strip())
+                result, real_effect=honest_empty or structured_list
             )
         else:
             _assert_not_silent_noop(result, real_effect=False)
@@ -159,7 +161,16 @@ class TestWorkstreamResultsPersist:
         ws_dir = proj / "workstreams"
         assert ws_dir.is_dir(), "workstreams/ directory must exist"
         report_files = list(ws_dir.glob("*_report.md"))
+        result_files = list(ws_dir.glob("*_result.json"))
         assert report_files, "expected at least one *_report.md artifact"
+        assert result_files, "expected at least one *_result.json artifact"
+
+        payload = json.loads(result_files[0].read_text(encoding="utf-8"))
+        assert payload.get("status") == "completed"
+        assert payload.get("type") == "argumentation"
+        assert payload.get("workstream_id")
+        agent_result = payload.get("result") or {}
+        assert agent_result.get("arguments"), "argumentation result must include arguments"
 
         meta = json.loads((proj / "metadata.json").read_text(encoding="utf-8"))
         workstreams = meta.get("workstreams") or {}
@@ -213,7 +224,13 @@ class TestWorkstreamResultsPersist:
         proj = tmp_path / "projects" / project_id
         ws_dir = proj / "workstreams"
         report_files = list(ws_dir.glob("*_report.md"))
+        result_files = list(ws_dir.glob("*_result.json"))
         assert report_files, "expected *_report.md from concept_analysis"
+        assert result_files, "expected *_result.json from concept_analysis"
+
+        payload = json.loads(result_files[0].read_text(encoding="utf-8"))
+        assert payload.get("type") == "concept_analysis"
+        assert "concept_map" in (payload.get("result") or {})
 
         meta = json.loads((proj / "metadata.json").read_text(encoding="utf-8"))
         workstreams = meta.get("workstreams") or {}
