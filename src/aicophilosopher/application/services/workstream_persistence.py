@@ -6,7 +6,8 @@ from the agent result and write them to:
 - ``metadata.json`` (``hypotheses`` list + ``workstreams`` map)
 - ``hypotheses.jsonl`` (append-only history)
 - ``living_document.md`` (new section for the workstream)
-- ``workstreams/<id>_report.md`` (raw structured report)
+- ``workstreams/<id>_report.md`` (human-readable structured report)
+- ``workstreams/<id>_result.json`` (machine-readable agent result payload)
 
 This keeps the CLI pathway self-contained (Issue #63) without requiring
 the Coordinator → Agent wiring from Issue #60.
@@ -523,7 +524,7 @@ def persist_workstream_results(
 
     Returns
     -------
-    dict with keys: workstream_id, hypotheses_added, document_updated, report_path
+    dict with keys: workstream_id, hypotheses_added, document_updated, report_path, result_path
     """
     project_dir = Path(project_dir)
     ws_id = workstream_id or _new_id("ws")
@@ -575,9 +576,23 @@ def persist_workstream_results(
         title = meta.get("title", "Living Document")
         doc_path.write_text(f"# {title}\n\n" + section + "\n", encoding="utf-8")
 
-    # ── workstream report ────────────────────────────────────────────
+    # ── workstream report + machine-readable result ─────────────────
     report_path = ws_dir / f"{ws_id}_report.md"
     report_path.write_text(report, encoding="utf-8")
+
+    result_path = ws_dir / f"{ws_id}_result.json"
+    result_payload = {
+        "workstream_id": ws_id,
+        "type": workstream_type,
+        "status": "completed",
+        "completed_at": _now(),
+        "result": result,
+        "hypothesis_ids": [h["hypothesis_id"] for h in hypotheses],
+    }
+    result_path.write_text(
+        json.dumps(result_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
 
     return {
         "workstream_id": ws_id,
@@ -585,6 +600,7 @@ def persist_workstream_results(
         "hypotheses": hypotheses,
         "document_updated": True,
         "report_path": str(report_path),
+        "result_path": str(result_path),
     }
 
 
