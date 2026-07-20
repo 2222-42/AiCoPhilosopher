@@ -466,6 +466,40 @@ _RESULT_SUMMARY_KEYS = (
 )
 
 
+
+def _load_metadata_for_persist(meta_path: Path) -> dict[str, Any]:
+    """Load project metadata for update, or empty dict if missing.
+
+    Raises ValueError if the file exists but is unreadable or not a JSON object,
+    after attempting to preserve corrupt content as ``*.json.corrupt``.
+    """
+    if not meta_path.exists():
+        return {}
+    try:
+        raw_meta = meta_path.read_text(encoding="utf-8")
+        loaded = json.loads(raw_meta)
+    except json.JSONDecodeError as exc:
+        backup = meta_path.with_suffix(".json.corrupt")
+        try:
+            backup.write_text(raw_meta, encoding="utf-8")
+        except OSError:
+            backup = meta_path
+        raise ValueError(
+            f"Project metadata is invalid JSON ({meta_path}). "
+            f"Corrupt file preserved at {backup}. Fix or restore before persisting."
+        ) from exc
+    except OSError as exc:
+        raise ValueError(
+            f"Could not read project metadata ({meta_path}): {exc}"
+        ) from exc
+    if not isinstance(loaded, dict):
+        raise ValueError(
+            f"Project metadata must be a JSON object ({meta_path}), "
+            f"got {type(loaded).__name__}."
+        )
+    return loaded
+
+
 def persist_workstream_results(
     project_dir: Path,
     workstream_type: str,
@@ -504,34 +538,7 @@ def persist_workstream_results(
     report = format_workstream_report(workstream_type, result, ws_id)
 
     # ── metadata.json ────────────────────────────────────────────────
-    # Fail fast on corrupt metadata rather than wiping the project with {}.
-    meta: dict[str, Any]
-    if meta_path.exists():
-        try:
-            raw_meta = meta_path.read_text(encoding="utf-8")
-            loaded = json.loads(raw_meta)
-        except json.JSONDecodeError as exc:
-            backup = meta_path.with_suffix(".json.corrupt")
-            try:
-                backup.write_text(raw_meta, encoding="utf-8")
-            except OSError:
-                backup = meta_path
-            raise ValueError(
-                f"Project metadata is invalid JSON ({meta_path}). "
-                f"Corrupt file preserved at {backup}. Fix or restore before persisting."
-            ) from exc
-        except OSError as exc:
-            raise ValueError(
-                f"Could not read project metadata ({meta_path}): {exc}"
-            ) from exc
-        if not isinstance(loaded, dict):
-            raise ValueError(
-                f"Project metadata must be a JSON object ({meta_path}), "
-                f"got {type(loaded).__name__}."
-            )
-        meta = loaded
-    else:
-        meta = {}
+    meta = _load_metadata_for_persist(meta_path)
 
     if not isinstance(meta.get("hypotheses"), list):
         meta["hypotheses"] = []
