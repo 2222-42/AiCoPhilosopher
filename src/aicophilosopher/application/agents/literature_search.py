@@ -43,11 +43,14 @@ class LiteratureSearchAgent:
         trad_list: list[str] = list(raw_traditions) if isinstance(raw_traditions, (list, tuple)) else DEFAULT_DOMAINS
 
         results = await self.search_tool.search(query, traditions=trad_list)
+        source_statuses = self.search_tool.get_source_statuses()
 
         bridge_notes = self._generate_bridge_notes(query, trad_list)
 
         bibliography = []
         for i, r in enumerate(results):
+            source = str(r.get("source", ""))
+            source_status = r.get("source_status") or source_statuses.get(source, "unknown")
             bibliography.append({
                 "id": f"ref-{i + 1}",
                 "title": r.get("title", ""),
@@ -55,7 +58,8 @@ class LiteratureSearchAgent:
                 "year": r.get("year"),
                 "abstract": r.get("abstract", ""),
                 "url": r.get("url", ""),
-                "source": r.get("source", ""),
+                "source": source,
+                "source_status": source_status,
                 "tradition_tag": r.get("tradition_tag", "analytic"),
                 "relevance_score": r.get("relevance_score", 0.5),
                 "bibtex": f"@article{{ref{i + 1},\n  title={{{r.get('title', '')}}},\n  year={{{r.get('year', 'n.d.')}}},\n}}",
@@ -67,5 +71,6 @@ class LiteratureSearchAgent:
             "result_count": len(bibliography),
             "bibliography": bibliography,
             "bridge_notes": bridge_notes,
+            "source_statuses": source_statuses,
             "confidence": 0.7 if results else 0.3,
         }

@@ -21,13 +21,19 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
         return {"action": "exit", "message": "Goodbye!"}
 
     if cmd == "/help":
-        return {
-            "message": "Available commands:\n"
-            "  /exit, /help, /status\n"
-            "  /details, /hide-details\n"
-            "  /suggestions, /hide-suggestions\n"
-            "\nUse natural language for philosophical inquiry."
-        }
+        # Prefer full registry help (marks unwired commands) over a local stub list.
+        try:
+            from aicophilosopher.presentation.slash_commands import dispatch
+
+            return dispatch("/help", session)
+        except ImportError:
+            return {
+                "message": "Available commands:\n"
+                "  /exit, /help, /status\n"
+                "  /details, /hide-details\n"
+                "  /suggestions, /hide-suggestions\n"
+                "\nUse natural language for philosophical inquiry."
+            }
 
     if cmd == "/details":
         session.current_focus.toggle_state.show_details = True
@@ -107,12 +113,41 @@ def _detect_workstream_launch(text: str) -> str | None:
     return None
 
 
+async def _run_propose_workstream(
+    slash_result: dict[str, Any],
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+) -> dict[str, Any]:
+    """Execute an inquiry slash action via Coordinator.propose_workstream."""
+    try:
+        response = await coordinator.run(
+            user_input=str(slash_result.get("user_input", "")),
+            command="propose_workstream",
+            workstream_type=str(slash_result.get("workstream_type", "literature_search")),
+        )
+        active = getattr(coordinator, "active_workstreams", None)
+        if isinstance(active, dict):
+            session.active_workstreams = list(active.keys())
+        render_response(response, session.current_focus)
+        return response
+    except Exception as exc:
+        # Put details only in `error` so the Summary panel does not duplicate them.
+        err = {
+            "error": f"Failed to run {stripped.split()[0]}: {exc}",
+            "message": f"Failed to run {stripped.split()[0]}.",
+            "implemented": False,
+        }
+        render_response(err, session.current_focus)
+        return err
+
+
 async def _process_slash_command(
     stripped: str,
     session: SessionState,
     coordinator: Any,
 ) -> dict[str, Any]:
-    """Handle slash commands (/status, /logs, /exit, …)."""
+    """Handle slash commands (/status, /logs, /exit, inquiry, honest unimplemented)."""
     cmd = stripped.strip().lower()
 
     # Route /status to coordinator for rich status display
@@ -156,6 +191,12 @@ async def _process_slash_command(
     if slash_result.get("action") == "exit":
         await _finalize(session, "user_exit")
         return slash_result
+
+    # Inquiry slash → Coordinator (real path; never silent success)
+    if slash_result.get("action") == "propose_workstream":
+        return await _run_propose_workstream(slash_result, stripped, session, coordinator)
+
+    # Local handlers and honest "Not implemented" responses from slash_commands
     render_response(slash_result, session.current_focus)
     return slash_result
 
@@ -232,29 +273,28 @@ async def _finalize(session: SessionState, reason: str, storage: Any = None) -> 
 
         sm = SessionManager(storage=storage)
         # Persist full session state (including config_snapshot) BEFORE finalizing
-        if sm._storage:
-            await sm._storage.save_session(_session_to_dict(session))
+        await sm.save_session(session)
         await sm.finalize_session(str(session.session_id), reason)
     except (ImportError, AttributeError):
         pass  # SessionManager not yet wired
 
 
-def _session_to_dict(session: SessionState) -> dict[str, object]:
-    """Convert SessionState to storage dict including config_snapshot."""
-    import json
-    d: dict[str, object] = {
-        "session_id": str(session.session_id),
-        "project_id": session.project_id,
-        "status": session.status.value,
-        "pid": session.pid,
-        "heartbeat_at": session.heartbeat_at.isoformat(),
-        "created_at": session.created_at.isoformat(),
-        "last_active_at": session.last_active_at.isoformat(),
-        "exit_reason": session.exit_reason,
-        "active_workstreams_json": json.dumps(session.active_workstreams),
-        "config_snapshot_json": json.dumps(session.config_snapshot or {}),
-    }
-    return d
+async def _reactivate_session(sm: Any, session: SessionState) -> SessionState:
+    """Mark a loaded session active under the current process and re-persist."""
+    import os
+    from datetime import UTC, datetime
+
+    session.status = SessionStatus.ACTIVE
+    session.pid = os.getpid()
+    now = datetime.now(UTC)
+    session.heartbeat_at = now
+    session.last_active_at = now
+    session.exit_reason = None
+    try:
+        await sm.save_session(session)
+    except (AttributeError, TypeError):
+        pass
+    return session
 
 
 async def _startup_flow(  # noqa: C901
@@ -274,34 +314,32 @@ async def _startup_flow(  # noqa: C901
 
     # Reclaim stale sessions
     try:
-        reclaimed = await sm.reclaim_stale_sessions()  # type: ignore[attr-defined]
+        reclaimed = await sm.reclaim_stale_sessions()
         if reclaimed > 0:
             print(f"[System] Reclaimed {reclaimed} stale session(s).")
     except (AttributeError, NotImplementedError):
         pass
 
     if project_id:
-        session = await sm.load_session(project_id)  # type: ignore[attr-defined]
+        session = await sm.load_session(project_id)
         if session:
             if session.status == SessionStatus.ACTIVE:
-                live = await sm.is_active_session_live(session.pid)  # type: ignore[attr-defined]
+                live = await sm.is_active_session_live(session.pid)
                 if live:
                     print("Warning: Another active session exists for this project.")
                     return None
-            session.status = SessionStatus.ACTIVE
-            return session
-        return await sm.create_session(project_id)  # type: ignore[attr-defined]
+            return await _reactivate_session(sm, session)
+        return await sm.create_session(project_id)
 
-    projects = await sm.list_projects()  # type: ignore[attr-defined]
+    projects = await sm.list_projects()
     if not projects:
         return None
 
     for p in projects:
         if p.get("session_status") == "paused":
-            session = await sm.load_session(p["project_id"])  # type: ignore[attr-defined]
+            session = await sm.load_session(str(p["project_id"]))
             if session:
-                session.status = SessionStatus.ACTIVE  # ← fix: reactivate on resume
-                return session
+                return await _reactivate_session(sm, session)
 
     return None
 
