@@ -504,12 +504,34 @@ def persist_workstream_results(
     report = format_workstream_report(workstream_type, result, ws_id)
 
     # ── metadata.json ────────────────────────────────────────────────
-    meta: dict[str, Any] = {}
+    # Fail fast on corrupt metadata rather than wiping the project with {}.
+    meta: dict[str, Any]
     if meta_path.exists():
         try:
-            meta = json.loads(meta_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            meta = {}
+            raw_meta = meta_path.read_text(encoding="utf-8")
+            loaded = json.loads(raw_meta)
+        except json.JSONDecodeError as exc:
+            backup = meta_path.with_suffix(".json.corrupt")
+            try:
+                backup.write_text(raw_meta, encoding="utf-8")
+            except OSError:
+                backup = meta_path
+            raise ValueError(
+                f"Project metadata is invalid JSON ({meta_path}). "
+                f"Corrupt file preserved at {backup}. Fix or restore before persisting."
+            ) from exc
+        except OSError as exc:
+            raise ValueError(
+                f"Could not read project metadata ({meta_path}): {exc}"
+            ) from exc
+        if not isinstance(loaded, dict):
+            raise ValueError(
+                f"Project metadata must be a JSON object ({meta_path}), "
+                f"got {type(loaded).__name__}."
+            )
+        meta = loaded
+    else:
+        meta = {}
 
     if not isinstance(meta.get("hypotheses"), list):
         meta["hypotheses"] = []

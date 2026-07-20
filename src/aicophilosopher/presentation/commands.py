@@ -150,11 +150,33 @@ def _load_jsonl_dicts(path: Path) -> list[dict[str, Any]]:
 
 
 def _load_hypotheses(proj_id: str) -> list[dict[str, Any]]:
-    """Load hypotheses from metadata.json and hypotheses.jsonl."""
+    """Load hypotheses from metadata.json and hypotheses.jsonl.
+
+    metadata.json is the primary current list; hypotheses.jsonl is append-only
+    history. Records are de-duplicated by ``hypothesis_id`` (metadata wins).
+    """
     meta = _load_metadata(proj_id)
-    hypotheses = _as_dict_list(meta.get("hypotheses"))
-    hypotheses.extend(_load_jsonl_dicts(_project_dir(proj_id) / "hypotheses.jsonl"))
-    return hypotheses
+    by_id: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+
+    def _ingest(rows: list[dict[str, Any]], *, prefer_existing: bool) -> None:
+        for h in rows:
+            hid = str(h.get("hypothesis_id") or h.get("id") or "")
+            if not hid:
+                # Keep anonymous rows once; use object id for stability in-session.
+                hid = f"anon-{id(h)}"
+            if hid in by_id and prefer_existing:
+                continue
+            if hid not in by_id:
+                order.append(hid)
+            by_id[hid] = h
+
+    _ingest(_as_dict_list(meta.get("hypotheses")), prefer_existing=False)
+    _ingest(
+        _load_jsonl_dicts(_project_dir(proj_id) / "hypotheses.jsonl"),
+        prefer_existing=True,
+    )
+    return [by_id[hid] for hid in order]
 
 
 def _load_dead_ends(proj_id: str) -> list[dict[str, Any]]:
@@ -598,7 +620,7 @@ async def _dispatch_workstream(
     proj_id: str,
     query: str,
     trad_list: list[str] | None,
-) -> dict[str, object]:
+) -> dict[str, Any]:
     """Run the agent, print results, persist hypotheses/document (#63)."""
     from aicophilosopher.application.services.workstream_persistence import (
         persist_workstream_results,

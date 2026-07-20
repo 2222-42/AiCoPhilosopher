@@ -270,3 +270,77 @@ class TestCliPersistenceRoundtrip:
         status = runner.invoke(cmd_mod.cli, ["status"])
         assert status.exit_code == 0
         assert "Hypotheses: 0" not in status.output
+
+
+
+class TestPersistSafety:
+    """Copilot review: no silent metadata clobber; no hypothesis double-count."""
+
+    def test_corrupt_metadata_fails_fast(self, tmp_path: Path) -> None:
+        from aicophilosopher.application.services.workstream_persistence import (
+            persist_workstream_results,
+        )
+
+        proj = tmp_path / "proj"
+        proj.mkdir()
+        meta = proj / "metadata.json"
+        meta.write_text("{not-json", encoding="utf-8")
+        with pytest.raises(ValueError, match="invalid JSON"):
+            persist_workstream_results(
+                project_dir=proj,
+                workstream_type="argumentation",
+                result={
+                    "arguments": [{"conclusion": "x", "confidence": 0.5, "tradition": "analytic"}],
+                    "competing_positions": [],
+                },
+            )
+        # Original corrupt content still present (or backed up)
+        assert meta.exists()
+        raw = meta.read_text(encoding="utf-8")
+        assert "{not-json" in raw or (proj / "metadata.json.corrupt").exists()
+
+    def test_load_hypotheses_dedupes_metadata_and_jsonl(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Same hypothesis_id in metadata + jsonl must appear once in show path."""
+        import json
+
+        from click.testing import CliRunner
+
+        from aicophilosopher.presentation import commands as cmd_mod
+
+        monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path / "workspace"))
+        monkeypatch.setattr(cmd_mod, "CURRENT_PROJECT_FILE", tmp_path / ".current_project")
+        monkeypatch.chdir(tmp_path)
+
+        runner = CliRunner()
+        create = runner.invoke(cmd_mod.cli, ["new-project", "Dedupe", "-q", "Q?"])
+        assert create.exit_code == 0, create.output
+
+        # Locate project dir
+        from aicophilosopher.domain.services.config import Config
+
+        projects = Config().projects_dir()
+        proj_dirs = list(projects.glob("proj-*"))
+        assert proj_dirs
+        proj = proj_dirs[0]
+        hyp = {
+            "hypothesis_id": "hyp-dup-1",
+            "statement": "Only once",
+            "status": "active",
+            "strength": "moderate",
+            "confidence_score": 0.7,
+            "origin": "ai",
+        }
+        meta_path = proj / "metadata.json"
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta["hypotheses"] = [hyp]
+        meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+        (proj / "hypotheses.jsonl").write_text(
+            json.dumps(hyp) + "\n", encoding="utf-8"
+        )
+
+        shown = runner.invoke(cmd_mod.cli, ["show-hypotheses"])
+        assert shown.exit_code == 0, shown.output
+        assert shown.output.count("hyp-dup-1") == 1
+        assert shown.output.count("Only once") == 1
