@@ -189,3 +189,17 @@ async def test_list_projects_with_sessions(adapter: FileSystemAdapter) -> None:
     projects = await adapter.list_projects_with_sessions()
     ids = {p["project_id"] for p in projects}
     assert "p1" in ids and "p2" in ids
+
+
+@pytest.mark.asyncio
+async def test_save_session_requires_ids(adapter: FileSystemAdapter) -> None:
+    """Missing session_id/project_id must not write sessions/unknown.json."""
+    with pytest.raises(ValueError, match="session_id and project_id"):
+        await adapter.save_session({"session_id": "", "project_id": "proj-001"})
+    with pytest.raises(ValueError, match="session_id and project_id"):
+        await adapter.save_session({"session_id": "s-x", "project_id": ""})
+    with pytest.raises(ValueError, match="session_id and project_id"):
+        await adapter.save_session({})
+    sessions_dir = Path(adapter.base_path) / "sessions"
+    if sessions_dir.exists():
+        assert "unknown.json" not in {p.name for p in sessions_dir.glob("*.json")}

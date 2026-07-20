@@ -179,8 +179,15 @@ class FileSystemAdapter:
         from datetime import UTC, datetime
 
         data = dict(session)
-        sid = str(data.get("session_id", "unknown"))
+        sid = str(data.get("session_id") or "").strip()
+        project_id = str(data.get("project_id") or "").strip()
+        if not sid or not project_id:
+            # Do not write sessions/unknown.json or clobber unrelated files.
+            raise ValueError(
+                "save_session requires non-empty session_id and project_id"
+            )
         data["session_id"] = sid
+        data["project_id"] = project_id
         # Keep last_active_at fresh on every write unless caller set it.
         if not data.get("last_active_at"):
             data["last_active_at"] = datetime.now(UTC).isoformat()

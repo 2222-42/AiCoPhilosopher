@@ -189,25 +189,31 @@ class SessionManager:
 
     @staticmethod
     def _restore_nested(kwargs: dict[str, Any], data: dict[str, Any]) -> None:
-        """Best-effort nested entity restore — invalid rows are dropped."""
-        try:
-            from aicophilosopher.domain.entities.session import (
-                ApprovalRequest,
-                ContextBlock,
-                DialogueTurn,
-            )
+        """Best-effort nested entity restore — invalid rows are dropped per item."""
+        from aicophilosopher.domain.entities.session import (
+            ApprovalRequest,
+            ContextBlock,
+            DialogueTurn,
+        )
 
-            dialogue = SessionManager._as_typed_list(data.get("dialogue_history"))
-            contexts = SessionManager._as_typed_list(data.get("context_blocks"))
-            approvals = SessionManager._as_typed_list(data.get("approval_requests"))
-            kwargs["dialogue_history"] = [
-                DialogueTurn.model_validate(t) for t in dialogue if isinstance(t, dict)
-            ]
-            kwargs["context_blocks"] = [
-                ContextBlock.model_validate(c) for c in contexts if isinstance(c, dict)
-            ]
-            kwargs["approval_requests"] = [
-                ApprovalRequest.model_validate(a) for a in approvals if isinstance(a, dict)
-            ]
-        except Exception:
-            pass
+        def _validate_many(raw: object, model: type[Any]) -> list[Any]:
+            items: list[Any] = []
+            for row in SessionManager._as_typed_list(raw):
+                if not isinstance(row, dict):
+                    continue
+                try:
+                    items.append(model.model_validate(row))
+                except Exception:
+                    # Skip only the bad row; keep restoring the rest.
+                    continue
+            return items
+
+        kwargs["dialogue_history"] = _validate_many(
+            data.get("dialogue_history"), DialogueTurn
+        )
+        kwargs["context_blocks"] = _validate_many(
+            data.get("context_blocks"), ContextBlock
+        )
+        kwargs["approval_requests"] = _validate_many(
+            data.get("approval_requests"), ApprovalRequest
+        )
