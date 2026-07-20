@@ -494,3 +494,312 @@ class SQLiteAdapter:
             return cursor.rowcount > 0
         finally:
             await conn.close()
+
+    # ── 002-console-agent session persistence ─────────────────────────
+
+    HEARTBEAT_TIMEOUT_SECONDS = 300
+
+    async def _ensure_project_stub(self, conn: aiosqlite.Connection, project_id: str) -> None:
+        """Insert a minimal projects row so session FK constraints succeed."""
+        await conn.execute(
+            """INSERT OR IGNORE INTO projects (project_id, title, original_question)
+               VALUES (?, ?, ?)""",
+            (project_id, project_id, ""),
+        )
+
+    @staticmethod
+    def _json_text(value: object, default: str = "{}") -> str:
+        if value is None:
+            return default
+        if isinstance(value, str):
+            return value
+        return json.dumps(value)
+
+    async def save_session(self, session: dict[str, object]) -> None:
+        """Upsert session row. Auto-creates a project stub if needed."""
+        sid = str(session.get("session_id", ""))
+        project_id = str(session.get("project_id", ""))
+        if not sid or not project_id:
+            return
+
+        focus_json = self._json_text(
+            session.get("focus_json", session.get("current_focus")), "{}"
+        )
+        aws_json = self._json_text(
+            session.get("active_workstreams_json", session.get("active_workstreams")), "[]"
+        )
+        cfg_json = self._json_text(
+            session.get("config_snapshot_json", session.get("config_snapshot")), "{}"
+        )
+
+        conn = await self._connect()
+        try:
+            await self._ensure_project_stub(conn, project_id)
+            await conn.execute(
+                """INSERT INTO sessions
+                   (session_id, project_id, status, pid, heartbeat_at, focus_json,
+                    active_workstreams_json, exit_reason, config_snapshot_json,
+                    created_at, last_active_at)
+                   VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?, ?, ?,
+                           COALESCE(?, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                   ON CONFLICT(session_id) DO UPDATE SET
+                       project_id=excluded.project_id,
+                       status=excluded.status,
+                       pid=excluded.pid,
+                       heartbeat_at=excluded.heartbeat_at,
+                       focus_json=excluded.focus_json,
+                       active_workstreams_json=excluded.active_workstreams_json,
+                       exit_reason=excluded.exit_reason,
+                       config_snapshot_json=excluded.config_snapshot_json,
+                       last_active_at=CURRENT_TIMESTAMP""",
+                (
+                    sid,
+                    project_id,
+                    str(session.get("status", "active")),
+                    int(session.get("pid") or 0),  # type: ignore[arg-type]
+                    session.get("heartbeat_at"),
+                    focus_json,
+                    aws_json,
+                    session.get("exit_reason"),
+                    cfg_json,
+                    session.get("created_at"),
+                ),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+    async def load_session(self, project_id: str) -> dict[str, object] | None:
+        """Load the most recent non-closed session for a project."""
+        conn = await self._connect()
+        try:
+            cursor = await conn.execute(
+                """SELECT * FROM sessions
+                   WHERE project_id = ? AND status != 'closed'
+                   ORDER BY last_active_at DESC
+                   LIMIT 1""",
+                (project_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            return dict(row)
+        finally:
+            await conn.close()
+
+    async def list_projects_with_sessions(self) -> list[dict[str, object]]:
+        """Return projects joined with latest non-closed session status."""
+        conn = await self._connect()
+        try:
+            cursor = await conn.execute(
+                """SELECT p.project_id,
+                          p.title,
+                          s.status AS session_status,
+                          s.last_active_at,
+                          s.session_id,
+                          s.active_workstreams_json
+                   FROM projects p
+                   LEFT JOIN sessions s
+                     ON s.session_id = (
+                        SELECT s2.session_id FROM sessions s2
+                        WHERE s2.project_id = p.project_id
+                          AND s2.status != 'closed'
+                        ORDER BY s2.last_active_at DESC
+                        LIMIT 1
+                     )
+                   ORDER BY COALESCE(s.last_active_at, p.updated_at) DESC"""
+            )
+            rows = await cursor.fetchall()
+            result: list[dict[str, object]] = []
+            for row in rows:
+                d = dict(row)
+                aws = d.pop("active_workstreams_json", "[]") or "[]"
+                try:
+                    ws = json.loads(aws) if isinstance(aws, str) else aws
+                except json.JSONDecodeError:
+                    ws = []
+                d["workstream_count"] = len(ws) if isinstance(ws, list) else 0
+                result.append(d)
+            return result
+        finally:
+            await conn.close()
+
+    async def reclaim_stale_sessions(self) -> int:
+        """Mark active sessions with expired heartbeat as paused/stale_reclaimed."""
+        import errno
+        import os
+        from datetime import UTC, datetime, timedelta
+
+        conn = await self._connect()
+        try:
+            cursor = await conn.execute(
+                "SELECT session_id, pid, heartbeat_at FROM sessions WHERE status = 'active'"
+            )
+            rows = await cursor.fetchall()
+            now = datetime.now(UTC)
+            reclaimed = 0
+            for row in rows:
+                sid = row["session_id"]
+                stale = False
+                raw_hb = row["heartbeat_at"]
+                if raw_hb:
+                    try:
+                        hb = datetime.fromisoformat(str(raw_hb))
+                        if hb.tzinfo is None:
+                            hb = hb.replace(tzinfo=UTC)
+                        if now - hb > timedelta(seconds=self.HEARTBEAT_TIMEOUT_SECONDS):
+                            stale = True
+                    except (ValueError, TypeError):
+                        stale = True
+                else:
+                    stale = True
+
+                pid = int(row["pid"] or 0)
+                if pid > 0:
+                    try:
+                        os.kill(pid, 0)
+                    except OSError as e:
+                        if e.errno == errno.ESRCH:
+                            stale = True
+                else:
+                    stale = True
+
+                if stale:
+                    await conn.execute(
+                        """UPDATE sessions
+                           SET status = 'paused',
+                               exit_reason = 'stale_reclaimed',
+                               last_active_at = CURRENT_TIMESTAMP
+                           WHERE session_id = ?""",
+                        (sid,),
+                    )
+                    reclaimed += 1
+            await conn.commit()
+            return reclaimed
+        finally:
+            await conn.close()
+
+    async def save_dialogue_turn(self, turn: dict[str, object], session_id: str) -> None:
+        turn_id = str(turn.get("turn_id") or turn.get("id") or "")
+        if not turn_id:
+            import uuid
+
+            turn_id = str(uuid.uuid4())
+        speaker = str(turn.get("speaker", "user"))
+        content = str(turn.get("content", ""))
+        intent = turn.get("intent") or turn.get("intent_json")
+        actions = turn.get("actions_taken") or turn.get("actions_json")
+        context_id = turn.get("context_id")
+        approved = turn.get("approved_by_user")
+        ts = turn.get("timestamp")
+
+        conn = await self._connect()
+        try:
+            await conn.execute(
+                """INSERT OR REPLACE INTO dialogue_turns
+                   (turn_id, session_id, speaker, content, intent_json, actions_json,
+                    context_id, approved_by_user, timestamp)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))""",
+                (
+                    turn_id,
+                    session_id,
+                    speaker,
+                    content,
+                    json.dumps(intent) if intent is not None and not isinstance(intent, str) else intent,
+                    json.dumps(actions) if actions is not None and not isinstance(actions, str) else actions,
+                    str(context_id) if context_id is not None else None,
+                    None if approved is None else (1 if approved else 0),
+                    ts,
+                ),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+    async def save_approval_request(self, request: dict[str, object], session_id: str) -> None:
+        rid = str(request.get("request_id") or request.get("id") or "")
+        if not rid:
+            import uuid
+
+            rid = str(uuid.uuid4())
+        options = request.get("options") or request.get("options_json") or []
+        options_json = options if isinstance(options, str) else json.dumps(options)
+
+        conn = await self._connect()
+        try:
+            await conn.execute(
+                """INSERT INTO approval_requests
+                   (request_id, session_id, request_type, description, options_json,
+                    urgency, resolved_at, user_choice, user_comment, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                   ON CONFLICT(request_id) DO UPDATE SET
+                       request_type=excluded.request_type,
+                       description=excluded.description,
+                       options_json=excluded.options_json,
+                       urgency=excluded.urgency,
+                       resolved_at=excluded.resolved_at,
+                       user_choice=excluded.user_choice,
+                       user_comment=excluded.user_comment""",
+                (
+                    rid,
+                    session_id,
+                    str(request.get("request_type", "workstream_proposal")),
+                    str(request.get("description", "Approval required")),
+                    options_json,
+                    str(request.get("urgency", "non_blocking")),
+                    request.get("resolved_at"),
+                    request.get("user_choice"),
+                    request.get("user_comment"),
+                    request.get("created_at"),
+                ),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+    async def load_pending_approvals(self, session_id: str) -> list[dict[str, object]]:
+        conn = await self._connect()
+        try:
+            cursor = await conn.execute(
+                """SELECT * FROM approval_requests
+                   WHERE session_id = ? AND resolved_at IS NULL
+                   ORDER BY created_at ASC""",
+                (session_id,),
+            )
+            return [dict(row) for row in await cursor.fetchall()]
+        finally:
+            await conn.close()
+
+    async def update_session_heartbeat(self, session_id: str) -> None:
+        conn = await self._connect()
+        try:
+            await conn.execute(
+                """UPDATE sessions
+                   SET heartbeat_at = CURRENT_TIMESTAMP,
+                       last_active_at = CURRENT_TIMESTAMP
+                   WHERE session_id = ?""",
+                (session_id,),
+            )
+            await conn.commit()
+        finally:
+            await conn.close()
+
+    async def finalize_session(self, session_id: str, reason: str) -> None:
+        """Pause session and set exit_reason in a single transaction."""
+        conn = await self._connect()
+        try:
+            await conn.execute("BEGIN")
+            await conn.execute(
+                """UPDATE sessions
+                   SET status = 'paused',
+                       exit_reason = ?,
+                       last_active_at = CURRENT_TIMESTAMP
+                   WHERE session_id = ?""",
+                (reason, session_id),
+            )
+            await conn.commit()
+        except Exception:
+            await conn.rollback()
+            raise
+        finally:
+            await conn.close()
