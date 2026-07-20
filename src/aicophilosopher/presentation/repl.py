@@ -21,13 +21,19 @@ def _handle_slash(command: str, session: SessionState) -> dict[str, Any]:
         return {"action": "exit", "message": "Goodbye!"}
 
     if cmd == "/help":
-        return {
-            "message": "Available commands:\n"
-            "  /exit, /help, /status\n"
-            "  /details, /hide-details\n"
-            "  /suggestions, /hide-suggestions\n"
-            "\nUse natural language for philosophical inquiry."
-        }
+        # Prefer full registry help (marks unwired commands) over a local stub list.
+        try:
+            from aicophilosopher.presentation.slash_commands import dispatch
+
+            return dispatch("/help", session)
+        except ImportError:
+            return {
+                "message": "Available commands:\n"
+                "  /exit, /help, /status\n"
+                "  /details, /hide-details\n"
+                "  /suggestions, /hide-suggestions\n"
+                "\nUse natural language for philosophical inquiry."
+            }
 
     if cmd == "/details":
         session.current_focus.toggle_state.show_details = True
@@ -107,12 +113,41 @@ def _detect_workstream_launch(text: str) -> str | None:
     return None
 
 
+async def _run_propose_workstream(
+    slash_result: dict[str, Any],
+    stripped: str,
+    session: SessionState,
+    coordinator: Any,
+) -> dict[str, Any]:
+    """Execute an inquiry slash action via Coordinator.propose_workstream."""
+    try:
+        response = await coordinator.run(
+            user_input=str(slash_result.get("user_input", "")),
+            command="propose_workstream",
+            workstream_type=str(slash_result.get("workstream_type", "literature_search")),
+        )
+        active = getattr(coordinator, "active_workstreams", None)
+        if isinstance(active, dict):
+            session.active_workstreams = list(active.keys())
+        render_response(response, session.current_focus)
+        return response
+    except Exception as exc:
+        # Put details only in `error` so the Summary panel does not duplicate them.
+        err = {
+            "error": f"Failed to run {stripped.split()[0]}: {exc}",
+            "message": f"Failed to run {stripped.split()[0]}.",
+            "implemented": False,
+        }
+        render_response(err, session.current_focus)
+        return err
+
+
 async def _process_slash_command(
     stripped: str,
     session: SessionState,
     coordinator: Any,
 ) -> dict[str, Any]:
-    """Handle slash commands (/status, /logs, /exit, …)."""
+    """Handle slash commands (/status, /logs, /exit, inquiry, honest unimplemented)."""
     cmd = stripped.strip().lower()
 
     # Route /status to coordinator for rich status display
@@ -156,6 +191,12 @@ async def _process_slash_command(
     if slash_result.get("action") == "exit":
         await _finalize(session, "user_exit")
         return slash_result
+
+    # Inquiry slash → Coordinator (real path; never silent success)
+    if slash_result.get("action") == "propose_workstream":
+        return await _run_propose_workstream(slash_result, stripped, session, coordinator)
+
+    # Local handlers and honest "Not implemented" responses from slash_commands
     render_response(slash_result, session.current_focus)
     return slash_result
 

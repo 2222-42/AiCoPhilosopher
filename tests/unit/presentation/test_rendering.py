@@ -180,10 +180,13 @@ def test_error_command_renders_usage(console: Console, focus: FocusContext) -> N
     assert "Usage" in output
 
 
-def test_archive_command_renders_approval(console: Console, focus: FocusContext) -> None:
+def test_archive_command_renders_unimplemented(
+    console: Console, focus: FocusContext
+) -> None:
     from aicophilosopher.domain.entities.session import SessionState
     from aicophilosopher.presentation.slash_commands import dispatch
 
     result = dispatch("/archive", SessionState(project_id="p1"))
     output = _render_capture(console, result, focus)
-    assert "Approval" in output
+    assert "Not implemented" in output or "not implemented" in output.lower()
+    assert "Error" in output  # renderer shows error panel for honest failure
