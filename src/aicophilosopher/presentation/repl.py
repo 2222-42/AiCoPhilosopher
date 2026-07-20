@@ -273,29 +273,28 @@ async def _finalize(session: SessionState, reason: str, storage: Any = None) -> 
 
         sm = SessionManager(storage=storage)
         # Persist full session state (including config_snapshot) BEFORE finalizing
-        if sm._storage:
-            await sm._storage.save_session(_session_to_dict(session))
+        await sm.save_session(session)
         await sm.finalize_session(str(session.session_id), reason)
     except (ImportError, AttributeError):
         pass  # SessionManager not yet wired
 
 
-def _session_to_dict(session: SessionState) -> dict[str, object]:
-    """Convert SessionState to storage dict including config_snapshot."""
-    import json
-    d: dict[str, object] = {
-        "session_id": str(session.session_id),
-        "project_id": session.project_id,
-        "status": session.status.value,
-        "pid": session.pid,
-        "heartbeat_at": session.heartbeat_at.isoformat(),
-        "created_at": session.created_at.isoformat(),
-        "last_active_at": session.last_active_at.isoformat(),
-        "exit_reason": session.exit_reason,
-        "active_workstreams_json": json.dumps(session.active_workstreams),
-        "config_snapshot_json": json.dumps(session.config_snapshot or {}),
-    }
-    return d
+async def _reactivate_session(sm: Any, session: SessionState) -> SessionState:
+    """Mark a loaded session active under the current process and re-persist."""
+    import os
+    from datetime import UTC, datetime
+
+    session.status = SessionStatus.ACTIVE
+    session.pid = os.getpid()
+    now = datetime.now(UTC)
+    session.heartbeat_at = now
+    session.last_active_at = now
+    session.exit_reason = None
+    try:
+        await sm.save_session(session)
+    except (AttributeError, TypeError):
+        pass
+    return session
 
 
 async def _startup_flow(  # noqa: C901
@@ -315,34 +314,32 @@ async def _startup_flow(  # noqa: C901
 
     # Reclaim stale sessions
     try:
-        reclaimed = await sm.reclaim_stale_sessions()  # type: ignore[attr-defined]
+        reclaimed = await sm.reclaim_stale_sessions()
         if reclaimed > 0:
             print(f"[System] Reclaimed {reclaimed} stale session(s).")
     except (AttributeError, NotImplementedError):
         pass
 
     if project_id:
-        session = await sm.load_session(project_id)  # type: ignore[attr-defined]
+        session = await sm.load_session(project_id)
         if session:
             if session.status == SessionStatus.ACTIVE:
-                live = await sm.is_active_session_live(session.pid)  # type: ignore[attr-defined]
+                live = await sm.is_active_session_live(session.pid)
                 if live:
                     print("Warning: Another active session exists for this project.")
                     return None
-            session.status = SessionStatus.ACTIVE
-            return session
-        return await sm.create_session(project_id)  # type: ignore[attr-defined]
+            return await _reactivate_session(sm, session)
+        return await sm.create_session(project_id)
 
-    projects = await sm.list_projects()  # type: ignore[attr-defined]
+    projects = await sm.list_projects()
     if not projects:
         return None
 
     for p in projects:
         if p.get("session_status") == "paused":
-            session = await sm.load_session(p["project_id"])  # type: ignore[attr-defined]
+            session = await sm.load_session(str(p["project_id"]))
             if session:
-                session.status = SessionStatus.ACTIVE  # ← fix: reactivate on resume
-                return session
+                return await _reactivate_session(sm, session)
 
     return None
 

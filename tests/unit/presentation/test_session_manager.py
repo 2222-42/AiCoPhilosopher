@@ -240,3 +240,28 @@ async def test_is_active_session_dead(mock_storage: MagicMock) -> None:
     # PID 99999 is almost certainly not running
     result = await sm.is_active_session_live(99999)
     assert result is False
+
+
+def test_from_dict_skips_invalid_nested_rows_only() -> None:
+    """Malformed dialogue/context rows must not wipe the rest of the history."""
+    from aicophilosopher.presentation.session_manager import SessionManager
+
+    good_turn = {
+        "speaker": "user",
+        "content": "hello there",
+    }
+    bad_turn = {"speaker": "user"}  # missing content
+    data = {
+        "session_id": "00000000-0000-4000-8000-000000000001",
+        "project_id": "proj-nested",
+        "status": "paused",
+        "pid": 1,
+        "dialogue_history": [good_turn, bad_turn, {"speaker": "not-a-real-speaker", "content": "x"}],
+        "context_blocks": [{"label": "ok-block"}, {"label": ""}],  # empty label invalid
+        "approval_requests": [],
+    }
+    session = SessionManager._from_dict(data)
+    assert len(session.dialogue_history) == 1
+    assert session.dialogue_history[0].content == "hello there"
+    assert len(session.context_blocks) == 1
+    assert session.context_blocks[0].label == "ok-block"
