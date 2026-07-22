@@ -10,7 +10,9 @@ from aicophilosopher.domain.services.config import (
 )
 
 
-def test_default_workspace_dir() -> None:
+def test_default_workspace_dir(monkeypatch) -> None:
+    # Hermetic: ambient AICOPH_WORKSPACE_DIR (e.g. Track A .verify-ws) must not leak in.
+    monkeypatch.delenv("AICOPH_WORKSPACE_DIR", raising=False)
     cfg = Config()
     assert cfg.workspace_dir == DEFAULT_WORKSPACE_DIR
     assert cfg.workspace_dir == "~/.aicophilosopher"
@@ -31,6 +33,7 @@ def test_projects_dir_nests_under_workspace(tmp_path: Path, monkeypatch) -> None
 
 
 def test_aicoph_env_prefix_llm_backend(monkeypatch) -> None:
+    monkeypatch.delenv("AICOPH_WORKSPACE_DIR", raising=False)
     monkeypatch.setenv("AICOPH_LLM_BACKEND", "claude")
     cfg = Config()
     assert cfg.llm_backend == "claude"
