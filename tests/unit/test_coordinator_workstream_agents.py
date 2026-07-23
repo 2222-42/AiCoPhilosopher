@@ -469,3 +469,157 @@ def test_format_bridge_section_none_is_empty() -> None:
 def test_format_bridge_section_status_none() -> None:
     text = ProjectCoordinatorAgent._format_bridge_section({"status": "none", "data": {}})
     assert "OpenCode Go: none" in text
+
+
+# ── Issue #86: inject main LLM into workstream agents ────────────────────
+
+
+def _mock_llm_with_json(payload: dict[str, Any]) -> MagicMock:
+    """Build an LLMPort-like mock that returns JSON text from generate()."""
+    from aicophilosopher.ports.llm_port import GenerationResult
+
+    llm = MagicMock()
+    llm.generate = AsyncMock(
+        return_value=GenerationResult(text=json.dumps(payload), model="mock")
+    )
+    llm.embed = AsyncMock(return_value=[0.0, 0.0, 0.0])
+    return llm
+
+
+@pytest.mark.asyncio
+async def test_run_workstream_agent_argumentation_calls_llm() -> None:
+    """When llm is injected, ArgumentationAgent must call generate()."""
+    llm = _mock_llm_with_json(
+        {
+            "arguments": [
+                {
+                    "premises": ["P1 from mock LLM"],
+                    "conclusion": "C1 from mock LLM",
+                    "inference_rule": "modus ponens",
+                    "tradition": "analytic",
+                    "implicit_assumptions": [],
+                    "has_circularity": False,
+                },
+                {
+                    "premises": ["P2 from mock LLM"],
+                    "conclusion": "C2 from mock LLM",
+                    "inference_rule": "abduction",
+                    "tradition": "continental",
+                    "implicit_assumptions": [],
+                    "has_circularity": False,
+                },
+            ]
+        }
+    )
+
+    result = await run_workstream_agent(
+        "argumentation",
+        "Is free will compatible with determinism?",
+        agent_id="t-llm",
+        llm=llm,
+    )
+
+    assert "error" not in result
+    llm.generate.assert_awaited()
+    assert result.get("llm_augmented") is True
+    conclusions = [str(a.get("conclusion", "")) for a in result.get("arguments", [])]
+    assert any("mock LLM" in c for c in conclusions)
+
+
+@pytest.mark.asyncio
+async def test_run_workstream_agent_argumentation_without_llm_is_heuristic() -> None:
+    """llm=None keeps the offline heuristic path (no crash, llm_augmented false)."""
+    result = await run_workstream_agent(
+        "argumentation",
+        "Is free will compatible with determinism?",
+        agent_id="t-offline",
+        llm=None,
+    )
+    assert "error" not in result
+    assert result.get("llm_augmented") is False
+    assert result.get("arguments")
+    assert result.get("competing_positions")
+
+
+@pytest.mark.asyncio
+async def test_run_workstream_agent_synthesis_calls_llm() -> None:
+    """SynthesisAgent also receives the injected LLM."""
+    from aicophilosopher.ports.llm_port import GenerationResult
+
+    # SynthesisAgent only accepts LLM text longer than 50 characters.
+    long_doc = (
+        "# LLM Synthesis\n\n"
+        "Mock document from LLM covering free will, determinism, and "
+        "compatibilist positions with epistemic markers preserved.\n"
+    )
+    llm = MagicMock()
+    llm.generate = AsyncMock(
+        return_value=GenerationResult(text=long_doc, model="mock")
+    )
+    llm.embed = AsyncMock(return_value=[0.0])
+
+    result = await run_workstream_agent(
+        "synthesis",
+        "Synthesize free will debate",
+        agent_id="t-synth-llm",
+        llm=llm,
+    )
+
+    assert "error" not in result
+    llm.generate.assert_awaited()
+    assert result.get("llm_augmented") is True
+
+
+@pytest.mark.asyncio
+async def test_coordinator_passes_llm_to_workstream_runner(workspace: Path) -> None:
+    """ProjectCoordinatorAgent injects self.llm into run_workstream_agent."""
+    pid = "test-proj-86-coord-llm"
+    _seed_project(workspace, pid)
+
+    llm = _mock_llm_with_json(
+        {
+            "arguments": [
+                {
+                    "premises": ["coord-llm P1"],
+                    "conclusion": "coord-llm conclusion A",
+                    "inference_rule": "rule",
+                    "tradition": "analytic",
+                    "implicit_assumptions": [],
+                    "has_circularity": False,
+                },
+                {
+                    "premises": ["coord-llm P2"],
+                    "conclusion": "coord-llm conclusion B",
+                    "inference_rule": "rule",
+                    "tradition": "continental",
+                    "implicit_assumptions": [],
+                    "has_circularity": False,
+                },
+            ]
+        }
+    )
+    coord = ProjectCoordinatorAgent(project_id=pid, llm_backend=llm)
+    await _approve(coord)
+
+    result = await coord.run(command="propose_workstream", workstream_type="argumentation")
+
+    assert result["status"] == "completed"
+    llm.generate.assert_awaited()
+    agent = result["agent_result"]
+    assert agent.get("llm_augmented") is True
+
+
+@pytest.mark.asyncio
+async def test_coordinator_without_llm_still_completes(workspace: Path) -> None:
+    """Coordinator with no llm_backend still completes via heuristic (regression)."""
+    pid = "test-proj-86-no-llm"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    assert coord.llm is None
+    await _approve(coord)
+
+    result = await coord.run(command="propose_workstream", workstream_type="argumentation")
+
+    assert result["status"] == "completed"
+    assert result["agent_result"].get("llm_augmented") is False
+    assert result["agent_result"].get("arguments")

@@ -5,13 +5,19 @@ Used by ``ProjectCoordinatorAgent`` when proposing/running workstreams
 directly; consolidating CLI onto this runner is optional follow-up.
 
 Agents operate in offline/heuristic mode when no LLM is configured and always
-return a result dict. Persistence of results into living documents is out of
-scope here (see Issue #63).
+return a result dict. When an ``LLMPort`` is passed, LLM-capable agents
+(argumentation, critical_review, cross_traditional_comparison, synthesis)
+use it as an optional enhancer and fall back to heuristics on failure
+(ADR-0003). Persistence of results into living documents is out of scope
+here (see Issue #63).
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from aicophilosopher.ports.llm_port import LLMPort
 
 # REPL patterns use shorter aliases; CLI Choice uses the longer form.
 _TYPE_ALIASES: dict[str, str] = {
@@ -42,10 +48,14 @@ async def run_workstream_agent(
     agent_id: str = "workstream",
     traditions: list[str] | None = None,
     prior_outputs: list[dict[str, object]] | None = None,
+    llm: LLMPort | None = None,
 ) -> dict[str, Any]:
     """Run the agent for *workstream_type*; works offline without an LLM.
 
-    Returns the agent result dict. Unknown types yield ``{"error": ...}``.
+    When *llm* is provided it is injected into agents that support LLM
+    augmentation (argumentation, critical_review, cross_traditional_comparison,
+    synthesis). Agents without an ``llm`` constructor parameter ignore it and
+    stay on the heuristic path. Unknown types yield ``{"error": ...}``.
     """
     ws_type = normalize_workstream_type(workstream_type)
     kwargs: dict[str, object] = {}
@@ -57,13 +67,13 @@ async def run_workstream_agent(
     if ws_type == "concept_analysis":
         return await _run_concept_analysis(agent_id, query, kwargs)
     if ws_type == "argumentation":
-        return await _run_argumentation(agent_id, query, kwargs)
+        return await _run_argumentation(agent_id, query, kwargs, llm=llm)
     if ws_type == "critical_review":
-        return await _run_critical_review(agent_id, query, kwargs)
+        return await _run_critical_review(agent_id, query, kwargs, llm=llm)
     if ws_type == "cross_traditional_comparison":
-        return await _run_cross_traditional(agent_id, query, kwargs)
+        return await _run_cross_traditional(agent_id, query, kwargs, llm=llm)
     if ws_type == "synthesis":
-        return await _run_synthesis(agent_id, query, prior_outputs)
+        return await _run_synthesis(agent_id, query, prior_outputs, llm=llm)
     return {"error": f"Unknown workstream type: {workstream_type}"}
 
 
@@ -86,39 +96,51 @@ async def _run_concept_analysis(
 
 
 async def _run_argumentation(
-    agent_id: str, query: str, kwargs: dict[str, object]
+    agent_id: str,
+    query: str,
+    kwargs: dict[str, object],
+    *,
+    llm: LLMPort | None = None,
 ) -> dict[str, Any]:
     from aicophilosopher.application.agents.argumentation import ArgumentationAgent
 
-    agent = ArgumentationAgent(agent_id=agent_id)
+    agent = ArgumentationAgent(agent_id=agent_id, llm=llm)
     return dict(await agent.run(query, **kwargs))
 
 
 async def _run_critical_review(
-    agent_id: str, query: str, kwargs: dict[str, object]
+    agent_id: str,
+    query: str,
+    kwargs: dict[str, object],
+    *,
+    llm: LLMPort | None = None,
 ) -> dict[str, Any]:
     from aicophilosopher.application.agents.argumentation import ArgumentationAgent
     from aicophilosopher.application.agents.critical_review import CriticalReviewAgent
 
-    arg_agent = ArgumentationAgent(agent_id=f"{agent_id}-arg")
+    arg_agent = ArgumentationAgent(agent_id=f"{agent_id}-arg", llm=llm)
     arg_result = await arg_agent.run(query, **kwargs)
     review_input = list(arg_result.get("arguments", [])) + list(
         arg_result.get("competing_positions", [])
     )
-    agent = CriticalReviewAgent(agent_id=agent_id)
+    agent = CriticalReviewAgent(agent_id=agent_id, llm=llm)
     result = dict(await agent.run(review_input))
     result["source_arguments"] = arg_result
     return result
 
 
 async def _run_cross_traditional(
-    agent_id: str, query: str, kwargs: dict[str, object]
+    agent_id: str,
+    query: str,
+    kwargs: dict[str, object],
+    *,
+    llm: LLMPort | None = None,
 ) -> dict[str, Any]:
     from aicophilosopher.application.agents.cross_traditional import (
         CrossTraditionalComparisonAgent,
     )
 
-    agent = CrossTraditionalComparisonAgent(agent_id=agent_id)
+    agent = CrossTraditionalComparisonAgent(agent_id=agent_id, llm=llm)
     return dict(await agent.run(query, **kwargs))
 
 
@@ -126,10 +148,12 @@ async def _run_synthesis(
     agent_id: str,
     query: str,
     prior_outputs: list[dict[str, object]] | None,
+    *,
+    llm: LLMPort | None = None,
 ) -> dict[str, Any]:
     from aicophilosopher.application.agents.synthesis import SynthesisAgent
 
-    agent = SynthesisAgent(agent_id=agent_id)
+    agent = SynthesisAgent(agent_id=agent_id, llm=llm)
     outputs: list[dict[str, object]] = prior_outputs or [
         {
             "workstream_id": "ws-seed",
