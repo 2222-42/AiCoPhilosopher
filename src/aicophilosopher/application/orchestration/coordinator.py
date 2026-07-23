@@ -156,11 +156,16 @@ class ProjectCoordinatorAgent(BaseAgent):
         }
 
     async def _maybe_bridge_delegate(self, workstream_type: str) -> dict[str, Any] | None:
-        """Optionally delegate via external bridge (best-effort, never required)."""
+        """Optionally delegate via external bridge (best-effort, never required).
+
+        Returns None when no bridge is configured. On any bridge attempt, returns a
+        status-tagged dict (success / consent_denied / fallback / exception / …)
+        so callers can surface outcomes instead of silently dropping them.
+        """
         if self.external_bridge is None:
             return None
         try:
-            return await self.external_bridge.request(
+            result = await self.external_bridge.request(
                 endpoint="delegate_task",
                 payload={
                     "prompt": (
@@ -172,8 +177,100 @@ class ProjectCoordinatorAgent(BaseAgent):
                 },
                 consent_scope="workstream_delegation",
             )
-        except Exception:
-            return None
+        except Exception as exc:
+            # Never swallow: log + return a status dict for the user-facing message.
+            self.logger.exception(
+                "OpenCode bridge delegation raised for workstream_type=%s",
+                workstream_type,
+            )
+            return {
+                "status": "exception",
+                "data": {},
+                "error": str(exc),
+            }
+
+        status = str((result or {}).get("status") or "unknown")
+        data = (result or {}).get("data") if isinstance(result, dict) else None
+        inner = ""
+        if isinstance(data, dict):
+            inner = str(data.get("status") or "")
+        # Outer "success" may still wrap OpenCodeGoAdapter error/timeout in data.
+        if status != "success" or inner in ("error", "timeout"):
+            self.logger.warning(
+                "OpenCode bridge non-success: status=%s inner=%s error=%s",
+                status,
+                inner or "-",
+                (result or {}).get("error") if isinstance(result, dict) else None,
+            )
+        else:
+            self.logger.info("OpenCode bridge success for workstream_type=%s", workstream_type)
+        return result if isinstance(result, dict) else {"status": "unknown", "data": result}
+
+    @staticmethod
+    def _format_bridge_section(bridge_result: dict[str, Any] | None) -> str:
+        """User-visible OpenCode bridge summary for propose / logs messages.
+
+        Returns "" when no bridge was configured (None). Otherwise always produces
+        at least one line so success / failure / skip / timeout are never silent.
+        """
+        if bridge_result is None:
+            return ""
+
+        status = str(bridge_result.get("status") or "unknown")
+        data = bridge_result.get("data") or {}
+        if not isinstance(data, dict):
+            data = {}
+
+        # Outer success wraps OpenCodeGoAdapter._send payload; that payload may
+        # itself report error / timeout without raising.
+        if status == "success":
+            inner = str(data.get("status") or "")
+            if inner in ("error", "timeout"):
+                reason = str(data.get("output") or bridge_result.get("error") or inner)
+                return f"\n\nOpenCode Go: {inner} — {reason}"
+            output_preview = str(data.get("output", ""))[:200]
+            if output_preview:
+                return f"\n\nOpenCode Go response:\n{output_preview}"
+            return "\n\nOpenCode Go: success (empty output)"
+
+        if status == "consent_denied":
+            reason = str(bridge_result.get("error") or "Consent not granted")
+            return f"\n\nOpenCode Go: consent_denied — {reason}"
+
+        if status == "fallback":
+            reason = str(
+                bridge_result.get("error")
+                or bridge_result.get("message")
+                or "Fell back to internal execution"
+            )
+            return f"\n\nOpenCode Go: fallback — {reason}"
+
+        if status == "exception":
+            reason = str(bridge_result.get("error") or "unknown exception")
+            return f"\n\nOpenCode Go: exception — {reason}"
+
+        if status == "none":
+            return "\n\nOpenCode Go: none — bridge not configured"
+
+        reason = str(
+            bridge_result.get("error")
+            or data.get("output")
+            or bridge_result.get("message")
+            or status
+        )
+        return f"\n\nOpenCode Go: {status} — {reason}"
+
+    @staticmethod
+    def _format_bridge_log_snippet(bridge_result: dict[str, Any] | None) -> str:
+        """One-line bridge status for logs listings (empty when no bridge)."""
+        section = ProjectCoordinatorAgent._format_bridge_section(bridge_result)
+        if not section:
+            return ""
+        # Strip leading newlines and collapse to a single line preview.
+        text = section.strip().replace("\n", " ")
+        if len(text) > 120:
+            text = text[:117] + "..."
+        return text
 
     @staticmethod
     def _agent_confidence(agent_result: dict[str, Any], default: float = 0.6) -> float:
@@ -291,9 +388,7 @@ class ProjectCoordinatorAgent(BaseAgent):
                     f"\nPersisted: {persistence.get('hypotheses_added', 0)} hypotheses; "
                     f"report={persistence.get('report_path', '')}"
                 )
-        if bridge_result and bridge_result.get("status") == "success":
-            output_preview = str(bridge_result.get("data", {}).get("output", ""))[:200]
-            msg += f"\n\nOpenCode Go response:\n{output_preview}"
+        msg += self._format_bridge_section(bridge_result)
 
         response: dict[str, Any] = {
             "message": msg,
@@ -301,6 +396,7 @@ class ProjectCoordinatorAgent(BaseAgent):
             "workstream_id": ws_id,
             "status": status,
             "agent_result": agent_result,
+            "bridge_result": bridge_result,
             "details": agent_summary,
             "active_workstreams": [
                 f"{wid} — {ws['status']}" for wid, ws in self.active_workstreams.items()
@@ -356,17 +452,16 @@ class ProjectCoordinatorAgent(BaseAgent):
         }
 
     def _format_ws_log_line(self, wid: str, ws: dict[str, Any]) -> str:
+        parts = [f"{wid} — {ws['status']}"]
         agent_result = ws.get("agent_result")
         if agent_result:
-            preview = summarize_agent_result(str(ws.get("type", "")), agent_result)
-            return f"{wid} — {ws['status']} | {preview}"
-
-        br = ws.get("bridge_result")
-        preview = ""
-        if br and br.get("status") == "success":
-            output = br.get("data", {}).get("output", "")
-            preview = output[:80] + ("..." if len(output) > 80 else "")
-        return f"{wid} — {ws['status']} | {preview}"
+            parts.append(summarize_agent_result(str(ws.get("type", "")), agent_result))
+        bridge_snip = self._format_bridge_log_snippet(ws.get("bridge_result"))
+        if bridge_snip:
+            parts.append(bridge_snip)
+        elif not agent_result:
+            parts.append("")
+        return " | ".join(parts).rstrip(" |")
 
     def _get_workstream_logs(self, workstream_id: str) -> dict[str, Any]:
         """Return output/logs for a specific workstream."""
@@ -390,30 +485,35 @@ class ProjectCoordinatorAgent(BaseAgent):
             }
 
         agent_result = ws.get("agent_result")
+        bridge_result = ws.get("bridge_result")
+        bridge_section = self._format_bridge_section(bridge_result)
         if agent_result:
             import json
 
             details = json.dumps(agent_result, default=str, indent=2)
             agent_summary = summarize_agent_result(str(ws.get("type", "")), agent_result)
         else:
-            br = ws.get("bridge_result")
-            details = ""
-            if br and br.get("status") == "success":
-                details = str(br.get("data", {}).get("output", ""))
+            details = bridge_section.strip() if bridge_section else ""
             agent_summary = (
                 details[:80] if details else "(no output yet — workstream may still be running)"
             )
 
+        summary = (
+            f"Workstream: {workstream_id}\n"
+            f"Type: {ws['type']}\n"
+            f"Status: {ws['status']}\n"
+            f"Result: {agent_summary}"
+        )
+        if bridge_section and agent_result:
+            # When both local agent and bridge ran, surface bridge outcome too.
+            summary += bridge_section
+
         return {
-            "summary": (
-                f"Workstream: {workstream_id}\n"
-                f"Type: {ws['type']}\n"
-                f"Status: {ws['status']}\n"
-                f"Result: {agent_summary}"
-            ),
+            "summary": summary,
             "details": details or "(no output yet — workstream may still be running)",
             "epistemic_status": f"Status: {ws['status']}",
             "agent_result": agent_result,
+            "bridge_result": bridge_result,
         }
 
     def _user_utterances(self) -> list[str]:

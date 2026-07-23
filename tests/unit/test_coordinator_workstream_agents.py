@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -279,3 +280,192 @@ def test_project_dir_uses_config_projects_dir(workspace: Path) -> None:
     pid = "test-proj-dir"
     coord = ProjectCoordinatorAgent(project_id=pid)
     assert coord._project_dir() == workspace / "projects" / pid
+
+
+# ── Issue #85: OpenCode bridge status surfaced in REPL messages ──────────
+
+
+def _attach_bridge(coord: ProjectCoordinatorAgent, response: dict[str, Any]) -> MagicMock:
+    """Wire a mock external_bridge that returns ``response`` from request()."""
+    bridge = MagicMock()
+    bridge.request = AsyncMock(return_value=response)
+    coord.external_bridge = bridge
+    return bridge
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_bridge_success(workspace: Path) -> None:
+    """Bridge success shows OpenCode Go response preview in the message."""
+    pid = "test-proj-85-success"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "success",
+            "data": {
+                "status": "completed",
+                "output": "Bridge found three relevant sources on free will.",
+            },
+        },
+    )
+
+    result = await coord.run(command="propose_workstream", workstream_type="literature_search")
+
+    assert result["status"] == "completed"
+    assert "OpenCode Go response:" in result["message"]
+    assert "three relevant sources" in result["message"]
+    assert result.get("bridge_result", {}).get("status") == "success"
+    stored = coord.active_workstreams[result["workstream_id"]]
+    assert stored["bridge_result"]["status"] == "success"
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_bridge_error(workspace: Path) -> None:
+    """Outer success wrapping data.status=error must still show the reason."""
+    pid = "test-proj-85-error"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "success",
+            "data": {
+                "status": "error",
+                "output": "OpenCode Go exited 1: auth failed",
+            },
+        },
+    )
+
+    result = await coord.run(command="propose_workstream", workstream_type="concept_analysis")
+
+    assert "OpenCode Go: error" in result["message"]
+    assert "auth failed" in result["message"]
+    # Local agent still completes independently of bridge failure.
+    assert result["status"] == "completed"
+    assert result.get("bridge_result", {}).get("status") == "success"
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_bridge_timeout(workspace: Path) -> None:
+    pid = "test-proj-85-timeout"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "success",
+            "data": {
+                "status": "timeout",
+                "output": "OpenCode Go task timed out (120s).",
+            },
+        },
+    )
+
+    result = await coord.run(command="propose_workstream", workstream_type="argumentation")
+
+    assert "OpenCode Go: timeout" in result["message"]
+    assert "timed out" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_consent_denied(workspace: Path) -> None:
+    pid = "test-proj-85-consent"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "consent_denied",
+            "data": {},
+            "error": "Consent not granted for scope 'workstream_delegation'",
+        },
+    )
+
+    result = await coord.run(command="propose_workstream", workstream_type="critical_review")
+
+    assert "OpenCode Go: consent_denied" in result["message"]
+    assert "workstream_delegation" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_fallback(workspace: Path) -> None:
+    pid = "test-proj-85-fallback"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "fallback",
+            "data": {},
+            "message": "External bridge 'opencode_go' unavailable.",
+            "error": "Bridge 'opencode_go' is disabled",
+        },
+    )
+
+    result = await coord.run(command="propose_workstream", workstream_type="synthesis")
+
+    assert "OpenCode Go: fallback" in result["message"]
+    assert "disabled" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_propose_workstream_surfaces_bridge_exception(workspace: Path) -> None:
+    """Bare exceptions become status=exception and appear in the message."""
+    pid = "test-proj-85-exc"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    bridge = MagicMock()
+    bridge.request = AsyncMock(side_effect=RuntimeError("connection reset"))
+    coord.external_bridge = bridge
+
+    result = await coord.run(command="propose_workstream", workstream_type="literature_search")
+
+    assert "OpenCode Go: exception" in result["message"]
+    assert "connection reset" in result["message"]
+    assert result.get("bridge_result", {}).get("status") == "exception"
+    # Local agent still runs despite bridge exception.
+    assert result["status"] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_logs_include_bridge_non_success(workspace: Path) -> None:
+    """logs command shows bridge failure text, not only agent summary."""
+    pid = "test-proj-85-logs"
+    _seed_project(workspace, pid)
+    coord = ProjectCoordinatorAgent(project_id=pid)
+    await _approve(coord)
+    _attach_bridge(
+        coord,
+        {
+            "status": "fallback",
+            "data": {},
+            "error": "Bridge offline",
+            "message": "Fell back to internal execution",
+        },
+    )
+
+    launch = await coord.run(command="propose_workstream", workstream_type="argumentation")
+    ws_id = launch["workstream_id"]
+
+    logs_all = await coord.run(command="logs", workstream_id="")
+    assert "OpenCode Go: fallback" in logs_all["summary"]
+
+    logs_one = await coord.run(command="logs", workstream_id=ws_id)
+    assert "OpenCode Go: fallback" in logs_one["summary"]
+    assert logs_one.get("bridge_result", {}).get("status") == "fallback"
+
+
+def test_format_bridge_section_none_is_empty() -> None:
+    assert ProjectCoordinatorAgent._format_bridge_section(None) == ""
+
+
+def test_format_bridge_section_status_none() -> None:
+    text = ProjectCoordinatorAgent._format_bridge_section({"status": "none", "data": {}})
+    assert "OpenCode Go: none" in text
