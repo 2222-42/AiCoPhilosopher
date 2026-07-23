@@ -4,9 +4,17 @@ Exercises the public run(command=...) API exclusively.
 Tests FAIL before implementation and PASS after T-033 implementation.
 """
 
+from pathlib import Path
+
 import pytest
 
 from aicophilosopher.application.orchestration.coordinator import ProjectCoordinatorAgent
+
+
+@pytest.fixture(autouse=True)
+def _isolate_workspace(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep propose_workstream disk writes out of the real home workspace."""
+    monkeypatch.setenv("AICOPH_WORKSPACE_DIR", str(tmp_path))
 
 
 @pytest.fixture
@@ -47,7 +55,9 @@ async def test_goal_approval_transition(coordinator: ProjectCoordinatorAgent) ->
 
 
 @pytest.mark.asyncio
-async def test_workstream_proposal_after_goal_approved(coordinator: ProjectCoordinatorAgent) -> None:
+async def test_workstream_proposal_after_goal_approved(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
     """start_workstream returns structured proposal."""
     for _ in range(5):
         result = await coordinator.run("test")
@@ -55,16 +65,22 @@ async def test_workstream_proposal_after_goal_approved(coordinator: ProjectCoord
             break
     await coordinator.run(command="approve_goal")
 
-    result = await coordinator.run(command="propose_workstream", workstream_type="literature_search")
+    result = await coordinator.run(
+        command="propose_workstream", workstream_type="literature_search"
+    )
     assert "proposal" in result
     assert result["proposal"]["type"] == "literature_search"
     assert result["proposal"]["goal"] is not None
 
 
 @pytest.mark.asyncio
-async def test_workstream_proposal_before_goal_approved_raises(coordinator: ProjectCoordinatorAgent) -> None:
+async def test_workstream_proposal_before_goal_approved_raises(
+    coordinator: ProjectCoordinatorAgent,
+) -> None:
     """start_workstream before goal approval returns error."""
-    result = await coordinator.run(command="propose_workstream", workstream_type="literature_search")
+    result = await coordinator.run(
+        command="propose_workstream", workstream_type="literature_search"
+    )
     assert "error" in result
     assert "no approved goals" in result["error"].lower()
 
@@ -72,7 +88,9 @@ async def test_workstream_proposal_before_goal_approved_raises(coordinator: Proj
 @pytest.mark.asyncio
 async def test_steer_command(coordinator: ProjectCoordinatorAgent) -> None:
     """Steer command is acknowledged."""
-    result = await coordinator.run(command="steer", workstream_id="ws-001", instruction="Focus on X")
+    result = await coordinator.run(
+        command="steer", workstream_id="ws-001", instruction="Focus on X"
+    )
     assert result.get("acknowledged") is True
     assert "ws-001" in result.get("message", "")
 
