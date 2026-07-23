@@ -176,3 +176,96 @@ async def test_response_rendered(
             "hello", mock_session, mock_coordinator, mock_llm, test_mode=True
         )
         mock_render.assert_called_once()
+
+
+# ── Coordinator project_id sync (Issue #84) ─────────────────────────────
+
+
+def test_sync_coordinator_project_id_overwrites_default() -> None:
+    """Wire-time 'default' must be replaced with the session's real id."""
+    from aicophilosopher.presentation.repl import _sync_coordinator_project_id
+
+    session = SessionState(project_id="proj-23b06be4")
+    coordinator = MagicMock()
+    coordinator.project_id = "default"
+
+    _sync_coordinator_project_id(session, coordinator)
+
+    assert coordinator.project_id == "proj-23b06be4"
+
+
+def test_sync_coordinator_project_id_noop_when_coordinator_missing() -> None:
+    from aicophilosopher.presentation.repl import _sync_coordinator_project_id
+
+    session = SessionState(project_id="proj-001")
+    _sync_coordinator_project_id(session, None)  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_status_shows_session_project_id_not_default() -> None:
+    """/status must report the session project_id after sync, not 'default'."""
+    from aicophilosopher.application.orchestration.coordinator import (
+        ProjectCoordinatorAgent,
+    )
+    from aicophilosopher.presentation.repl import (
+        _process_slash_command,
+        _sync_coordinator_project_id,
+    )
+
+    real_pid = "proj-23b06be4"
+    session = SessionState(project_id=real_pid)
+    # Simulate _wire_backends(None) which falls back to "default"
+    coordinator = ProjectCoordinatorAgent(project_id="default", llm_backend=None)
+
+    _sync_coordinator_project_id(session, coordinator)
+    assert coordinator.project_id == real_pid
+
+    with patch("aicophilosopher.presentation.repl.render_response"):
+        result = await _process_slash_command("/status", session, coordinator)
+
+    summary = result.get("summary", "")
+    assert real_pid in summary
+    # First line is "Project: <id>"
+    project_line = summary.splitlines()[0]
+    assert real_pid in project_line
+    assert "default" not in project_line
+    assert result.get("project_id") == real_pid
+
+
+@pytest.mark.asyncio
+async def test_run_repl_syncs_coordinator_project_id_on_auto_resume() -> None:
+    """run_repl must sync coordinator after auto-resume resolves a real id."""
+    from aicophilosopher.application.orchestration.coordinator import (
+        ProjectCoordinatorAgent,
+    )
+    from aicophilosopher.presentation.repl import run_repl
+
+    real_pid = "proj-auto-resume"
+    session = SessionState(project_id=real_pid)
+    coordinator = ProjectCoordinatorAgent(project_id="default", llm_backend=None)
+    llm_port = MagicMock()
+
+    mock_prompt = MagicMock()
+    mock_prompt.prompt_async = AsyncMock(side_effect=EOFError())
+
+    with (
+        patch(
+            "aicophilosopher.presentation.repl._startup_flow",
+            new=AsyncMock(return_value=session),
+        ),
+        patch(
+            "aicophilosopher.presentation.repl._finalize",
+            new=AsyncMock(),
+        ),
+        patch("prompt_toolkit.PromptSession", return_value=mock_prompt),
+        patch("prompt_toolkit.history.FileHistory"),
+    ):
+        await run_repl(
+            project_id=None,
+            test_mode=False,
+            llm_port=llm_port,
+            coordinator=coordinator,
+            storage=MagicMock(),
+        )
+
+    assert coordinator.project_id == real_pid

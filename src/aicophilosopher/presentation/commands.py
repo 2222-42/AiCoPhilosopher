@@ -290,6 +290,10 @@ def _wire_backends(  # noqa: C901
 
     # ── Create Coordinator ──────────────────────────────────────────
     fs_adapter = FileSystemAdapter(base_path=config.workspace_dir)
+    # When CLI omits -p, project_id is None here; auto-resume resolves the
+    # real id in run_repl/_startup_flow and syncs via
+    # _sync_coordinator_project_id. Keep a non-empty placeholder so
+    # ProjectCoordinatorAgent can be constructed before session load.
     resolved_pid = project_id or "default"
 
     from aicophilosopher.application.orchestration.coordinator import ProjectCoordinatorAgent
