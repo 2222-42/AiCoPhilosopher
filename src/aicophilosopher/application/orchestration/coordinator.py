@@ -334,11 +334,14 @@ class ProjectCoordinatorAgent(BaseAgent):
         query = self._goal_proposed or ""
         prior = self._collect_prior_outputs()
         try:
+            # Inject coordinator's main LLM so capable agents can augment
+            # heuristic output; llm=None keeps the offline/heuristic path.
             agent_result = await run_workstream_agent(
                 workstream_type,
                 query,
                 agent_id=f"coord-{self.project_id}",
                 prior_outputs=prior or None,
+                llm=self.llm,
             )
         except Exception as exc:
             agent_result = {"error": str(exc)}
