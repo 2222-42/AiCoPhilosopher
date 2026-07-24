@@ -513,11 +513,15 @@ def _restore_coordinator_state(session: SessionState, coordinator: Any) -> None:
 def _sync_coordinator_project_id(session: SessionState, coordinator: Any) -> None:
     """Align coordinator.project_id with the resolved session project_id.
 
-    ``_wire_backends`` may construct the coordinator with ``\"default\"``
+    ``_wire_backends`` may construct the coordinator with ``"default"``
     when the CLI omits ``-p``; auto-resume then loads a real session id.
     Without this sync, ``/status`` reports ``Project: default`` while the
     REPL banner shows the real id (Issue #84).
     """
+    import logging
+
+    logger = logging.getLogger(__name__)
+
     if coordinator is None:
         return
     pid = getattr(session, "project_id", None)
@@ -526,7 +530,8 @@ def _sync_coordinator_project_id(session: SessionState, coordinator: Any) -> Non
     try:
         coordinator.project_id = pid
     except Exception:
-        pass  # best-effort; mocks without a settable attr still work
+        # best-effort; mocks without a settable attr still work
+        logger.exception("Failed to sync coordinator.project_id to %s", pid)
 
 
 async def run_repl(
