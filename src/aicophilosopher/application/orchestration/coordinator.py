@@ -1,10 +1,15 @@
+from pathlib import Path
 from typing import Any
 
 from aicophilosopher.application.orchestration.base import BaseAgent
+from aicophilosopher.application.services.workstream_persistence import (
+    persist_workstream_results,
+)
 from aicophilosopher.application.services.workstream_runner import (
     run_workstream_agent,
     summarize_agent_result,
 )
+from aicophilosopher.domain.services.config import Config
 
 CLARIFICATION_QUESTIONS = [
     "Thank you for your question. Could you clarify which philosophical tradition or methodological framework you're approaching this from?",
@@ -47,7 +52,14 @@ class ProjectCoordinatorAgent(BaseAgent):
         filesystem: Any = None,
         **kwargs: object,
     ) -> None:
-        super().__init__(agent_id="project_coordinator", project_id=project_id, llm_backend=llm_backend, message_queue=message_queue, config=kwargs.get("config"), tool_registry=kwargs.get("tool_registry"))  # type: ignore[arg-type]
+        super().__init__(
+            agent_id="project_coordinator",
+            project_id=project_id,
+            llm_backend=llm_backend,
+            message_queue=message_queue,
+            config=kwargs.get("config"),
+            tool_registry=kwargs.get("tool_registry"),
+        )  # type: ignore[arg-type]
         self.project_id = project_id
         self.storage = storage
         self.filesystem = filesystem
@@ -61,7 +73,9 @@ class ProjectCoordinatorAgent(BaseAgent):
     async def run(self, user_input: str = "", **kwargs: object) -> dict[str, Any]:  # type: ignore[override]
         command = str(kwargs.get("command", "")).lower()
         if command == "start":
-            return self._start_dialogue(None) if not user_input else self._start_dialogue(user_input)
+            return (
+                self._start_dialogue(None) if not user_input else self._start_dialogue(user_input)
+            )
         elif command == "refine_goal":
             return self._handle_refine_goal(user_input)
         elif command == "approve_goal":
@@ -131,10 +145,10 @@ class ProjectCoordinatorAgent(BaseAgent):
                 f"Goal approved! 🎉\n\n"
                 f"Approved goal: **{self._goal_proposed}**\n\n"
                 f"Now launch a workstream. Try typing:\n"
-                f"  • \"start literature search\"\n"
-                f"  • \"analyze this concept\"\n"
-                f"  • \"compare traditions\"\n"
-                f"  • \"construct an argument\"\n"
+                f'  • "start literature search"\n'
+                f'  • "analyze this concept"\n'
+                f'  • "compare traditions"\n'
+                f'  • "construct an argument"\n'
                 f"Or use slash commands: /search, /analyze, /argue, /compare, /status"
             ),
             "dialogue_state": "goal_approved",
@@ -160,7 +174,6 @@ class ProjectCoordinatorAgent(BaseAgent):
             )
         except Exception:
             return None
-
 
     @staticmethod
     def _agent_confidence(agent_result: dict[str, Any], default: float = 0.6) -> float:
@@ -205,9 +218,18 @@ class ProjectCoordinatorAgent(BaseAgent):
             )
         return outputs
 
+    def _project_dir(self) -> Path:
+        """Resolve the on-disk project directory for this coordinator's project_id.
+
+        Matches CLI ``_project_dir``: ``Config().projects_dir() / project_id``.
+        """
+        return Config().projects_dir() / self.project_id
+
     async def _handle_propose_workstream(self, workstream_type: str) -> dict[str, Any]:
         if not self._goal_approved:
-            return {"error": "Cannot start workstream: no approved goals. Use `approve_goal` first."}
+            return {
+                "error": "Cannot start workstream: no approved goals. Use `approve_goal` first."
+            }
 
         # Optional external bridge (does not replace local agent execution)
         bridge_result = await self._maybe_bridge_delegate(workstream_type)
@@ -226,6 +248,24 @@ class ProjectCoordinatorAgent(BaseAgent):
 
         status = "failed" if agent_result.get("error") else "completed"
         ws_id = f"ws-{workstream_type}-{len(self.active_workstreams) + 1}"
+
+        # Persist to disk after agent success (same artefacts as CLI start-workstream).
+        # Runner itself does not persist; Coordinator is the call site (Issue #83).
+        persistence: dict[str, Any] | None = None
+        persistence_error: str | None = None
+        if status == "completed":
+            try:
+                persistence = persist_workstream_results(
+                    project_dir=self._project_dir(),
+                    workstream_type=workstream_type,
+                    result=agent_result,
+                    workstream_id=ws_id,
+                )
+            except Exception as exc:
+                # Do not pretend success when disk write fails.
+                persistence_error = str(exc)
+                status = "failed"
+
         self.active_workstreams[ws_id] = {
             "workstream_id": ws_id,
             "type": workstream_type,
@@ -233,16 +273,29 @@ class ProjectCoordinatorAgent(BaseAgent):
             "goal": self._goal_proposed,
             "bridge_result": bridge_result,
             "agent_result": agent_result,
+            "persistence": persistence,
+            "persistence_error": persistence_error,
         }
 
         agent_summary = summarize_agent_result(workstream_type, agent_result)
-        msg = f"Workstream '{workstream_type}' launched as {ws_id} — {status}."
-        msg += f"\nAgent result: {agent_summary}"
+        if persistence_error is not None:
+            msg = (
+                f"Workstream '{workstream_type}' agent completed as {ws_id}, "
+                f"but failed to persist results to disk: {persistence_error}"
+            )
+        else:
+            msg = f"Workstream '{workstream_type}' launched as {ws_id} — {status}."
+            msg += f"\nAgent result: {agent_summary}"
+            if persistence is not None:
+                msg += (
+                    f"\nPersisted: {persistence.get('hypotheses_added', 0)} hypotheses; "
+                    f"report={persistence.get('report_path', '')}"
+                )
         if bridge_result and bridge_result.get("status") == "success":
             output_preview = str(bridge_result.get("data", {}).get("output", ""))[:200]
             msg += f"\n\nOpenCode Go response:\n{output_preview}"
 
-        return {
+        response: dict[str, Any] = {
             "message": msg,
             "workstream_type": workstream_type,
             "workstream_id": ws_id,
@@ -258,6 +311,11 @@ class ProjectCoordinatorAgent(BaseAgent):
                 "assigned_coordinator": f"{workstream_type}_coordinator",
             },
         }
+        if persistence is not None:
+            response["persistence"] = persistence
+        if persistence_error is not None:
+            response["error"] = f"Failed to persist workstream results: {persistence_error}"
+        return response
 
     async def _handle_steer(self, workstream_id: str, instruction: str) -> dict[str, Any]:
         return {
@@ -315,7 +373,9 @@ class ProjectCoordinatorAgent(BaseAgent):
         if not workstream_id:
             if not self.active_workstreams:
                 return {"summary": "No workstreams running.", "active_workstreams": []}
-            lines = [self._format_ws_log_line(wid, ws) for wid, ws in self.active_workstreams.items()]
+            lines = [
+                self._format_ws_log_line(wid, ws) for wid, ws in self.active_workstreams.items()
+            ]
             return {
                 "summary": "Active workstreams:\n" + "\n".join(lines),
                 "active_workstreams": [
@@ -340,7 +400,9 @@ class ProjectCoordinatorAgent(BaseAgent):
             details = ""
             if br and br.get("status") == "success":
                 details = str(br.get("data", {}).get("output", ""))
-            agent_summary = details[:80] if details else "(no output yet — workstream may still be running)"
+            agent_summary = (
+                details[:80] if details else "(no output yet — workstream may still be running)"
+            )
 
         return {
             "summary": (
